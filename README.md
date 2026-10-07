@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/header.jpg" alt="deveggs: the developer eggsperience, a basket of eggs for the agentic developer" width="100%">
+  <img src="assets/header.jpg" alt="deveggs, the developer eggsperience: you tell your agents preferences and ask for skills, each is laid as an egg on trial, tried across Claude Code, Codex and Cursor, and you hatch it into a permanent chicken or crack it. One basket, every agent." width="100%">
 </p>
 
 # deveggs 🥚
