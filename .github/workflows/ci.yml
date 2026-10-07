@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+
+  # my-basket/ is each developer's personal basket (gitignored). Anything committed
+  # here would land in everyone's basket on `git pull`, so upstream rejects it.
+  # Shared baskets go in shared-baskets/<github-username>/ instead. Forks that choose
+  # to commit their own basket skip this job.
+  upstream-basket-empty:
+    if: github.repository == 'kunggaochicken/deveggs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: my-basket/ holds only .gitkeep
+        run: |
+          stray=$(git ls-files my-basket | grep -v '/\.gitkeep$' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::my-basket/ must stay empty upstream. To share your basket, move it to shared-baskets/<your-github-username>/ (see shared-baskets/README.md)."
+            echo "$stray"
+            exit 1
+          fi

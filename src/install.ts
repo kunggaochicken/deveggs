@@ -47,14 +47,14 @@ const END = "<!-- deveggs:end -->";
 const BLOCK_RE = new RegExp(`\\n*${BEGIN}[\\s\\S]*?${END}\\n?`);
 
 export function managedBlock(repoRoot: string): string {
-  const prefs = join(repoRoot, "basket", "PREFERENCES.md");
+  const prefs = join(repoRoot, "my-basket", "PREFERENCES.md");
   return [
     BEGIN,
     "## deveggs",
     "",
     `My agentic-dev preferences live in a harness-agnostic basket at \`${repoRoot}\`.`,
     `- Read \`${prefs}\` at session start and follow it; it outranks harness-local memory.`,
-    "- Use the `deveggs` skill to lay or warm eggs when I state or reveal how I like to work.",
+    "- Use the `deveggs` skill when I state or reveal how I like to work: propose eggs (I confirm), record trials.",
     END,
   ].join("\n");
 }
@@ -94,7 +94,7 @@ function exists(path: string): boolean {
 export function skillSources(repoRoot: string): Array<{ name: string; dir: string }> {
   const out = [{ name: "deveggs", dir: join(repoRoot, "skills", "deveggs") }];
   for (const tier of ["chickens", "eggs"]) {
-    const base = join(repoRoot, "basket", "skills", tier);
+    const base = join(repoRoot, "my-basket", "skills", tier);
     if (!existsSync(base)) continue;
     for (const name of readdirSync(base).sort()) {
       if (out.some((s) => s.name === name)) continue;

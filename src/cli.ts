@@ -22,7 +22,7 @@ usage:
   deveggs crack <id>                   reject an egg, or retire a chicken
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
-  deveggs render                       rebuild basket/PREFERENCES.md
+  deveggs render                       rebuild my-basket/PREFERENCES.md
   deveggs install [--harness claude,codex] [--dry-run]
   deveggs uninstall [--harness claude,codex] [--dry-run]
 
@@ -30,10 +30,10 @@ An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no ba
 Every change re-renders PREFERENCES.md.
 
 env:
-  DEVEGGS_HOME   repo root holding basket/ and skills/ (default: this checkout)`;
+  DEVEGGS_HOME   repo root holding my-basket/ and skills/ (default: this checkout)`;
 
 const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
-const basket = new Basket(join(repoRoot, "basket"));
+const basket = new Basket(join(repoRoot, "my-basket"));
 
 function line(egg: Egg): string {
   const mark = egg.tier === "chicken" ? "🐔" : egg.tier === "cracked" ? "💥" : isReady(egg) ? "🐣" : "🥚";
@@ -110,6 +110,7 @@ function main(argv: string[]): void {
     case "feedback": {
       if (values.good === values.bad) throw new BasketError("pass exactly one of --good or --bad");
       const egg = basket.feedback(requireId(positionals), { good: values.good, ...harness, ...note });
+      basket.render();
       console.log(line(egg));
       if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
       return;
