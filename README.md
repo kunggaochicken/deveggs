@@ -4,10 +4,16 @@
 
 # deveggs 🥚
 
-Every developer works with agents differently. deveggs gives you **one personal
-basket** of preferences, workflows and skills. Every coding agent you use (Claude Code,
-Codex, …) reads it. New ideas go in as eggs on trial. Only the ones that
-prove themselves become permanent.
+Every developer works with agents differently. Stacks like
+[gstack](https://github.com/garrytan/gstack) and
+[pstack](https://github.com/cursor/plugins/blob/main/pstack) are great, but they are
+*someone else's* loop. Mining your old transcripts for a stack picks up weak, noisy
+signals. Harness-local memory (Claude Code memory, Codex memories, Cursor rules, …)
+helps, but each harness keeps its own copy and puts its own slant on it.
+
+deveggs gives you **one personal basket** to build your own loop: preferences,
+workflows and skills that every coding agent you use reads. New ideas go in as eggs
+on trial. Only the ones that prove themselves become permanent.
 
 <p align="center">
   <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you say how you like to work. 2: your agent drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
@@ -65,8 +71,8 @@ deveggs install                                       # wire the basket into you
   in practice aren't the same.
 - **You hatch, agents don't.** Agents lay eggs and log trials. Only you decide what
   becomes permanent.
-- **One basket, every harness.** No per-harness memory, each with its own copy and
-  slant. The basket is plain Markdown under git.
+- **One basket, every harness.** Plain Markdown under git, not locked to any one
+  harness.
 - **Never explain yourself twice.** Tell one agent once, and every agent knows.
 
 Under the hood: [architecture](assets/architecture.svg) ·
