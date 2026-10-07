@@ -30,8 +30,8 @@ that start with `[egg: on trial]`.
 
 | Signal | Command |
 |---|---|
-| "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you>` |
-| "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area>` |
+| "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
+| "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area> --harness <you> --quote "<their words>"` |
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
 | A shell snippet they keep rewriting | `--kind script`, then write `basket/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
@@ -45,6 +45,10 @@ Rules:
 - **Don't duplicate.** Run `deveggs list` first. If an egg already covers it, record
   feedback on that egg instead of laying a new one.
 - **`--chicken` needs an explicit "always/never".** Never use it for something you inferred.
+- **Always record the origin.** `--quote` is the developer's own words, verbatim, not
+  your paraphrase. Run `lay` from the project's directory so the repo is picked up
+  automatically, or pass `--repo`. Pass `--session <id>` if your harness exposes one.
+  The origin is what the developer reads when deciding whether to hatch.
 
 ## Trying eggs: record feedback
 
@@ -68,6 +72,9 @@ natural pause, propose them in one batch:
 
 > 🐣 These eggs have been working well. Should I hatch them into chickens?
 > 1. `terse-summaries`: End each turn with a one-line summary (✓4 ✗0, claude+codex)
+>    from: "can you just give me one line at the end" (grover, 2026-10-06)
+
+Get the origin and trial log from `deveggs show <id>`.
 
 - Yes → `deveggs hatch <id>`. The egg becomes a chicken, and a skill moves to `skills/chickens/`.
 - No, drop it → `deveggs crack <id>`. It's kept so it's never laid again.

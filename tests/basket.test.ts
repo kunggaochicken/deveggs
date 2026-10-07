@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Basket, BasketError, isReady, parseEgg, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
+import { Basket, BasketError, formatOrigin, isReady, parseEgg, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
 
 const fresh = (): Basket => new Basket(mkdtempSync(join(tmpdir(), "deveggs-")));
 
@@ -78,4 +78,25 @@ test("render lists chickens as permanent and eggs as on trial", () => {
   assert.match(chickens, /### git\n\n- Never push to main/);
   assert.match(eggs, /### comms\n\n- Try terse summaries `try-terse-summaries`/);
   assert.doesNotMatch(out, /Rejected/);
+});
+
+test("lay records where the egg came from, ahead of the trial log", () => {
+  const b = fresh();
+  b.lay({
+    summary: "Land changes through a PR",
+    harness: "claude",
+    note: "applies to every repo",
+    origin: { quote: "always land changes\nthrough a PR", repo: "grover", session: "abc123" },
+    today: "2026-10-06",
+  });
+  const egg = b.feedback("land-changes-through-a-pr", { good: true, today: "2026-10-07" });
+  assert.equal(
+    egg.body,
+    "applies to every repo\n\n## Origin\n\n> always land changes\n> through a PR\n\n" +
+      "- 2026-10-06 · claude · grover · session abc123\n\n## Trials\n\n- 2026-10-07 ✓",
+  );
+});
+
+test("origin without a quote still records when and where", () => {
+  assert.equal(formatOrigin("2026-10-06", undefined, {}), "## Origin\n\n- 2026-10-06");
 });

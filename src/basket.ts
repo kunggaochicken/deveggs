@@ -46,7 +46,18 @@ export interface LayInput {
   note?: string;
   /** Skip the trial: the developer is already sure. */
   chicken?: boolean;
+  origin?: Origin;
   today?: string;
+}
+
+/** Where an egg came from, so whoever decides to hatch it can see why it exists. */
+export interface Origin {
+  /** The developer's own words that prompted the egg, verbatim. */
+  quote?: string;
+  /** Repo (or project) the session was in. */
+  repo?: string;
+  /** Harness session id, if known. */
+  session?: string;
 }
 
 export interface Feedback {
@@ -70,8 +81,9 @@ export function slugify(text: string): string {
   return slug;
 }
 
+/** Local calendar date (YYYY-MM-DD), so eggs are dated the way the developer sees the day. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("en-CA");
 }
 
 const list = (value: string | undefined): string[] =>
@@ -129,6 +141,15 @@ export function serializeEgg(egg: Egg): string {
   ].join("\n");
   const body = egg.body ? `\n\n${egg.body}` : "";
   return `---\n${front}\n---\n${egg.summary}${body}\n`;
+}
+
+export function formatOrigin(date: string, harness: string | undefined, origin: Origin): string {
+  const quote = origin.quote?.trim();
+  const where = [date, harness, origin.repo, origin.session && `session ${origin.session}`].filter(Boolean);
+  const lines = ["## Origin", ""];
+  if (quote) lines.push(...quote.split("\n").map((l) => `> ${l}`), "");
+  lines.push(`- ${where.join(" · ")}`);
+  return lines.join("\n");
 }
 
 function skillStub(egg: Egg): string {
@@ -242,7 +263,7 @@ export class Basket {
       laid: date,
       updated: date,
       summary: input.summary.trim(),
-      body: input.note?.trim() ?? "",
+      body: [input.note?.trim(), formatOrigin(date, input.harness, input.origin ?? {})].filter(Boolean).join("\n\n"),
     });
     if (egg.kind === "skill") {
       mkdirSync(this.skillDir(egg.tier, id), { recursive: true });

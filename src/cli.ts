@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
@@ -15,6 +16,7 @@ const USAGE = `deveggs: a basket of eggs for the agentic developer
 usage:
   deveggs lay "<one-sentence fact>" [--kind ${KINDS.join("|")}]
                                      [--tag t1,t2] [--harness name] [--note text] [--chicken]
+                                     [--quote "<developer's words>"] [--repo name] [--session id]
   deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
   deveggs hatch <id>                   egg -> chicken (permanent)
   deveggs crack <id>                   reject an egg, or retire a chicken
@@ -40,6 +42,16 @@ function line(egg: Egg): string {
   return `${mark} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
 }
 
+/** Name of the git repo the command runs in, used as the egg's origin when --repo is absent. */
+function currentRepo(): string | undefined {
+  try {
+    const top = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return basename(top.trim()) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function requireId(positionals: string[]): string {
   const id = positionals[0];
   if (!id) throw new BasketError("missing <id>");
@@ -56,6 +68,9 @@ function main(argv: string[]): void {
       tag: { type: "string" },
       harness: { type: "string" },
       note: { type: "string" },
+      quote: { type: "string" },
+      repo: { type: "string" },
+      session: { type: "string" },
       chicken: { type: "boolean", default: false },
       good: { type: "boolean", default: false },
       bad: { type: "boolean", default: false },
@@ -73,9 +88,15 @@ function main(argv: string[]): void {
       if (values.kind !== undefined && !isKind(values.kind)) {
         throw new BasketError(`invalid kind ${JSON.stringify(values.kind)}; expected one of ${KINDS.join(", ")}`);
       }
+      const repo = values.repo ?? currentRepo();
       const egg = basket.lay({
         summary,
         chicken: values.chicken,
+        origin: {
+          ...(values.quote !== undefined && { quote: values.quote }),
+          ...(repo !== undefined && { repo }),
+          ...(values.session !== undefined && { session: values.session }),
+        },
         tags: values.tag?.split(",").map((t) => t.trim()).filter(Boolean) ?? [],
         ...(values.kind !== undefined && { kind: values.kind }),
         ...harness,

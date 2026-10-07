@@ -23,7 +23,8 @@ build your own: one portable basket that goes into every harness you use.
 ```
 
 - **🥚 Egg: on trial.** A new preference, workflow, script or skill that you want to
-  play with before committing to it. Agents follow it, but every time it clearly
+  play with before committing to it. Each egg records its origin: your words,
+  verbatim, plus the repo, harness and date. Agents follow it, but every time it clearly
   helps or gets in the way, they record a trial (`deveggs feedback <id> --good|--bad`).
 - **🐣 Ready.** The egg has 3 good trials and no bad ones. Agents propose hatching
   it, but only you decide.
@@ -72,7 +73,8 @@ npm run check                  # tsc --noEmit (strict) + node --test
 export PATH="$PWD/bin:$PATH"
 
 deveggs lay "Land changes through a PR; never push to main" --tag git --chicken   # already sure
-deveggs lay "End each turn with a one-line summary" --tag comms --harness claude  # try it out
+deveggs lay "End each turn with a one-line summary" --tag comms --harness claude \
+  --quote "can you just give me one line at the end"                              # try it out
 deveggs feedback end-each-turn-with-a-one-line-summary --good --harness codex --note "kept threads short"
 deveggs lay "Release checklist" --kind skill        # egg skill: fill in the generated SKILL.md
 deveggs list --tier ready                           # 🐣 eggs with clean trials
