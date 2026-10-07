@@ -1,0 +1,10 @@
+#!/bin/sh
+# Thin shim: Node >=22.18 runs the TypeScript source directly (type stripping).
+# Resolve symlinks (e.g. `npm link` or ~/bin/deveggs -> here) to find the repo.
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK="$(readlink "$SELF")"
+  case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
+done
+DIR="$(cd "$(dirname "$SELF")/.." && pwd -P)"
+exec node --disable-warning=ExperimentalWarning "$DIR/src/cli.ts" "$@"
