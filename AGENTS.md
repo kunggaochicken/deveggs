@@ -14,6 +14,18 @@ meta-skill that teaches any agent to use it (`skills/deveggs/SKILL.md`).
 - Model changes go in `src/basket.ts`. Harness wiring goes in `src/install.ts`. Add
   a new harness by adding an entry to `harnesses()`.
 
+## Upstream vs forks
+
+- Upstream (`kunggaochicken/deveggs`) is the tool plus shared baskets. Every fork is
+  one developer's personal copy, and their eggs live in that fork's `basket/`.
+- **Never commit to `basket/` upstream.** It must hold only `.gitkeep` files, and CI
+  enforces this. Anything committed there would be pulled into every fork's basket.
+- Shared baskets go in `baskets/<github-username>/` (see `baskets/README.md`). Before
+  opening a PR that shares a basket, warn the developer to review its Origin and
+  `context` rows for anything private.
+- In a fork, committing `basket/` is expected. Upstream PRs (tool changes or a shared
+  basket) must come from a branch off `upstream/main`, never from the basket branch.
+
 ## Working on the basket
 
 - Follow `skills/deveggs/SKILL.md`.

@@ -24,11 +24,18 @@ https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-The agent checks prerequisites, clones the repo, previews exactly which skills and
-instruction files it will touch, and waits for your yes. It then offers to seed
-your basket from preferences you've already written down, one confirmed egg at a
-time. To install by hand, follow the steps in [INSTALL.md](INSTALL.md) yourself.
-Requires Node >= 22.18 and git.
+The agent forks this repo for you (**your fork is your basket**), clones it, and
+previews exactly which skills and instruction files it will touch. Then it waits for
+your yes. Afterwards it offers to seed your basket from preferences you've already
+written down, one confirmed egg at a time. To install by hand, follow the steps in
+[INSTALL.md](INSTALL.md) yourself. Requires Node >= 22.18, git and `gh`.
+
+Your fork holds two things:
+- **the tool**, which you update with `git pull upstream main`
+- **your basket** (`basket/`), which you commit to your fork so it follows you to
+  every machine
+
+Upstream never touches `basket/`, so pulling never conflicts with your eggs.
 
 ## Eggs and chickens
 
@@ -108,6 +115,21 @@ deveggs install                # wire the basket into Claude Code / Codex
 
 It never copies your preferences into a harness. The basket remains the single
 source of truth. `deveggs uninstall` removes both.
+
+## Sharing baskets: an open-source dev experience
+
+Your basket stays in your fork unless you choose to share it. If you do, open a PR
+that adds a copy under [`baskets/<your-github-username>/`](baskets/README.md).
+Everyone can then browse how other developers work with agents and borrow what
+looks good. A borrowed egg always enters your basket as an **egg on trial**, even
+if it was a chicken for its author.
+
+- **Review before you share.** An egg's origin holds your verbatim words and repo
+  names.
+- **Never PR your personal `basket/` upstream.** Everyone would pull your eggs into
+  their own basket. CI rejects it, and points you to `baskets/` instead.
+- **Tool improvements are welcome too.** Branch from upstream `main`, not from your
+  basket branch.
 
 ## Philosophy
 

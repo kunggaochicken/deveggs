@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run check
+
+  # Upstream only: basket/ is every fork's personal basket, so anything committed
+  # here would land in everyone's basket on `git pull upstream main`.
+  # Shared baskets go in baskets/<github-username>/ instead. Forks skip this job.
+  upstream-basket-empty:
+    if: github.repository == 'kunggaochicken/deveggs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: basket/ stays empty upstream
+        run: |
+          stray=$(git ls-files basket | grep -v '/\.gitkeep$' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::basket/ must stay empty upstream. To share your basket, move it to baskets/<your-github-username>/ (see baskets/README.md)."
+            echo "$stray"
+            exit 1
+          fi
