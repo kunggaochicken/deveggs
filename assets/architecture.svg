@@ -1,0 +1,291 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 990" width="1400" height="990" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933">
+  <title>deveggs architecture</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa3ab"/>
+    </marker>
+    <style>
+      .panel { fill: #fbfbf8; stroke: #d6d9d2; stroke-width: 1; }
+      .ptitle { font-family: Georgia, 'Times New Roman', serif; font-size: 15px; font-weight: bold; }
+      .muted { fill: #5b6670; }
+      .small { font-size: 10.5px; }
+      .mono { font-family: Menlo, 'SF Mono', Consolas, monospace; font-size: 11px; }
+      .b { font-weight: bold; }
+      .c { text-anchor: middle; }
+      .line { stroke: #4a5560; stroke-width: 1.3; fill: none; }
+      .dash { stroke: #9aa3ab; stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+      .egg { fill: #f3e3b5; stroke: #b8923a; stroke-width: 1.4; }
+      .chick { fill: #d9704a; stroke: #9c4426; stroke-width: 1.4; }
+      .agentbox { fill: #e7edf5; stroke: #3d5a80; stroke-width: 1.2; }
+      .pkgbox { fill: #eeeaf5; stroke: #6b5b95; stroke-width: 1.2; }
+      .basketbox { fill: #e9f0e2; stroke: #5f7f4a; stroke-width: 1.2; }
+      .viewbox { fill: #ffffff; stroke: #b9bfc6; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="990" fill="#ffffff"/>
+  <text x="30" y="42" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-weight="bold">deveggs: explicit, trial-gated, harness-agnostic memory for agentic development</text>
+
+  <!-- ============ (a) Lifecycle ============ -->
+  <rect class="panel" x="30" y="66" width="660" height="334" rx="6"/>
+  <text class="ptitle" x="46" y="92">(a) Lifecycle: nothing is stored without a yes</text>
+
+  <!-- developer signal -->
+  <rect class="agentbox" x="46" y="160" width="122" height="64" rx="8"/>
+  <text class="b c" x="107" y="183">Developer signal</text>
+  <text class="small c muted" x="107" y="199">directive · experiment</text>
+  <text class="small c muted" x="107" y="213">correction · repeated</text>
+  <line class="line" x1="168" y1="192" x2="194" y2="192" marker-end="url(#arr)"/>
+
+  <!-- confirm gate -->
+  <polygon points="236,156 278,192 236,228 194,192" fill="#ffffff" stroke="#1f2933" stroke-width="1.4"/>
+  <text class="b c" x="236" y="196" font-size="11">confirm?</text>
+  <line class="dash" x1="236" y1="228" x2="236" y2="262" marker-end="url(#arrRed)"/>
+  <text class="small c muted" x="236" y="277">no → nothing stored</text>
+  <text class="small c muted" x="236" y="291">(not silent memory)</text>
+  <line class="line" x1="278" y1="192" x2="316" y2="192" marker-end="url(#arr)"/>
+  <text class="small c" x="297" y="183">lay</text>
+
+  <!-- egg -->
+  <path class="egg" d="M350,154 C374,154 380,226 350,226 C320,226 326,154 350,154 Z"/>
+  <path class="line" d="M338,158 C322,112 378,112 362,158" marker-end="url(#arr)"/>
+  <text class="small c" x="350" y="116">feedback ✓ / ✗</text>
+  <text class="b c" x="350" y="246">Egg</text>
+  <text class="small c muted" x="350" y="260">on trial</text>
+  <line class="line" x1="382" y1="192" x2="438" y2="192" marker-end="url(#arr)"/>
+  <text class="small c" x="410" y="183">✓≥3, ✗=0</text>
+
+  <!-- ready -->
+  <path class="egg" d="M470,154 C494,154 500,226 470,226 C440,226 446,154 470,154 Z"/>
+  <path d="M444,188 l7,-6 l7,6 l7,-6 l7,6 l7,-6 l7,6 l7,-6" fill="none" stroke="#9c4426" stroke-width="1.3"/>
+  <text class="b c" x="470" y="246">Ready</text>
+  <text class="small c muted" x="470" y="260">agent proposes</text>
+  <line class="line" x1="502" y1="192" x2="568" y2="192" marker-end="url(#arr)"/>
+  <text class="small c" x="535" y="172">developer</text>
+  <text class="small c" x="535" y="184">hatches</text>
+
+  <!-- chicken -->
+  <polygon points="584,196 572,180 590,190" fill="#9c4426"/>
+  <ellipse class="chick" cx="614" cy="202" rx="33" ry="23"/>
+  <path d="M598,200 C606,214 624,214 630,202" fill="none" stroke="#9c4426" stroke-width="1.3"/>
+  <circle class="chick" cx="640" cy="172" r="13"/>
+  <path d="M633,160 l3,-7 l3,5 l3,-6 l3,6 l2,-3 l1,6 z" fill="#c0392b"/>
+  <polygon points="652,170 662,174 652,178" fill="#e0a526"/>
+  <circle cx="643" cy="169" r="1.9" fill="#1f2933"/>
+  <text class="b c" x="614" y="246">Chicken</text>
+  <text class="small c muted" x="614" y="260">permanent</text>
+
+  <!-- cracked -->
+  <path d="M452,318 C452,298 462,290 470,290 l-4,8 l6,5 l-5,7 l5,8 z" fill="#eceef0" stroke="#9aa3ab" stroke-width="1.3"/>
+  <path d="M478,320 l-5,-8 l5,-7 l-6,-5 l4,-8 C482,292 490,300 490,320 C490,338 478,340 478,340 z" fill="#eceef0" stroke="#9aa3ab" stroke-width="1.3" transform="translate(6,2)"/>
+  <path class="dash" d="M350,228 C350,300 400,318 440,318" marker-end="url(#arrRed)"/>
+  <text class="small muted" x="356" y="300" text-anchor="end">crack</text>
+  <path class="dash" d="M614,228 C614,300 550,318 504,318" marker-end="url(#arrRed)"/>
+  <text class="small muted" x="604" y="300">retire</text>
+  <text class="b c" x="472" y="362">Cracked</text>
+  <text class="small c muted" x="472" y="376">kept so it is never re-laid</text>
+
+  <!-- ============ (d) Egg anatomy ============ -->
+  <rect class="panel" x="710" y="66" width="660" height="334" rx="6"/>
+  <text class="ptitle" x="726" y="92">(d) Egg anatomy: one table, grep-able trigger first</text>
+  <rect x="728" y="104" width="300" height="20" fill="#eef0f2" stroke="#d6d9d2"/>
+  <text class="mono" x="736" y="118">basket/eggs/pr-body-why-not-what.md</text>
+
+  <rect x="728" y="128" width="522" height="20" fill="#eef0f2" stroke="#d6d9d2"/>
+  <text class="b" x="736" y="142">field</text>
+  <text class="b" x="830" y="142">value</text>
+  <rect x="728" y="148" width="522" height="20" fill="#fbeec6" stroke="#b8923a"/>
+  <rect x="728" y="168" width="522" height="180" fill="#ffffff" stroke="#d6d9d2"/>
+  <line x1="822" y1="128" x2="822" y2="348" stroke="#d6d9d2"/>
+  <g stroke="#eceef0">
+    <line x1="728" y1="188" x2="1250" y2="188"/><line x1="728" y1="208" x2="1250" y2="208"/>
+    <line x1="728" y1="228" x2="1250" y2="228"/><line x1="728" y1="248" x2="1250" y2="248"/>
+    <line x1="728" y1="268" x2="1250" y2="268"/><line x1="728" y1="288" x2="1250" y2="288"/>
+    <line x1="728" y1="308" x2="1250" y2="308"/><line x1="728" y1="328" x2="1250" y2="328"/>
+  </g>
+  <g class="mono">
+    <text x="736" y="162" font-weight="bold">trigger</text>
+    <text x="736" y="182">not-when</text>
+    <text x="736" y="202">group</text>
+    <text x="736" y="222">rule</text>
+    <text x="736" y="242">why</text>
+    <text x="736" y="262">example</text>
+    <text x="736" y="282">check</text>
+    <text x="736" y="302">trials</text>
+    <text x="736" y="322">context</text>
+    <text x="736" y="342">related</text>
+  </g>
+  <g font-size="11.5">
+    <text x="830" y="162" font-weight="bold">writing · PR description</text>
+    <text x="830" y="182">tool-generated release PRs; my own scratch drafts</text>
+    <text x="830" y="202">pull-requests  (compiled into deveggs-ctx-pull-requests)</text>
+    <text x="830" y="222">Lead with why the change exists; the diff already shows what.</text>
+    <text x="830" y="242">Reviewers skim; motivation is the one thing the diff can't give.</text>
+    <text x="830" y="262">"401s now fail fast; retries were masking auth errors"</text>
+    <text x="830" y="282">✓ no "why?" from the reviewer · ✗ developer rewrites the body</text>
+    <text x="830" y="302">✓2 ✗0   (dated log under ## Trials)</text>
+    <text x="830" y="322">grover · claude · 2026-10-07 · after rewriting PR #6's summary</text>
+    <text x="830" y="342">one-line-summary-at-end</text>
+  </g>
+  <g class="line" stroke="#5b6670">
+    <path d="M1256,151 h6 v54 h-6"/><path d="M1256,211 h6 v54 h-6"/>
+    <path d="M1256,271 h6 v34 h-6"/><path d="M1256,311 h6 v34 h-6"/>
+  </g>
+  <g class="small">
+    <text x="1270" y="175" class="b">load decision</text><text x="1270" y="189" class="muted">trigger, guard</text>
+    <text x="1270" y="235" class="b">how to apply</text><text x="1270" y="249" class="muted">rule + intent</text>
+    <text x="1270" y="292" class="b">trial signal</text>
+    <text x="1270" y="332" class="b">provenance</text>
+  </g>
+  <text class="mono" x="728" y="374">$ rg -N '^\| trigger \|' basket/eggs basket/chickens</text>
+  <text class="small muted" x="728" y="390">one line per egg: enough to decide what to load, without reading every file</text>
+
+  <!-- ============ (b) Architecture ============ -->
+  <rect class="panel" x="30" y="420" width="900" height="494" rx="6"/>
+  <text class="ptitle" x="46" y="446">(b) Architecture: one basket, every harness</text>
+
+  <!-- developer -->
+  <circle cx="92" cy="516" r="14" fill="#e7edf5" stroke="#3d5a80" stroke-width="1.3"/>
+  <path d="M64,566 C64,538 120,538 120,566 Z" fill="#e7edf5" stroke="#3d5a80" stroke-width="1.3"/>
+  <text class="b c" x="92" y="586">Developer</text>
+  <text class="small c muted" x="92" y="602">signals intent,</text>
+  <text class="small c muted" x="92" y="616">confirms lays,</text>
+  <text class="small c muted" x="92" y="630">decides hatches</text>
+  <line class="line" x1="124" y1="540" x2="176" y2="540" marker-start="url(#arr)" marker-end="url(#arr)"/>
+
+  <!-- harness -->
+  <rect class="agentbox" x="178" y="466" width="232" height="372" rx="8"/>
+  <text class="b c" x="294" y="488" fill="#3d5a80">Harness (any)</text>
+  <rect class="viewbox" x="192" y="500" width="204" height="86" rx="5"/>
+  <text class="b" x="202" y="518">Agent</text>
+  <text class="small" x="202" y="534">reads the always block at start</text>
+  <text class="small" x="202" y="548">loads ctx skills when a task matches</text>
+  <text class="small" x="202" y="562">runs the deveggs + deveggs-lay skills</text>
+  <text class="small" x="202" y="576">calls the CLI for every state change</text>
+  <rect class="viewbox" x="192" y="598" width="204" height="62" rx="5"/>
+  <text class="b" x="202" y="616">Instructions file</text>
+  <text class="mono" x="202" y="632">CLAUDE.md · AGENTS.md</text>
+  <text class="small muted" x="202" y="648">← managed always block</text>
+  <rect class="viewbox" x="192" y="672" width="204" height="94" rx="5"/>
+  <text class="b" x="202" y="690">Skills directory</text>
+  <text class="mono" x="202" y="707">deveggs · deveggs-lay</text>
+  <text class="mono" x="202" y="723">deveggs-ctx-‹group›</text>
+  <text class="mono" x="202" y="739">egg + chicken skills</text>
+  <text class="small muted" x="202" y="756">← symlinks, loaded natively</text>
+  <text class="small c muted" x="294" y="790" font-style="italic">Claude Code · Codex · Cursor · …</text>
+  <text class="small c muted" x="294" y="806" font-style="italic">same basket, no per-harness copy</text>
+
+  <!-- package -->
+  <rect class="pkgbox" x="446" y="466" width="178" height="230" rx="8"/>
+  <text class="b c" x="535" y="488" fill="#6b5b95">deveggs (npm package)</text>
+  <text class="small c muted" x="535" y="503">the tool: versioned, read-only</text>
+  <g class="mono">
+    <text x="462" y="528">init</text>
+    <text x="462" y="546">lay · feedback</text>
+    <text x="462" y="564">hatch · crack</text>
+    <text x="462" y="582">list · show · triggers</text>
+    <text x="462" y="600">compile · install</text>
+  </g>
+  <line x1="460" y1="614" x2="610" y2="614" stroke="#c9c0de"/>
+  <text class="small b" x="462" y="632">core skills</text>
+  <text class="mono" x="462" y="650">deveggs · deveggs-lay</text>
+  <text class="small muted" x="462" y="676">TypeScript · no runtime deps</text>
+  <line class="line" x1="410" y1="560" x2="444" y2="560" marker-end="url(#arr)"/>
+  <text class="small c" x="427" y="552">calls</text>
+
+  <!-- basket -->
+  <rect class="basketbox" x="662" y="466" width="252" height="250" rx="8"/>
+  <text class="b c" x="788" y="488" fill="#5f7f4a">Your basket (git repo)</text>
+  <text class="small c muted" x="788" y="503">created by deveggs init; yours to commit</text>
+  <g class="mono">
+    <text x="678" y="528">basket/</text>
+    <text x="678" y="546">├ eggs/</text><text x="790" y="546" class="muted">trial</text>
+    <text x="678" y="564">├ chickens/</text><text x="790" y="564" class="muted">permanent</text>
+    <text x="678" y="582">├ cracked/</text><text x="790" y="582" class="muted">rejected</text>
+    <text x="678" y="600">├ skills/{eggs,chickens}/</text>
+    <text x="678" y="618">└ scripts/</text>
+  </g>
+  <text class="small muted" x="678" y="642">one Markdown table per item;</text>
+  <text class="small muted" x="678" y="656">the folder is the tier</text>
+  <line x1="676" y1="670" x2="900" y2="670" stroke="#c6d4bb"/>
+  <text class="small" x="678" y="690">⇅ git remote: the same basket</text>
+  <text class="small" x="678" y="704">  on every machine and harness</text>
+  <line class="line" x1="624" y1="560" x2="660" y2="560" marker-end="url(#arr)"/>
+  <text class="small c" x="642" y="552">writes</text>
+
+  <!-- compiled views -->
+  <rect fill="#f4f5f6" stroke="#b9bfc6" x="446" y="748" width="468" height="150" rx="8"/>
+  <text class="b" x="460" y="770">compile → derived views</text>
+  <text class="small muted" x="610" y="770">(regenerated, never hand-edited)</text>
+  <rect class="viewbox" x="460" y="782" width="142" height="102" rx="5"/>
+  <text class="b" x="470" y="800">Always block</text>
+  <text class="small" x="470" y="818">eggs in group "always"</text>
+  <text class="small" x="470" y="834">loaded every session</text>
+  <text class="small muted" x="470" y="856">→ instructions file</text>
+  <rect class="viewbox" x="612" y="782" width="150" height="102" rx="5"/>
+  <text class="b" x="622" y="800">Context skills</text>
+  <text class="mono" x="622" y="818" font-size="10.5">deveggs-ctx-‹group›</text>
+  <text class="small" x="622" y="834">description = union of</text>
+  <text class="small" x="622" y="848">the group's triggers</text>
+  <text class="small muted" x="622" y="870">→ skills directory</text>
+  <rect class="viewbox" x="772" y="782" width="128" height="102" rx="5"/>
+  <text class="b" x="782" y="800">Egg/chicken skills</text>
+  <text class="small" x="782" y="818">egg skills marked</text>
+  <text class="small" x="782" y="832">[egg: on trial]</text>
+  <text class="small" x="782" y="846">chicken wins a tie</text>
+  <text class="small muted" x="782" y="870">→ skills directory</text>
+  <line class="line" x1="788" y1="716" x2="788" y2="746" marker-end="url(#arr)"/>
+  <text class="small" x="796" y="736">compile</text>
+  <path class="line" d="M446,822 C428,822 428,822 412,822" marker-end="url(#arr)"/>
+  <text class="small c" x="429" y="814">install</text>
+  <text class="small c muted" x="294" y="862">install = symlinks + managed block</text>
+
+  <!-- ============ (c) Agent loop ============ -->
+  <rect class="panel" x="950" y="420" width="420" height="494" rx="6"/>
+  <text class="ptitle" x="966" y="446">(c) How the agent works with it, per session</text>
+  <g>
+    <circle cx="978" cy="478" r="11" fill="#3d5a80"/><text class="c b" x="978" y="482" fill="#fff" font-size="11">1</text>
+    <text class="b" x="998" y="482">Session start</text>
+    <text class="small" x="998" y="499">Read the always block. Cheap relevance check:</text>
+    <text class="mono" x="998" y="514" font-size="10.5">rg '^\| trigger \|' over eggs + chickens</text>
+
+    <circle cx="978" cy="548" r="11" fill="#3d5a80"/><text class="c b" x="978" y="552" fill="#fff" font-size="11">2</text>
+    <text class="b" x="998" y="552">Context match</text>
+    <text class="small" x="998" y="569">Task fits a ctx skill's description → the harness</text>
+    <text class="small" x="998" y="584">loads that group; not-when filters out misfits.</text>
+
+    <circle cx="978" cy="618" r="11" fill="#3d5a80"/><text class="c b" x="978" y="622" fill="#fff" font-size="11">3</text>
+    <text class="b" x="998" y="622">Work</text>
+    <text class="small" x="998" y="639">Follow chickens as-is. Follow eggs as trials,</text>
+    <text class="small" x="998" y="654">watching each egg's check criteria.</text>
+
+    <rect x="962" y="672" width="364" height="66" rx="6" fill="#fbeec6" stroke="#b8923a"/>
+    <circle cx="978" cy="688" r="11" fill="#b8923a"/><text class="c b" x="978" y="692" fill="#fff" font-size="11">4</text>
+    <text class="b" x="998" y="692">Lay intent → confirm</text>
+    <text class="small" x="998" y="709">directive · experiment · correction · repeated →</text>
+    <text class="small" x="998" y="724">deveggs-lay drafts the table and asks: lay this egg?</text>
+
+    <circle cx="978" cy="758" r="11" fill="#3d5a80"/><text class="c b" x="978" y="762" fill="#fff" font-size="11">5</text>
+    <text class="b" x="998" y="762">Record trials</text>
+    <text class="small" x="998" y="779">An egg clearly helped or hurt → deveggs feedback</text>
+    <text class="small" x="998" y="794">✓ / ✗ with a note and the harness name.</text>
+
+    <circle cx="978" cy="828" r="11" fill="#9c4426"/><text class="c b" x="978" y="832" fill="#fff" font-size="11">6</text>
+    <text class="b" x="998" y="832">Propose hatch</text>
+    <text class="small" x="998" y="849">Ready egg → show its rule and origin quote;</text>
+    <text class="small" x="998" y="864">the developer hatches, cracks, or waits.</text>
+  </g>
+  <path class="line" d="M1334,834 C1360,834 1360,552 1334,552" marker-end="url(#arr)"/>
+  <text class="small muted" x="1364" y="700" transform="rotate(-90 1364 700)" text-anchor="middle">next task</text>
+  <text class="small muted" x="966" y="898" font-style="italic">Agents may draft, propose and record. Only the developer lays, hatches and cracks.</text>
+
+  <!-- caption -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-size="12.5">
+    <text x="30" y="944"><tspan font-weight="bold">Figure 1.</tspan> (a) An egg enters the basket only after explicit developer confirmation, is followed as a trial with structured ✓/✗ feedback, and becomes a permanent chicken only</text>
+    <text x="30" y="962">when the developer hatches it. (b) The npm package is the tool; the basket is the developer's own git repo, compiled into an always-loaded block plus per-context skills that</text>
+    <text x="30" y="980">every harness loads natively. (c) The agent's per-session loop. (d) The egg template. Design target: init, triggers, compile and deveggs-lay are specified but not yet built.</text>
+  </g>
+</svg>

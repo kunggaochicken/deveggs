@@ -12,6 +12,24 @@ helps, but each harness keeps its own copy and puts its own slant on it.
 deveggs is a **meta-skill**. It doesn't hand you a stack. It gives you a place to
 build your own: one portable basket that goes into every harness you use.
 
+![deveggs architecture](assets/architecture.svg)
+
+## Install
+
+Paste this into any coding agent (Claude Code, Codex, Cursor, …):
+
+```text
+Install deveggs for me by following
+https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
+Confirm with me before changing any files outside the deveggs repo.
+```
+
+The agent checks prerequisites, clones the repo, previews exactly which skills and
+instruction files it will touch, and waits for your yes. It then offers to seed
+your basket from preferences you've already written down, one confirmed egg at a
+time. To install by hand, follow the steps in [INSTALL.md](INSTALL.md) yourself.
+Requires Node >= 22.18 and git.
+
 ## Eggs and chickens
 
 ```
@@ -64,13 +82,10 @@ basket/
 The basket holds plain Markdown and scripts under git. No database and no harness
 lock-in. If you move to a new machine or harness, clone it and run `install`.
 
-## Quickstart
+## Usage
 
 ```bash
-git clone <your-fork> ~/Projects/deveggs && cd ~/Projects/deveggs
-npm install                    # dev-only: typescript + @types/node
-npm run check                  # tsc --noEmit (strict) + node --test
-export PATH="$PWD/bin:$PATH"
+export PATH="$HOME/Projects/deveggs/bin:$PATH"
 
 deveggs lay "Land changes through a PR; never push to main" --tag git --chicken   # already sure
 deveggs lay "End each turn with a one-line summary" --tag comms --harness claude \
