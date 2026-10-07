@@ -54,7 +54,7 @@ export function managedBlock(repoRoot: string): string {
     "",
     `My agentic-dev preferences live in a harness-agnostic basket at \`${repoRoot}\`.`,
     `- Read \`${prefs}\` at session start and follow it; it outranks harness-local memory.`,
-    "- Use the `deveggs` skill when I state or reveal how I like to work: propose eggs (I confirm), record trials.",
+    `- Use the \`deveggs\` skill (\`${join(repoRoot, "skills", "deveggs", "SKILL.md")}\`) when I state or reveal how I like to work: propose eggs (I confirm), record trials.`,
     END,
   ].join("\n");
 }
@@ -182,7 +182,7 @@ export function describe(a: Action): string {
     case "unlink":
       return `[${a.harness}] unlink ${a.path}`;
     case "block":
-      return `[${a.harness}] update ${a.path} (managed deveggs block)`;
+      return `[${a.harness}] update ${a.path} (deveggs prompt)`;
     case "skip":
       return `[${a.harness}] skip   ${a.path}: ${a.reason}`;
   }

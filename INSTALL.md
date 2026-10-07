@@ -1,34 +1,43 @@
 # Installing deveggs (instructions for an agent)
 
-You are installing deveggs for the developer you're working with. deveggs keeps
-their agentic-dev preferences in one basket that every harness reads. Their personal
-basket is `my-basket/` inside the clone. It's gitignored, so it stays local unless
-they choose to fork and commit it. Follow these steps in order.
-**Stop and ask whenever a step says to confirm.** deveggs is explicit memory, so
-nothing changes without the developer's yes.
+You are setting up deveggs for the developer you're working with, in whatever harness
+you are running in (Claude Code, Codex, Cursor, …). They paste the same
+prompt into each agent they use. The first one clones the repo and wires up every
+harness the CLI knows. Later ones only need to wire themselves if the CLI doesn't
+know them. **Stop and ask whenever a step says to confirm.** deveggs is explicit
+memory, so nothing changes without the developer's yes.
 
-1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on PATH. If not, tell the developer what's missing and stop.
-2. **Clone.** Ask where they keep repos (default `~/Projects`). If `<dir>/deveggs`
-   already exists, run `git -C <dir>/deveggs pull`. Otherwise run
-   `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs`.
-3. **Verify.** In that directory run `npm install && npm run check`. If anything
-   fails, show the output and stop.
-4. **Preview the wiring.** Run `<dir>/deveggs/bin/deveggs install --dry-run`. Show the
-   developer the exact list of planned symlinks and instruction-file edits, then
-   **confirm** before going on.
-5. **Install.** Run `<dir>/deveggs/bin/deveggs install`. Suggest adding `<dir>/deveggs/bin`
-   to their PATH. Don't edit their shell profile without asking.
-6. **Learn the skill.** Read `<dir>/deveggs/skills/deveggs/SKILL.md` so you know how to lay
-   eggs, record trials and propose hatching.
-7. **Offer to seed the basket. Don't do it automatically.** Ask whether they want
-   to import preferences they've already written down, e.g. their global
-   `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md`. Mention that `shared-baskets/` has
-   community baskets they can borrow eggs from. If they say yes, propose each
-   candidate one at a time: suggest a rule, a trigger, and egg or chicken. Lay only
-   what they confirm, and pass their original wording as `--quote`.
-8. **Report.** Summarize what was linked, which files were edited, and what was laid.
-   Mention that:
-   - `deveggs uninstall` reverts the wiring
+1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
+   PATH. If not, tell the developer what's missing and stop.
+2. **Get the repo.** Ask where they keep repos (default `~/Projects`).
+   - If `<dir>/deveggs` exists, another harness already cloned it: run
+     `git -C <dir>/deveggs pull`.
+   - Otherwise run `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs`
+     and then `npm install && npm run check` inside it. If anything fails, show the
+     output and stop.
+
+   A plain clone is all you need. No fork.
+3. **Wire up the harnesses.** Run `<dir>/deveggs/bin/deveggs install --dry-run`, show
+   the developer the plan, **confirm**, then run `<dir>/deveggs/bin/deveggs install`.
+   It links the deveggs skill into every harness it knows (Claude Code, Codex) and
+   prints the deveggs prompt. If you are running in a harness it didn't wire, do what
+   the output says: add that prompt to your own global instructions file, or give it
+   to the developer to paste. If you have a global skills folder, also symlink
+   `<dir>/deveggs/skills/deveggs` into it.
+4. **Learn the skill.** Read `<dir>/deveggs/skills/deveggs/SKILL.md` so you know how
+   to lay eggs, record trials and propose hatching.
+5. **Offer to seed the basket. Don't do it automatically.** Ask whether they want to
+   import preferences from this harness's instructions file. Mention that
+   `shared-baskets/` has community baskets they can borrow eggs from. If they say
+   yes, propose each candidate one at a time: suggest a rule, a trigger, and egg or
+   chicken. Lay only what they confirm, and pass their original wording as `--quote`.
+6. **Report.** Say what you changed, and tell them to paste the same prompt into any
+   other agent they use. Mention that:
    - `git pull` gets tool updates and new shared baskets without touching `my-basket/`
-   - to sync `my-basket/` across machines, they can fork, un-ignore it there, and commit it
-   - to share it with others, they can PR a reviewed copy into `shared-baskets/<username>/`
+   - `deveggs uninstall` reverts the wiring. For other harnesses, delete the
+     deveggs prompt (`deveggs:begin` … `deveggs:end`) from their instructions.
+   - to share their basket, they can open a PR with a reviewed copy in
+     `shared-baskets/<username>/`. GitHub creates the fork for them.
+
+Optional: to sync `my-basket/` across machines, fork the repo, remove the
+`my-basket` lines from `.gitignore` in the fork, and commit it there.

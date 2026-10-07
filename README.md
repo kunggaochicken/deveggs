@@ -26,16 +26,17 @@ Skills work the same way: an egg skill is on trial, a chicken skill is permanent
 
 ## Install
 
-Paste this into any coding agent:
+Paste this into **each** coding agent you use (Claude Code, Codex, Cursor, …):
 
 ```text
-Install deveggs for me by following
+Set up deveggs for me by following
 https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-The agent shows you what it will change and waits for your yes. Requires Node >= 22.18
-and git. To install by hand, see [INSTALL.md](INSTALL.md).
+The first agent clones the repo. Each agent then points itself at the deveggs skill
+and your basket, shows you the change, and waits for your yes. Requires Node >= 22.18
+and git.
 
 ## Usage
 
@@ -52,8 +53,8 @@ deveggs install                                       # wire the basket into you
 
 ## Your basket, and everyone else's
 
-- **`my-basket/`** is yours. It's gitignored, so `git pull` never touches it. To sync
-  it across machines, fork the repo and commit it there.
+- **`my-basket/`** is yours. It's gitignored, so `git pull` never touches it, and CI
+  keeps it out of upstream PRs.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
   it always enters your basket as an egg on trial. To share yours, open a PR that adds
   a reviewed copy under [`shared-baskets/<you>/`](shared-baskets/README.md).
