@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="assets/header.jpg" alt="deveggs: the developer eggsperience, a basket of eggs for the agentic developer" width="100%">
+  <img src="assets/header.jpg" alt="deveggs, the developer eggsperience: lay an egg, try it, hatch it into a chicken you keep, or crack it. One basket feeds every agent (Claude Code, Codex, Cursor)." width="100%">
 </p>
 
 # deveggs 🥚
 
-*The **dev**eloper **egg**sperience: a basket of eggs for the agentic developer.*
+*The **dev**eloper **eggs**perience: a basket of eggs for the agentic developer.*
 
 Every developer works with agents differently. deveggs gives you **one personal
 basket** of preferences, workflows and skills. Every coding agent you use (Claude Code,
