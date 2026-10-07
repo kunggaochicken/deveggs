@@ -37,9 +37,14 @@ on trial. Only the ones that prove themselves become permanent.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
+You don't have to tell deveggs anything. Just work. When you correct your agent, say
+"always…" or "never…", or walk it through the same steps again, it notices the
+preference and offers to save it in one line. Say yes and it's laid. Say nothing or
+no and nothing's saved.
+
 ## Example
 
-After a session where you corrected your agent a few times, run `/deveggs`. The
+To catch anything it missed, run `/deveggs` at the end of a session. The
 agent turns what you said into eggs and asks before laying any of them:
 
 ```text
