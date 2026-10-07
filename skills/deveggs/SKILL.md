@@ -28,6 +28,12 @@ that start with `[egg: on trial]`.
 
 ## Laying eggs
 
+This is a meta skill: absorb preferences as the developer works. They never have to
+ask you to lay anything. When you notice one, lay it as an egg yourself, then
+mention it in one line at the end of your turn, e.g. "🥚 laid `terse-summaries`
+(crack it if that's wrong)". Eggs are only on trial, so laying one is cheap and
+reversible. Chickens are not: always confirm a `--chicken` lay in one line first.
+
 | Signal | Command |
 |---|---|
 | "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
@@ -35,7 +41,7 @@ that start with `[egg: on trial]`.
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
 | A shell snippet they keep rewriting | `--kind script`, then write `my-basket/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
-| You *noticed* a pattern they never stated | Ask in one line first: "Lay an egg for X?" |
+| You *noticed* a pattern they never stated (a correction, a repeat) | Lay it as an egg; quote what they said that revealed it |
 
 Rules:
 

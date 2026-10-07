@@ -23,7 +23,7 @@ workflows and skills that every coding agent you use reads. New ideas go in as e
 on trial. Only the ones that prove themselves become permanent.
 
 <p align="center">
-  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you say how you like to work. 2: your agent drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
+  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you just work: corrections, always, repeats. 2: your agent picks up the preference, lays an egg and tells you in one line. 3: you keep working, or crack it if it's wrong. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
 </p>
 
 ## How it works
@@ -37,22 +37,22 @@ on trial. Only the ones that prove themselves become permanent.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
-You don't have to tell deveggs anything. Just work. When you correct your agent, say
-"always…" or "never…", or walk it through the same steps again, it notices the
-preference and offers to save it in one line. Say yes and it's laid. Say nothing or
-no and nothing's saved.
+deveggs is a meta skill: you never have to tell it anything. Just work. When you
+correct your agent, say "let's try…", or walk it through the same steps again, it
+absorbs the preference as an egg on its own and tells you in one line. Eggs are only
+on trial, so a wrong guess costs nothing: crack it, or let ✗ trials sink it. The only
+things that wait for you are permanent: a chicken from your "always…" or "never…",
+and every hatch.
 
 ## Example
 
-To catch anything it missed, run `/deveggs` at the end of a session. The
-agent turns what you said into eggs and asks before laying any of them:
+Want to review a session all at once? Run `/deveggs` and the agent lists what it
+picked up:
 
 ```text
 > /deveggs
 
-Your basket is empty: no chickens and no eggs yet, so there's nothing to follow or hatch.
-
-Eggs from this session. Say the numbers you want laid; I won't lay any without your yes.
+Laid as eggs while we worked (on trial now; crack any that are wrong):
 
 1. 🥚 Prefer agent-native setup: write instructions an agent follows, not install
    scripts. From your words: "no dont use a script. this is supposed to be agent
@@ -60,6 +60,8 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
 2. 🥚 One install should cover every agent; never make the developer repeat setup per
    harness. From your words: "we shouldn't have to paste into each coding agent…
    shouldn't one just install it into all?" Tag: tooling.
+Chickens wait for your yes. Say the numbers you want:
+
 3. 🐔 Import from your global CLAUDE.md as chickens, since they're already
    "always/never" rules:
    - Always land changes through a PR; never push to main.
@@ -69,8 +71,8 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
    These would also apply in Codex and Gemini, not just Claude Code.
 ```
 
-Your words become eggs on trial. Rules you've already stated as "always" or "never"
-go straight in as chickens. Once laid, every agent you use follows them.
+Your words became eggs on trial without you asking. Rules you've already stated as
+"always" or "never" become chickens once you say yes. Every agent you use follows them.
 
 You don't have to run `/deveggs` at all. Say a preference mid-task and the agent lays
 it on the spot:
