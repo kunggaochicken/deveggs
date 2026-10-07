@@ -67,6 +67,27 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
 Your words become eggs on trial. Rules you've already stated as "always" or "never"
 go straight in as chickens. Once laid, every agent you use follows them.
 
+You don't have to run `/deveggs` at all. Say a preference mid-task and the agent lays
+it on the spot:
+
+```text
+> when i need something complex explained we should draw a visual diagram for it
+
+🥚 Laid when-explaining-something-complex-draw-a-visual-diagram (on trial, tag: explaining)
+   When explaining something complex, draw a visual diagram alongside the explanation.
+   From your words: "when i need something complex explained we should draw a visual
+   diagram for it"
+```
+
+From then on, every agent draws a diagram when it explains something complex, and
+logs whether the diagram helped:
+
+```text
+🥚 +1 when-explaining-something-complex-draw-a-visual-diagram
+```
+
+After three of those and no misses, your agent asks whether to hatch it into a chicken.
+
 ## Install
 
 Paste this into **one** coding agent (Claude Code, Codex, Cursor, …):
