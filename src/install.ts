@@ -54,7 +54,7 @@ export function managedBlock(repoRoot: string): string {
     "",
     `My agentic-dev preferences live in a harness-agnostic basket at \`${repoRoot}\`.`,
     `- Read \`${prefs}\` at session start and follow it; it outranks harness-local memory.`,
-    "- Use the `deveggs` skill to lay or warm eggs when I state or reveal how I like to work.",
+    "- Use the `deveggs` skill when I state or reveal how I like to work: propose eggs (I confirm), record trials.",
     END,
   ].join("\n");
 }

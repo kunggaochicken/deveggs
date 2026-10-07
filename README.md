@@ -1,6 +1,6 @@
 # deveggs 🥚
 
-*A basket of eggs for the agentic developer.*
+*The **dev**eloper **egg**sperience: a basket of eggs for the agentic developer.*
 
 Every developer works with agents differently. Stacks like
 [gstack](https://github.com/garrytan/gstack) and
@@ -13,6 +13,8 @@ deveggs is a **meta-skill**. It doesn't hand you a stack. It gives you a place t
 build your own: one portable basket that goes into every harness you use.
 
 ![deveggs architecture](assets/architecture.svg)
+
+![deveggs repo setup](assets/setup.svg)
 
 ## Install
 

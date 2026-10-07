@@ -1,0 +1,351 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 980" width="1400" height="980" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933">
+  <title>deveggs repo setup</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa3ab"/>
+    </marker>
+    <marker id="arrTeal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f7f86"/>
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5f7f4a"/>
+    </marker>
+    <style>
+      .panel { fill: #fbfbf8; stroke: #d6d9d2; stroke-width: 1; }
+      .ptitle { font-family: Georgia, 'Times New Roman', serif; font-size: 15px; font-weight: bold; }
+      .muted { fill: #5b6670; }
+      .small { font-size: 10.5px; }
+      .mono { font-family: Menlo, 'SF Mono', Consolas, monospace; font-size: 11px; }
+      .ms { font-family: Menlo, 'SF Mono', Consolas, monospace; font-size: 10px; }
+      .b { font-weight: bold; }
+      .c { text-anchor: middle; }
+      .line { stroke: #4a5560; stroke-width: 1.3; fill: none; }
+      .dash { stroke: #9aa3ab; stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+      .tealline { stroke: #2f7f86; stroke-width: 1.3; fill: none; }
+      .greenline { stroke: #5f7f4a; stroke-width: 1.3; fill: none; }
+      .agentbox { fill: #e7edf5; stroke: #3d5a80; stroke-width: 1.2; }
+      .pkgbox { fill: #eeeaf5; stroke: #6b5b95; stroke-width: 1.2; }
+      .basketbox { fill: #e9f0e2; stroke: #5f7f4a; stroke-width: 1.2; }
+      .sharebox { fill: #e3f0ef; stroke: #2f7f86; stroke-width: 1.2; }
+      .viewbox { fill: #ffffff; stroke: #b9bfc6; stroke-width: 1; }
+      .gate { fill: #fbeec6; stroke: #b8923a; stroke-width: 1.2; }
+      .band-tool { fill: #f4f1f9; stroke: #cfc6e3; stroke-width: 1; }
+      .band-share { fill: #edf6f5; stroke: #a9cfd1; stroke-width: 1; }
+      .band-mine { fill: #eff5e9; stroke: #b9cdaa; stroke-width: 1; }
+      .badge { fill: #1f2933; }
+      .bt { fill: #ffffff; font-size: 10px; font-weight: bold; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="980" fill="#ffffff"/>
+  <text x="30" y="42" font-family="Georgia, 'Times New Roman', serif" font-size="21" font-weight="bold">deveggs setup: one clone, a personal basket, shared baskets, and every harness wired to it</text>
+
+  <!-- ===================== (a) Upstream ===================== -->
+  <rect class="panel" x="30" y="66" width="280" height="642" rx="6"/>
+  <text class="ptitle" x="46" y="92">(a) Upstream on GitHub</text>
+  <text class="mono" x="46" y="112">kunggaochicken/deveggs</text>
+  <text class="small muted" x="46" y="128">branch main · changes land by PR</text>
+
+  <rect class="pkgbox" x="46" y="160" width="248" height="136" rx="8"/>
+  <text class="b" x="58" y="180" fill="#6b5b95">deveggs tool</text>
+  <text class="mono" x="58" y="199">bin/ · src/ · skills/</text>
+  <text class="mono" x="58" y="215">tests/ · *.md · ci.yml</text>
+  <text class="small" x="58" y="238">CI check job:</text>
+  <text class="mono" x="58" y="254">npm ci &amp;&amp; npm run check</text>
+  <text class="small muted" x="58" y="278">installed by git clone, not npm</text>
+
+  <rect class="sharebox" x="46" y="306" width="248" height="90" rx="8"/>
+  <text class="b" x="58" y="326" fill="#2f7f86">shared-baskets/&lt;user&gt;/</text>
+  <text class="small" x="58" y="344">baskets people chose to share,</text>
+  <text class="small" x="58" y="359">public and browsable</text>
+  <text class="small muted" x="58" y="382">added by PR, one folder per user</text>
+
+  <rect x="46" y="406" width="248" height="82" rx="8" fill="#ffffff" stroke="#9c4426" stroke-width="1.2"/>
+  <text class="b" x="58" y="426" fill="#9c4426">CI upstream guard</text>
+  <text class="small" x="58" y="444">my-basket/ may hold only .gitkeep;</text>
+  <text class="small" x="58" y="459">any other file fails the PR</text>
+  <text class="small muted" x="58" y="477">job is skipped on forks</text>
+
+  <rect x="46" y="500" width="248" height="70" rx="8" fill="#ffffff" stroke="#5f7f4a" stroke-width="1.2" stroke-dasharray="5 3"/>
+  <text class="b" x="58" y="520" fill="#5f7f4a">Your fork (optional)</text>
+  <text class="small" x="58" y="538">delete the my-basket lines from</text>
+  <text class="small" x="58" y="553">.gitignore, commit, sync machines</text>
+
+  <line x1="46" y1="586" x2="294" y2="586" stroke="#d6d9d2"/>
+  <text class="small muted" x="46" y="606">Upstream my-basket/ is only .gitkeep</text>
+  <text class="small muted" x="46" y="621">scaffolding, so a pull can never</text>
+  <text class="small muted" x="46" y="636">overwrite anyone's personal basket.</text>
+  <text class="small muted" x="46" y="660">Tool PRs branch from upstream main,</text>
+  <text class="small muted" x="46" y="675">never from a branch that carries</text>
+  <text class="small muted" x="46" y="690">a committed basket.</text>
+
+  <!-- ===================== (b) Local clone ===================== -->
+  <rect class="panel" x="360" y="66" width="540" height="642" rx="6"/>
+  <text class="ptitle" x="376" y="92">(b) Developer's machine: the local clone</text>
+
+  <!-- legend -->
+  <rect class="pkgbox" x="376" y="106" width="12" height="12" rx="2"/>
+  <text class="small" x="394" y="116">tool (from upstream)</text>
+  <rect class="sharebox" x="522" y="106" width="12" height="12" rx="2"/>
+  <text class="small" x="540" y="116">shared (public, by PR)</text>
+  <rect class="basketbox" x="674" y="106" width="12" height="12" rx="2"/>
+  <text class="small" x="692" y="116">personal (gitignored, local)</text>
+
+  <text class="mono b" x="376" y="146">~/Projects/deveggs/</text>
+
+  <!-- tool band -->
+  <rect class="band-tool" x="368" y="158" width="516" height="138" rx="4"/>
+  <g class="mono">
+    <text x="376" y="176">├ bin/deveggs</text>
+    <text x="376" y="195">├ src/</text>
+    <text x="376" y="252">├ skills/deveggs/SKILL.md</text>
+    <text x="376" y="271">├ .github/workflows/ci.yml</text>
+    <text x="376" y="290">├ AGENTS.md · INSTALL.md · README.md</text>
+  </g>
+  <text class="ms muted" x="376" y="213">│</text>
+  <text class="ms muted" x="376" y="231">│</text>
+  <text class="ms muted" x="400" y="213">lay · feedback · hatch · crack · list</text>
+  <text class="ms muted" x="400" y="231">show · render · install · uninstall</text>
+  <text class="small" x="590" y="176">shim → node src/cli.ts</text>
+  <text class="small" x="590" y="195">TypeScript CLI, no runtime deps</text>
+  <text class="small" x="590" y="252">meta-skill for any agent</text>
+  <text class="small" x="590" y="271">check + upstream guard</text>
+
+  <!-- shared band -->
+  <rect class="band-share" x="368" y="306" width="516" height="90" rx="4"/>
+  <g class="mono">
+    <text x="376" y="324" font-weight="bold" fill="#2f7f86">├ shared-baskets/</text>
+    <text x="376" y="343">│ ├ README.md</text>
+    <text x="376" y="362">│ ├ &lt;user&gt;/</text>
+    <text x="376" y="381">│ └ &lt;you&gt;/</text>
+  </g>
+  <text class="small b" x="590" y="324" fill="#2f7f86">PUBLIC · repository of baskets</text>
+  <text class="small" x="590" y="343">how to borrow and share</text>
+  <text class="small" x="590" y="362">eggs/ chickens/ skills/ …</text>
+  <text class="small" x="590" y="381">your reviewed copy, to PR</text>
+
+  <!-- personal band -->
+  <rect class="band-mine" x="368" y="406" width="516" height="164" rx="4"/>
+  <g class="mono">
+    <text x="376" y="424" font-weight="bold" fill="#5f7f4a">└ my-basket/</text>
+    <text x="392" y="443">├ eggs/</text>
+    <text x="392" y="462">├ chickens/</text>
+    <text x="392" y="481">├ cracked/</text>
+    <text x="392" y="500">├ skills/eggs/</text>
+    <text x="392" y="519">├ skills/chickens/</text>
+    <text x="392" y="538">├ scripts/</text>
+    <text x="392" y="557">└ PREFERENCES.md</text>
+  </g>
+  <text class="small b" x="590" y="424" fill="#5f7f4a">PERSONAL · gitignored, local</text>
+  <text class="small" x="590" y="443">on trial</text>
+  <text class="small" x="590" y="462">permanent, hatched by you</text>
+  <text class="small" x="590" y="481">rejected, kept on file</text>
+  <text class="small" x="590" y="500">[egg: on trial] skills</text>
+  <text class="small" x="590" y="519">permanent skills</text>
+  <text class="small" x="590" y="538">for script-kind items</text>
+  <text class="small" x="590" y="557">generated by deveggs render</text>
+
+  <!-- borrow (2) and share-copy (3) lanes inside the clone -->
+  <path class="tealline" d="M800,358 H862 Q870,358 870,366 V431 Q870,439 862,439 H664" marker-end="url(#arrTeal)"/>
+  <path class="greenline" d="M760,420 H826 Q834,420 834,412 V385 Q834,377 826,377 H724" marker-end="url(#arrGreen)"/>
+  <circle class="badge" cx="870" cy="400" r="8"/><text class="bt" x="870" y="403.5">2</text>
+  <circle class="badge" cx="834" cy="398" r="8"/><text class="bt" x="834" y="401.5">3</text>
+
+  <!-- flow key -->
+  <line x1="376" y1="586" x2="884" y2="586" stroke="#d6d9d2"/>
+  <text class="b" x="376" y="604">Flows</text>
+  <g class="small">
+    <circle class="badge" cx="384" cy="619" r="7"/><text class="bt" x="384" y="622.5" font-size="9">1</text>
+    <text x="398" y="623"><tspan font-weight="bold">git pull</tspan>: tool updates and new shared baskets; never touches my-basket/</text>
+    <circle class="badge" cx="384" cy="637" r="7"/><text class="bt" x="384" y="640.5" font-size="9">2</text>
+    <text x="398" y="641"><tspan font-weight="bold">borrow</tspan>: copy an item into my-basket/eggs/; always an egg, trials reset to ✓0 ✗0</text>
+    <circle class="badge" cx="384" cy="655" r="7"/><text class="bt" x="384" y="658.5" font-size="9">3</text>
+    <text x="398" y="659"><tspan font-weight="bold">share</tspan>: review origin quotes and repo names, copy to shared-baskets/&lt;you&gt;/, open a PR</text>
+    <circle class="badge" cx="384" cy="673" r="7"/><text class="bt" x="384" y="676.5" font-size="9">4</text>
+    <text x="398" y="677"><tspan font-weight="bold">sync</tspan> (optional): fork, un-ignore my-basket/, commit it in the fork</text>
+    <circle class="badge" cx="384" cy="691" r="7"/><text class="bt" x="384" y="694.5" font-size="9">5</text>
+    <text x="398" y="695"><tspan font-weight="bold">install</tspan>: symlink skills and add a managed block; uninstall reverts both</text>
+  </g>
+
+  <!-- ===================== upstream <-> clone arrows ===================== -->
+  <!-- 1 pull tool -->
+  <line class="line" x1="294" y1="228" x2="366" y2="228" marker-end="url(#arr)"/>
+  <text class="small c" x="330" y="220">git pull</text>
+  <circle class="badge" cx="330" cy="240" r="7"/><text class="bt" x="330" y="243.5" font-size="9">1</text>
+  <!-- 1 pull shared -->
+  <line class="tealline" x1="294" y1="334" x2="366" y2="334" marker-end="url(#arrTeal)"/>
+  <text class="small c" x="330" y="326">git pull</text>
+  <circle class="badge" cx="318" cy="346" r="7"/><text class="bt" x="318" y="349.5" font-size="9">1</text>
+  <!-- 3 PR -->
+  <line class="tealline" x1="366" y1="374" x2="296" y2="374" marker-end="url(#arrTeal)"/>
+  <circle class="badge" cx="342" cy="358" r="7"/><text class="bt" x="342" y="361.5" font-size="9">3</text>
+  <text class="small c" x="330" y="388">PR</text>
+  <!-- blocked commit of my-basket -->
+  <line class="dash" x1="366" y1="432" x2="296" y2="432" marker-end="url(#arrRed)"/>
+  <text class="small c" x="330" y="425" fill="#9c4426">commit ✗</text>
+  <text class="small c muted" x="330" y="448">blocked</text>
+  <!-- 4 sync -->
+  <line class="greenline" x1="296" y1="534" x2="366" y2="534" stroke-dasharray="5 3" marker-start="url(#arrGreen)" marker-end="url(#arrGreen)"/>
+  <circle class="badge" cx="330" cy="520" r="7"/><text class="bt" x="330" y="523.5" font-size="9">4</text>
+  <text class="small c" x="330" y="550">sync</text>
+
+  <!-- ===================== (c) Install ===================== -->
+  <rect class="panel" x="940" y="66" width="430" height="238" rx="6"/>
+  <text class="ptitle" x="956" y="92">(c) Install: an agent follows INSTALL.md</text>
+  <text class="small muted" x="956" y="111">README paste-in prompt · needs Node ≥ 22.18 and git</text>
+  <g>
+    <circle cx="968" cy="134" r="9" fill="#6b5b95"/><text class="bt" x="968" y="137.5">1</text>
+    <text class="mono" x="984" y="138">git clone …/kunggaochicken/deveggs</text>
+    <circle cx="968" cy="160" r="9" fill="#6b5b95"/><text class="bt" x="968" y="163.5">2</text>
+    <text class="mono" x="984" y="164">npm install &amp;&amp; npm run check</text>
+    <circle cx="968" cy="186" r="9" fill="#6b5b95"/><text class="bt" x="968" y="189.5">3</text>
+    <text class="mono" x="984" y="190">bin/deveggs install --dry-run</text>
+    <text class="small muted" x="1210" y="190">show the plan</text>
+    <rect class="gate" x="956" y="200" width="398" height="24" rx="5"/>
+    <circle cx="968" cy="212" r="9" fill="#b8923a"/><text class="bt" x="968" y="215.5">4</text>
+    <text class="b" x="984" y="216">developer confirms the plan</text>
+    <text class="small muted" x="1170" y="216">nothing changes before a yes</text>
+    <circle cx="968" cy="238" r="9" fill="#6b5b95"/><text class="bt" x="968" y="241.5">5</text>
+    <text class="mono" x="984" y="242">bin/deveggs install</text>
+    <text class="small muted" x="1140" y="242">wires (d); flow 5</text>
+    <circle cx="968" cy="264" r="9" fill="#6b5b95"/><text class="bt" x="968" y="267.5">6</text>
+    <text class="small" x="984" y="268">offer to seed my-basket from existing notes,</text>
+    <text class="small" x="984" y="284">one confirmed egg at a time (never automatic)</text>
+  </g>
+
+  <!-- ===================== (d) Harnesses ===================== -->
+  <rect class="panel" x="940" y="320" width="430" height="388" rx="6"/>
+  <text class="ptitle" x="956" y="346">(d) Harnesses: what install wires in</text>
+
+  <!-- Claude Code -->
+  <rect class="agentbox" x="956" y="360" width="192" height="236" rx="8"/>
+  <text class="b" x="968" y="380" fill="#3d5a80">Claude Code</text>
+  <text class="mono" x="968" y="400">~/.claude/skills/</text>
+  <text class="ms" x="968" y="417">├ deveggs</text>
+  <text class="ms" x="968" y="432">├ ‹chicken skills›</text>
+  <text class="ms" x="968" y="447">└ ‹egg skills›</text>
+  <text class="small muted" x="968" y="463">symlinks into the clone</text>
+  <text class="mono" x="968" y="486">~/.claude/CLAUDE.md</text>
+  <rect class="viewbox" x="964" y="494" width="176" height="92" rx="4"/>
+  <g class="ms">
+    <text x="972" y="510" fill="#b8923a">&lt;!-- deveggs:begin --&gt;</text>
+    <text x="972" y="526">## deveggs</text>
+    <text x="972" y="542">read PREFERENCES.md</text>
+    <text x="972" y="558">use the deveggs skill</text>
+    <text x="972" y="576" fill="#b8923a">&lt;!-- deveggs:end --&gt;</text>
+  </g>
+
+  <!-- Codex -->
+  <rect class="agentbox" x="1162" y="360" width="192" height="236" rx="8"/>
+  <text class="b" x="1174" y="380" fill="#3d5a80">Codex</text>
+  <text class="mono" x="1174" y="400">~/.codex/skills/</text>
+  <text class="ms" x="1174" y="417">├ deveggs</text>
+  <text class="ms" x="1174" y="432">├ ‹chicken skills›</text>
+  <text class="ms" x="1174" y="447">└ ‹egg skills›</text>
+  <text class="small muted" x="1174" y="463">symlinks into the clone</text>
+  <text class="mono" x="1174" y="486">~/.codex/AGENTS.md</text>
+  <rect class="viewbox" x="1170" y="494" width="176" height="92" rx="4"/>
+  <g class="ms">
+    <text x="1178" y="510" fill="#b8923a">&lt;!-- deveggs:begin --&gt;</text>
+    <text x="1178" y="526">## deveggs</text>
+    <text x="1178" y="542">read PREFERENCES.md</text>
+    <text x="1178" y="558">use the deveggs skill</text>
+    <text x="1178" y="576" fill="#b8923a">&lt;!-- deveggs:end --&gt;</text>
+  </g>
+
+  <g class="small">
+    <text x="956" y="618">• A chicken skill wins over a same-named egg skill.</text>
+    <text x="956" y="635">• Cracked skills are unlinked on the next install.</text>
+    <text x="956" y="652">• Nothing is copied: the basket stays the source of truth.</text>
+    <text x="956" y="669">• Targets the harnesses found at ~/.claude and ~/.codex.</text>
+    <text x="956" y="686">• deveggs uninstall removes the links and the block.</text>
+  </g>
+
+  <!-- 5 install: skills bus into the harnesses -->
+  <g class="line">
+    <line x1="720" y1="248" x2="920" y2="248"/>
+    <line x1="720" y1="496" x2="920" y2="496"/>
+    <line x1="720" y1="515" x2="920" y2="515"/>
+    <line x1="920" y1="248" x2="920" y2="515"/>
+  </g>
+  <line class="line" x1="920" y1="412" x2="954" y2="412" marker-end="url(#arr)"/>
+  <circle class="badge" cx="920" cy="300" r="8"/><text class="bt" x="920" y="303.5">5</text>
+  <!-- managed block points at PREFERENCES.md -->
+  <path class="dash" d="M962,542 H930 Q920,542 920,550 V553 H770" marker-end="url(#arrRed)"/>
+  <text class="small muted" x="798" y="549">points to</text>
+
+  <!-- ===================== (e) Runtime loop ===================== -->
+  <rect class="panel" x="30" y="724" width="1340" height="168" rx="6"/>
+  <text class="ptitle" x="46" y="750">(e) Agent and basket at runtime: every change goes through the CLI</text>
+
+  <g>
+    <rect class="agentbox" x="46" y="762" width="196" height="80" rx="6"/>
+    <circle cx="62" cy="779" r="9" fill="#3d5a80"/><text class="bt" x="62" y="782.5">1</text>
+    <text class="b" x="78" y="783">Session start</text>
+    <text class="small" x="56" y="801">Read my-basket/PREFERENCES.md:</text>
+    <text class="small" x="56" y="816">chickens first, then eggs on trial.</text>
+    <text class="small muted" x="56" y="831">Skills are already installed.</text>
+
+    <rect class="agentbox" x="268" y="762" width="196" height="80" rx="6"/>
+    <circle cx="284" cy="779" r="9" fill="#3d5a80"/><text class="bt" x="284" y="782.5">2</text>
+    <text class="b" x="300" y="783">Work</text>
+    <text class="small" x="278" y="801">Follow chickens as-is.</text>
+    <text class="small" x="278" y="816">Follow eggs as trials and watch</text>
+    <text class="small" x="278" y="831">whether they help or hurt.</text>
+
+    <rect class="gate" x="490" y="762" width="196" height="80" rx="6"/>
+    <circle cx="506" cy="779" r="9" fill="#b8923a"/><text class="bt" x="506" y="782.5">3</text>
+    <text class="b" x="522" y="783">Lay intent → confirm</text>
+    <text class="small" x="500" y="801">"always…", "let's try…", or a</text>
+    <text class="small" x="500" y="816">noticed pattern: ask the developer</text>
+    <text class="small" x="500" y="831">"Lay an egg for X?"</text>
+
+    <rect class="agentbox" x="712" y="762" width="196" height="80" rx="6"/>
+    <circle cx="728" cy="779" r="9" fill="#3d5a80"/><text class="bt" x="728" y="782.5">4</text>
+    <text class="b" x="744" y="783">Lay, only after a yes</text>
+    <text class="ms" x="722" y="801">deveggs lay "&lt;fact&gt;"</text>
+    <text class="ms" x="722" y="816">  --quote --harness</text>
+    <text class="small muted" x="722" y="831">--chicken only for always/never</text>
+
+    <rect class="agentbox" x="934" y="762" width="196" height="80" rx="6"/>
+    <circle cx="950" cy="779" r="9" fill="#3d5a80"/><text class="bt" x="950" y="782.5">5</text>
+    <text class="b" x="966" y="783">Record trials</text>
+    <text class="ms" x="944" y="801">deveggs feedback &lt;id&gt;</text>
+    <text class="ms" x="944" y="816">  --good ✓ | --bad ✗</text>
+    <text class="small muted" x="944" y="831">on a real signal, with a note</text>
+
+    <rect class="agentbox" x="1156" y="762" width="196" height="80" rx="6"/>
+    <circle cx="1172" cy="779" r="9" fill="#9c4426"/><text class="bt" x="1172" y="782.5">6</text>
+    <text class="b" x="1188" y="783">Propose hatch</text>
+    <text class="small" x="1166" y="801">Ready = ✓≥3 and ✗=0. Show rule</text>
+    <text class="small" x="1166" y="816">and origin; the developer hatches,</text>
+    <text class="small" x="1166" y="831">cracks, or waits.</text>
+  </g>
+  <g class="line">
+    <line x1="244" y1="802" x2="266" y2="802" marker-end="url(#arr)"/>
+    <line x1="466" y1="802" x2="488" y2="802" marker-end="url(#arr)"/>
+    <line x1="688" y1="802" x2="710" y2="802" marker-end="url(#arr)"/>
+    <line x1="910" y1="802" x2="932" y2="802" marker-end="url(#arr)"/>
+    <line x1="1132" y1="802" x2="1154" y2="802" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- CLI bar -->
+  <rect class="basketbox" x="712" y="856" width="640" height="24" rx="5"/>
+  <text class="small" x="722" y="872"><tspan class="mono b">bin/deveggs</tspan> writes my-basket/; every change re-renders PREFERENCES.md; run install after a skill hatches or cracks</text>
+  <g class="line">
+    <line x1="810" y1="842" x2="810" y2="854" marker-end="url(#arr)"/>
+    <line x1="1032" y1="842" x2="1032" y2="854" marker-end="url(#arr)"/>
+    <line x1="1254" y1="842" x2="1254" y2="854" marker-end="url(#arr)"/>
+  </g>
+  <text class="small muted" x="46" y="872" font-style="italic">Agents draft, ask and record. Only the developer confirms lays and decides hatches and cracks.</text>
+
+  <!-- caption -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-size="12.5">
+    <text x="30" y="918"><tspan font-weight="bold">Figure 2.</tspan> How the deveggs repo is set up. (a) Upstream holds the tool and the shared baskets; CI keeps upstream my-basket/ empty. (b) In the local clone, the tool</text>
+    <text x="30" y="936">and shared-baskets/ arrive by git pull while my-basket/ stays personal and gitignored; numbered arrows are the flows listed in (b). (c) Install is a git clone plus a confirmed</text>
+    <text x="30" y="954">install step that an agent runs from INSTALL.md. (d) install symlinks skills and adds a managed block to each harness. (e) At runtime the agent reads the basket and changes it only through the CLI.</text>
+  </g>
+</svg>

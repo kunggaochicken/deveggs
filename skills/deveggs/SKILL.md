@@ -89,6 +89,9 @@ the change.
 
 ## Committing
 
-Commit basket changes in the basket repo with messages like `egg: lay terse-summaries`,
-`chicken: hatch terse-summaries` or `crack: tabs`. Follow the developer's own git
-chickens, for example whether changes go through a PR.
+`my-basket/` is gitignored by default, so basket changes stay local and there's
+nothing to commit. If the developer forked deveggs and un-ignored `my-basket/` to sync
+it, commit there with messages like `egg: lay terse-summaries`,
+`chicken: hatch terse-summaries` or `crack: tabs`, following their own git chickens.
+Never commit `my-basket/` to `kunggaochicken/deveggs` itself. To share, follow
+`shared-baskets/README.md`.

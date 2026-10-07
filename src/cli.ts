@@ -110,6 +110,7 @@ function main(argv: string[]): void {
     case "feedback": {
       if (values.good === values.bad) throw new BasketError("pass exactly one of --good or --bad");
       const egg = basket.feedback(requireId(positionals), { good: values.good, ...harness, ...note });
+      basket.render();
       console.log(line(egg));
       if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
       return;

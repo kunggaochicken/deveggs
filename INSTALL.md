@@ -7,8 +7,7 @@ they choose to fork and commit it. Follow these steps in order.
 **Stop and ask whenever a step says to confirm.** deveggs is explicit memory, so
 nothing changes without the developer's yes.
 
-1. **Check prerequisites.** `node --version` must be >= 22.18, and `git` and `gh` must be
-   on PATH. If not, tell the developer what's missing and stop.
+1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on PATH. If not, tell the developer what's missing and stop.
 2. **Clone.** Ask where they keep repos (default `~/Projects`). If `<dir>/deveggs`
    already exists, run `git -C <dir>/deveggs pull`. Otherwise run
    `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs`.

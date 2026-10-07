@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: my-basket/ holds only .gitkeep
         run: |
-          stray=$(git ls-files basket | grep -v '/\.gitkeep$' || true)
+          stray=$(git ls-files my-basket | grep -v '/\.gitkeep$' || true)
           if [ -n "$stray" ]; then
             echo "::error::my-basket/ must stay empty upstream. To share your basket, move it to shared-baskets/<your-github-username>/ (see shared-baskets/README.md)."
             echo "$stray"
