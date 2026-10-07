@@ -1,9 +1,10 @@
 # Installing deveggs (instructions for an agent)
 
-You are setting up deveggs for the developer you're working with, **in the harness
-you are running in right now** (Claude Code, Codex, Cursor, …). They paste the same
-prompt into each agent they use. The first one clones the repo, and each one wires
-up only itself. **Stop and ask whenever a step says to confirm.** deveggs is explicit
+You are setting up deveggs for the developer you're working with, in whatever harness
+you are running in (Claude Code, Codex, Cursor, …). They paste the same
+prompt into each agent they use. The first one clones the repo and wires up every
+harness the CLI knows. Later ones only need to wire themselves if the CLI doesn't
+know them. **Stop and ask whenever a step says to confirm.** deveggs is explicit
 memory, so nothing changes without the developer's yes.
 
 1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
@@ -16,12 +17,13 @@ memory, so nothing changes without the developer's yes.
      output and stop.
 
    A plain clone is all you need. No fork.
-3. **Wire up this harness.** Show the developer the exact changes, **confirm**, then
+3. **Wire up the harnesses.** Show the developer the exact changes, **confirm**, then
    apply them.
-   - **Claude Code or Codex:** run `<dir>/deveggs/bin/deveggs install --harness claude`
-     (or `codex`) with `--dry-run` first to show the plan, then without it.
-   - **Any other harness:** run `<dir>/deveggs/bin/deveggs block` and add its output
-     to your own global instructions file (the one you read in every session). If
+   - Run `<dir>/deveggs/bin/deveggs install --dry-run` to show the plan, then
+     `<dir>/deveggs/bin/deveggs install`. It finds every harness it knows on this
+     machine (today Claude Code and Codex) and links the deveggs skill into each one.
+   - **If you are a harness it doesn't know:** run `<dir>/deveggs/bin/deveggs block`
+     and add its output to your own global instructions file (the one you read in every session). If
      you have a global skills folder, also symlink `<dir>/deveggs/skills/deveggs`
      into it. If you have no global instructions file, give the block to the
      developer and tell them where to paste it, for example Cursor's User Rules.
@@ -35,8 +37,8 @@ memory, so nothing changes without the developer's yes.
 6. **Report.** Say what you changed, and tell them to paste the same prompt into any
    other agent they use. Mention that:
    - `git pull` gets tool updates and new shared baskets without touching `my-basket/`
-   - `deveggs uninstall --harness <name>` reverts the wiring for Claude Code or Codex.
-     For other harnesses, delete the `deveggs:begin` … `deveggs:end` block.
+   - `deveggs uninstall` reverts the wiring. For other harnesses, delete the
+     `deveggs:begin` … `deveggs:end` block.
    - to share their basket, they can open a PR with a reviewed copy in
      `shared-baskets/<username>/`. GitHub creates the fork for them.
 
