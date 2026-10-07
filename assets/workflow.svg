@@ -108,9 +108,10 @@
   <path d="M618,623 C611,623 608,647 617,647 l2,-6 l-3,-5 l3,-5 z" fill="#e4e7ea" stroke="#9aa3ab" stroke-width="1.2"/>
   <path d="M622,623 C629,623 632,647 623,647 l2,-6 l-3,-5 l3,-5 z" fill="#e4e7ea" stroke="#9aa3ab" stroke-width="1.2"/>
   <text class="t" x="642" y="631" fill="#4b5563">Cracked</text>
-  <text class="s" x="642" y="648">rejected, never suggested again</text>
+  <text class="s" x="642" y="648">rejected or retired for good</text>
   <path d="M835,315 H849 V634 H837" fill="none" stroke="#9aa3ab" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#g)"/>
-  <text class="lbl" x="864" y="475" fill="#6b7280" text-anchor="middle" transform="rotate(90 864 475)">you can crack an egg anytime</text>
+  <path d="M835,555 H849" fill="none" stroke="#9aa3ab" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text class="lbl" x="864" y="470" fill="#6b7280" text-anchor="middle" transform="rotate(90 864 470)">you can crack an egg or a chicken anytime</text>
 
   <!-- footer -->
   <text x="30" y="700" font-size="12.5" fill="#4b5563">Already sure? “Never push to main” can go straight in as a chicken. You still confirm it first.</text>
