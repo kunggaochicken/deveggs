@@ -1,11 +1,11 @@
 <h1 align="center">deveggs 🥚</h1>
 <p align="center">
-  <a href="#install"><img alt="Works with" src="https://img.shields.io/badge/works%20with-Claude%20Code%20%7C%20Codex%20%7C%20Cursor%20%7C%20Gemini%20CLI-blue?style=flat-square"></a>
+  <a href="#install"><img alt="Works with any harness" src="https://img.shields.io/badge/works%20with-any%20harness-blue?style=flat-square"></a>
   <a href="https://x.com/kunggaochicken"><img alt="X" src="https://img.shields.io/badge/X-@kunggaochicken-black?style=flat-square"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat-square"></a>
 </p>
 
-<h3 align="center">One basket of preferences and skills. Every agent you use.</h3>
+<h3 align="center">One basket of your personal preferences and skills. Every agent you use.</h3>
 
 <p align="center">
   <img src="assets/header.jpg" alt="deveggs, the developer eggsperience: you tell your agents preferences and ask for skills, each is laid as an egg on trial, tried across Claude Code, Codex and Cursor, and you hatch it into a permanent chicken or crack it. One basket, every agent." width="100%">
