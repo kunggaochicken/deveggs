@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/header.jpg" alt="deveggs: the developer eggsperience, a basket of eggs for the agentic developer" width="100%">
+</p>
+
 # deveggs 🥚
 
 *The **dev**eloper **egg**sperience: a basket of eggs for the agentic developer.*
