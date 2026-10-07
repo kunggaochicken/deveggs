@@ -37,6 +37,36 @@ on trial. Only the ones that prove themselves become permanent.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
+## Example
+
+After a session where you corrected your agent a few times, run `/deveggs`. The
+agent turns what you said into eggs and asks before laying any of them:
+
+```text
+> /deveggs
+
+Your basket is empty: no chickens and no eggs yet, so there's nothing to follow or hatch.
+
+Eggs from this session. Say the numbers you want laid; I won't lay any without your yes.
+
+1. 🥚 Prefer agent-native setup: write instructions an agent follows, not install
+   scripts. From your words: "no dont use a script. this is supposed to be agent
+   native". Tag: tooling.
+2. 🥚 One install should cover every agent; never make the developer repeat setup per
+   harness. From your words: "we shouldn't have to paste into each coding agent…
+   shouldn't one just install it into all?" Tag: tooling.
+3. 🐔 Import from your global CLAUDE.md as chickens, since they're already
+   "always/never" rules:
+   - Always land changes through a PR; never push to main.
+   - Always refer to files by full absolute path.
+   - "Own through merge" means loop on CI and review until merged.
+
+   These would also apply in Codex and Gemini, not just Claude Code.
+```
+
+Your words become eggs on trial. Rules you've already stated as "always" or "never"
+go straight in as chickens. Once laid, every agent you use follows them.
+
 ## Install
 
 Paste this into **one** coding agent (Claude Code, Codex, Cursor, …):
