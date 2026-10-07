@@ -26,7 +26,9 @@ meta-skill that teaches any agent to use it (`skills/deveggs/SKILL.md`).
   private.
 - Install has each developer fork, remove the `my-basket` lines from `.gitignore`
   in the fork, and commit their basket there so it's saved permanently. PRs to this
-  repo must come from a branch without those commits.
+  repo must come from a branch without those commits. A developer who can't fork
+  (the repo owner) keeps `my-basket/` as its own private git repo instead; commit
+  basket changes there.
 
 ## Working on the basket
 
