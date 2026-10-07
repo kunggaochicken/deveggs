@@ -26,8 +26,11 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
    | --- | --- | --- | --- |
    | Claude Code | `~/.claude` | `~/.claude/CLAUDE.md` | `~/.claude/skills/` |
    | Codex | `~/.codex` | `~/.codex/AGENTS.md` | `~/.codex/skills/` |
-   | Cursor | `~/.cursor` | none: User Rules in Cursor Settings → Rules | `~/.cursor/skills/` |
-   | Gemini CLI | `~/.gemini` | `~/.gemini/GEMINI.md` | none |
+   | Cursor | `~/.cursor` | none: User Rules in Cursor Settings → Rules | none: it already reads `~/.claude/skills/` and `~/.codex/skills/`* |
+   | Gemini CLI | `~/.gemini` | `~/.gemini/GEMINI.md` | `~/.gemini/skills/` |
+
+   \* If neither Claude Code nor Codex is installed, **copy** (don't symlink) the skill
+   folders into `~/.cursor/skills/`. Cursor may not follow symlinks there.
 
 4. **Plan, then confirm.** For each harness found, plan these two changes:
    - **Skill links.** Symlink `<repo>/skills/deveggs` to `<skills>/deveggs`. Also
