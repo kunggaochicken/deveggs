@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { apply, harnesses, planInstall, planUninstall, removeBlock, upsertBlock } from "../src/install.ts";
+import { apply, harnesses, managedBlock, planInstall, planUninstall, removeBlock, upsertBlock } from "../src/install.ts";
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), "deveggs-repo-"));
@@ -26,6 +26,10 @@ test("upsertBlock is idempotent and removeBlock restores the file", () => {
   const twice = upsertBlock(once, "<!-- deveggs:begin -->\nB\n<!-- deveggs:end -->");
   assert.equal(twice, "# mine\n\n<!-- deveggs:begin -->\nB\n<!-- deveggs:end -->\n");
   assert.equal(removeBlock(twice), "# mine\n");
+});
+
+test("managedBlock names the skill file, so harnesses without a skills folder can follow it", () => {
+  assert.ok(managedBlock("/r").includes("/r/skills/deveggs/SKILL.md"));
 });
 
 test("install links skills + writes block; reinstall is a no-op; uninstall reverts", () => {

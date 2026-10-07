@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
-import { apply, describe, harnesses, planInstall, planUninstall } from "./install.ts";
+import { apply, describe, harnesses, managedBlock, planInstall, planUninstall } from "./install.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
@@ -25,6 +25,7 @@ usage:
   deveggs render                       rebuild my-basket/PREFERENCES.md
   deveggs install [--harness claude,codex] [--dry-run]
   deveggs uninstall [--harness claude,codex] [--dry-run]
+  deveggs block                        print the instructions block, for harnesses install doesn't know
 
 An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
 Every change re-renders PREFERENCES.md.
@@ -161,6 +162,9 @@ function main(argv: string[]): void {
       else apply(actions);
       return;
     }
+    case "block":
+      console.log(managedBlock(repoRoot));
+      return;
     case undefined:
     case "help":
     case "--help":
