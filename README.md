@@ -12,9 +12,17 @@ helps, but each harness keeps its own copy and puts its own slant on it.
 deveggs is a **meta-skill**. It doesn't hand you a stack. It gives you a place to
 build your own: one portable basket that goes into every harness you use.
 
-![deveggs architecture](assets/architecture.svg)
+```mermaid
+flowchart LR
+  you["💬 You: “always…” / “let's try…”"] -->|you confirm| egg
+  subgraph basket["🧺 your basket, loaded by every harness"]
+    egg["🥚 Egg<br/>on trial"] -->|"agents follow it<br/>and log ✓ / ✗"| ready["🐣 Ready<br/>3 ✓, no ✗"]
+    ready -->|you hatch| chicken["🐔 Chicken<br/>permanent"]
+  end
+  egg -.->|doesn't help| cracked["💥 Cracked"]
+```
 
-![deveggs repo setup](assets/setup.svg)
+Detailed figures: [architecture](assets/architecture.svg) · [repo setup](assets/setup.svg)
 
 ## Install
 
