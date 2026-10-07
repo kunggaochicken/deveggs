@@ -1,2 +1,9 @@
 node_modules/
 .DS_Store
+
+# Personal basket: local by default, so it's never committed by accident.
+# To sync it across machines, delete these lines in your own fork and commit it there.
+# Never commit it upstream; share a reviewed copy under shared-baskets/<you>/ instead.
+/my-basket/**
+!/my-basket/**/
+!/my-basket/**/.gitkeep

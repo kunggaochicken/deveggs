@@ -22,7 +22,7 @@ that block is missing, use `$DEVEGGS_HOME`. Run all commands through
 
 ## At session start
 
-Read `<basket-repo>/basket/PREFERENCES.md`. It lists the chickens, then the eggs with
+Read `<basket-repo>/my-basket/PREFERENCES.md`. It lists the chickens, then the eggs with
 their ids. Skills from both tiers are already installed. Egg skills have descriptions
 that start with `[egg: on trial]`.
 
@@ -33,7 +33,7 @@ that start with `[egg: on trial]`.
 | "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
 | "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area> --harness <you> --quote "<their words>"` |
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
-| A shell snippet they keep rewriting | `--kind script`, then write `basket/scripts/<id>` |
+| A shell snippet they keep rewriting | `--kind script`, then write `my-basket/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
 | You *noticed* a pattern they never stated | Ask in one line first: "Lay an egg for X?" |
 

@@ -24,18 +24,22 @@ https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-The agent forks this repo for you (**your fork is your basket**), clones it, and
-previews exactly which skills and instruction files it will touch. Then it waits for
-your yes. Afterwards it offers to seed your basket from preferences you've already
-written down, one confirmed egg at a time. To install by hand, follow the steps in
-[INSTALL.md](INSTALL.md) yourself. Requires Node >= 22.18, git and `gh`.
+The agent clones this repo and previews exactly which skills and instruction files it
+will touch. Then it waits for your yes. Afterwards it offers to seed your basket from
+preferences you've already written down, one confirmed egg at a time. To install by
+hand, follow the steps in [INSTALL.md](INSTALL.md) yourself. Requires Node >= 22.18
+and git.
 
-Your fork holds two things:
-- **the tool**, which you update with `git pull upstream main`
-- **your basket** (`basket/`), which you commit to your fork so it follows you to
-  every machine
+The repo has two kinds of basket, and the folder names keep them apart:
 
-Upstream never touches `basket/`, so pulling never conflicts with your eggs.
+| folder | what it is | committed? |
+|---|---|---|
+| `my-basket/` | **your personal basket**, the one the CLI reads and writes | no: gitignored by default |
+| `shared-baskets/<user>/` | **the repository of baskets** that people chose to share | yes, by PR |
+
+`git pull` updates the tool and the shared baskets, and never touches `my-basket/`.
+To sync your personal basket across machines, fork the repo, delete the
+`my-basket` lines from `.gitignore` in your fork, and commit it there.
 
 ## Eggs and chickens
 
@@ -60,9 +64,9 @@ Upstream never touches `basket/`, so pulling never conflicts with your eggs.
 - **💥 Cracked.** Rejected, or a chicken you've retired. It stays on file so it's
   never laid again.
 
-Skills get the same two tiers. **Egg skills** in `basket/skills/eggs/` are
+Skills get the same two tiers. **Egg skills** in `my-basket/skills/eggs/` are
 experimental: their description starts with `[egg: on trial]` so agents treat them
-that way. **Chicken skills** in `basket/skills/chickens/` are your permanent toolkit.
+that way. **Chicken skills** in `my-basket/skills/chickens/` are your permanent toolkit.
 Hatching a skill moves its folder and removes the trial marker. If a chicken skill
 and an egg skill share a name, the chicken wins.
 
@@ -79,7 +83,7 @@ skills/deveggs/SKILL.md   the meta-skill: teaches any agent to lay, try, hatch a
 bin/deveggs               CLI shim -> src/cli.ts (TypeScript, run natively by Node >= 22.18)
 src/                      basket model + harness installer (strict tsc, no runtime deps)
 tests/                    node:test suites
-basket/
+my-basket/
   eggs/ chickens/ cracked/         one Markdown file per item; the folder is the tier
   skills/eggs/ skills/chickens/    trial and permanent skills (<id>/SKILL.md)
   scripts/                         scripts that script-kind items point to
@@ -118,18 +122,18 @@ source of truth. `deveggs uninstall` removes both.
 
 ## Sharing baskets: an open-source dev experience
 
-Your basket stays in your fork unless you choose to share it. If you do, open a PR
-that adds a copy under [`baskets/<your-github-username>/`](baskets/README.md).
+Your personal basket stays local, or in your fork, unless you choose to share it. If
+you do, open a PR that adds a reviewed copy under [`shared-baskets/<your-github-username>/`](shared-baskets/README.md).
 Everyone can then browse how other developers work with agents and borrow what
 looks good. A borrowed egg always enters your basket as an **egg on trial**, even
 if it was a chicken for its author.
 
 - **Review before you share.** An egg's origin holds your verbatim words and repo
   names.
-- **Never PR your personal `basket/` upstream.** Everyone would pull your eggs into
-  their own basket. CI rejects it, and points you to `baskets/` instead.
-- **Tool improvements are welcome too.** Branch from upstream `main`, not from your
-  basket branch.
+- **Never commit `my-basket/` itself upstream.** Everyone would pull your eggs into
+  their own basket. CI rejects it, and points you to `shared-baskets/` instead.
+- **Tool improvements are welcome too.** Branch from upstream `main`, not from a
+  branch that carries your personal basket.
 
 ## Philosophy
 

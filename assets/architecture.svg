@@ -92,7 +92,7 @@
   <rect class="panel" x="710" y="66" width="660" height="334" rx="6"/>
   <text class="ptitle" x="726" y="92">(d) Egg anatomy: one table, grep-able trigger first</text>
   <rect x="728" y="104" width="300" height="20" fill="#eef0f2" stroke="#d6d9d2"/>
-  <text class="mono" x="736" y="118">basket/eggs/pr-body-why-not-what.md</text>
+  <text class="mono" x="736" y="118">my-basket/eggs/pr-body-why-not-what.md</text>
 
   <rect x="728" y="128" width="522" height="20" fill="#eef0f2" stroke="#d6d9d2"/>
   <text class="b" x="736" y="142">field</text>
@@ -140,7 +140,7 @@
     <text x="1270" y="292" class="b">trial signal</text>
     <text x="1270" y="332" class="b">provenance</text>
   </g>
-  <text class="mono" x="728" y="374">$ rg -N '^\| trigger \|' basket/eggs basket/chickens</text>
+  <text class="mono" x="728" y="374">$ rg -N '^\| trigger \|' my-basket/eggs my-basket/chickens</text>
   <text class="small muted" x="728" y="390">one line per egg: enough to decide what to load, without reading every file</text>
 
   <!-- ============ (b) Architecture ============ -->
@@ -180,8 +180,8 @@
 
   <!-- package -->
   <rect class="pkgbox" x="446" y="466" width="178" height="230" rx="8"/>
-  <text class="b c" x="535" y="488" fill="#6b5b95">deveggs tool (upstream)</text>
-  <text class="small c muted" x="535" y="503">git pull upstream main</text>
+  <text class="b c" x="535" y="488" fill="#6b5b95">deveggs tool</text>
+  <text class="small c muted" x="535" y="503">updated with git pull</text>
   <g class="mono">
     <text x="462" y="530">lay · feedback</text>
     <text x="462" y="550">hatch · crack</text>
@@ -197,10 +197,10 @@
 
   <!-- basket -->
   <rect class="basketbox" x="662" y="466" width="252" height="250" rx="8"/>
-  <text class="b c" x="788" y="488" fill="#5f7f4a">Your basket (in your fork)</text>
-  <text class="small c muted" x="788" y="503">in your fork; share a copy as baskets/‹you›/</text>
+  <text class="b c" x="788" y="488" fill="#5f7f4a">Your personal basket</text>
+  <text class="small c muted" x="788" y="503">gitignored; share a copy via shared-baskets/</text>
   <g class="mono">
-    <text x="678" y="528">basket/</text>
+    <text x="678" y="528">my-basket/</text>
     <text x="678" y="546">├ eggs/</text><text x="790" y="546" class="muted">trial</text>
     <text x="678" y="564">├ chickens/</text><text x="790" y="564" class="muted">permanent</text>
     <text x="678" y="582">├ cracked/</text><text x="790" y="582" class="muted">rejected</text>
@@ -210,8 +210,8 @@
   <text class="small muted" x="678" y="642">one Markdown table per item;</text>
   <text class="small muted" x="678" y="656">the folder is the tier</text>
   <line x1="676" y1="670" x2="900" y2="670" stroke="#c6d4bb"/>
-  <text class="small" x="678" y="690">⇅ your fork's remote: the same basket</text>
-  <text class="small" x="678" y="704">  on every machine and harness</text>
+  <text class="small" x="678" y="690">⇅ optional: fork + commit it to sync</text>
+  <text class="small" x="678" y="704">  it across machines</text>
   <line class="line" x1="624" y1="560" x2="660" y2="560" marker-end="url(#arr)"/>
   <text class="small c" x="642" y="552">writes</text>
 
@@ -284,7 +284,7 @@
   <!-- caption -->
   <g font-family="Georgia, 'Times New Roman', serif" font-size="12.5">
     <text x="30" y="944"><tspan font-weight="bold">Figure 1.</tspan> (a) An egg enters the basket only after explicit developer confirmation, is followed as a trial with structured ✓/✗ feedback, and becomes a permanent chicken only</text>
-    <text x="30" y="962">when the developer hatches it. (b) A fork holds the tool (merged from upstream) and the developer's basket (shared upstream only as baskets/‹user›/), compiled into an always-loaded block and</text>
+    <text x="30" y="962">when the developer hatches it. (b) The repo holds the tool, a personal my-basket/ (gitignored) and a repository of shared-baskets/. The personal basket is compiled into an always-loaded block and</text>
     <text x="30" y="980">per-context skills that every harness loads natively. (c) The agent's per-session loop. (d) The egg template. Design target: triggers, compile and deveggs-lay are specified, not yet built.</text>
   </g>
 </svg>

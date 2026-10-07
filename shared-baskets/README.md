@@ -11,7 +11,7 @@ Clear the `trials` row (`✓0 ✗0`) and the `## Trials` log. Then add a line to
 `context` saying where you borrowed it from, and try it like any other egg.
 
 Borrowed skills work the same way: copy `skills/chickens/<id>/` into your
-`basket/skills/eggs/<id>/` and add `[egg: on trial] ` to the start of its description.
+`my-basket/skills/eggs/<id>/` and add `[egg: on trial] ` to the start of its description.
 
 ## Sharing yours
 
@@ -19,10 +19,9 @@ Borrowed skills work the same way: copy `skills/chickens/<id>/` into your
    verbatim words, repo names and session details. Remove anything private:
    client names, internal repos, credentials, anything from work you can't publish.
    Consider leaving out `cracked/`.
-2. Copy your basket into `baskets/<your-github-username>/`, keeping the same layout
+2. Copy your basket into `shared-baskets/<your-github-username>/`, keeping the same layout
    (`eggs/`, `chickens/`, `skills/`, …). Optionally add a `README.md` about how you work.
-3. Open a PR to upstream from a branch based on upstream `main`, not your basket
-   branch. It should touch only `baskets/<your-github-username>/`.
+3. Open a PR to `kunggaochicken/deveggs` from a branch based on its `main`. It should touch only `shared-baskets/<your-github-username>/`.
 
-Your personal `basket/` must never go upstream. CI rejects any upstream change to
+Your personal `my-basket/` itself must never be committed here. CI rejects any change to
 it, because everyone would pull your eggs into their own basket.
