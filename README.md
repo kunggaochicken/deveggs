@@ -32,7 +32,7 @@ Skills work the same way: an egg skill is on trial, a chicken skill is permanent
 
 ## Install
 
-Paste this into **each** coding agent you use (Claude Code, Codex, Cursor, …):
+Paste this into **one** coding agent (Claude Code, Codex, Cursor, …):
 
 ```text
 Set up deveggs for me by following
@@ -40,9 +40,10 @@ https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-The first agent clones the repo. Each agent then points itself at the deveggs skill
-and your basket, shows you the change, and waits for your yes. Requires Node >= 22.18
-and git.
+That agent clones the repo and wires up every coding agent it finds on your machine.
+It links the deveggs skill into each one and adds a short deveggs prompt to each one's
+global instructions. It shows you the plan and waits for your yes. Requires
+Node >= 22.18 and git.
 
 ## Usage
 
@@ -54,7 +55,6 @@ deveggs lay "Never push to main" --chicken            # 🐔 already sure
 deveggs feedback <id> --good                          # log a trial
 deveggs hatch <id>                                    # 🥚 -> 🐔
 deveggs crack <id>                                    # 💥
-deveggs install                                       # wire the basket into your harnesses
 ```
 
 ## Your basket, and everyone else's

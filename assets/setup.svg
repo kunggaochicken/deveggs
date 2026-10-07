@@ -108,7 +108,7 @@
   <text class="ms muted" x="376" y="213">│</text>
   <text class="ms muted" x="376" y="231">│</text>
   <text class="ms muted" x="400" y="213">lay · feedback · hatch · crack · list</text>
-  <text class="ms muted" x="400" y="231">show · render · install · uninstall</text>
+  <text class="ms muted" x="400" y="231">show · render</text>
   <text class="small" x="590" y="176">shim → node src/cli.ts</text>
   <text class="small" x="590" y="195">TypeScript CLI, no runtime deps</text>
   <text class="small" x="590" y="252">meta-skill for any agent</text>
@@ -167,7 +167,7 @@
     <circle class="badge" cx="384" cy="673" r="7"/><text class="bt" x="384" y="676.5" font-size="9">4</text>
     <text x="398" y="677"><tspan font-weight="bold">sync</tspan> (optional): fork, un-ignore my-basket/, commit it in the fork</text>
     <circle class="badge" cx="384" cy="691" r="7"/><text class="bt" x="384" y="694.5" font-size="9">5</text>
-    <text x="398" y="695"><tspan font-weight="bold">install</tspan>: symlink skills and add a managed block; uninstall reverts both</text>
+    <text x="398" y="695"><tspan font-weight="bold">install</tspan>: the agent symlinks skills and adds a managed block in every harness</text>
   </g>
 
   <!-- ===================== upstream <-> clone arrows ===================== -->
@@ -195,22 +195,20 @@
   <!-- ===================== (c) Install ===================== -->
   <rect class="panel" x="940" y="66" width="430" height="238" rx="6"/>
   <text class="ptitle" x="956" y="92">(c) Install: an agent follows INSTALL.md</text>
-  <text class="small muted" x="956" y="111">README paste-in prompt · needs Node ≥ 22.18 and git</text>
+  <text class="small muted" x="956" y="111">README prompt, pasted once · needs Node ≥ 22.18 and git</text>
   <g>
     <circle cx="968" cy="134" r="9" fill="#6b5b95"/><text class="bt" x="968" y="137.5">1</text>
     <text class="mono" x="984" y="138">git clone …/kunggaochicken/deveggs</text>
     <circle cx="968" cy="160" r="9" fill="#6b5b95"/><text class="bt" x="968" y="163.5">2</text>
     <text class="mono" x="984" y="164">npm install &amp;&amp; npm run check</text>
     <circle cx="968" cy="186" r="9" fill="#6b5b95"/><text class="bt" x="968" y="189.5">3</text>
-    <text class="mono" x="984" y="190">bin/deveggs install --dry-run</text>
-    <text class="small muted" x="1210" y="190">show the plan</text>
+    <text class="small" x="984" y="190">find every harness; plan links + prompt blocks</text>
     <rect class="gate" x="956" y="200" width="398" height="24" rx="5"/>
     <circle cx="968" cy="212" r="9" fill="#b8923a"/><text class="bt" x="968" y="215.5">4</text>
     <text class="b" x="984" y="216">developer confirms the plan</text>
     <text class="small muted" x="1170" y="216">nothing changes before a yes</text>
     <circle cx="968" cy="238" r="9" fill="#6b5b95"/><text class="bt" x="968" y="241.5">5</text>
-    <text class="mono" x="984" y="242">bin/deveggs install</text>
-    <text class="small muted" x="1140" y="242">wires (d); flow 5</text>
+    <text class="small" x="984" y="242">agent wires every harness (d); flow 5</text>
     <circle cx="968" cy="264" r="9" fill="#6b5b95"/><text class="bt" x="968" y="267.5">6</text>
     <text class="small" x="984" y="268">offer to seed my-basket from existing notes,</text>
     <text class="small" x="984" y="284">one confirmed egg at a time (never automatic)</text>
@@ -258,10 +256,10 @@
 
   <g class="small">
     <text x="956" y="618">• A chicken skill wins over a same-named egg skill.</text>
-    <text x="956" y="635">• Cracked skills are unlinked on the next install.</text>
+    <text x="956" y="635">• The agent unlinks a skill when it is cracked.</text>
     <text x="956" y="652">• Nothing is copied: the basket stays the source of truth.</text>
-    <text x="956" y="669">• Targets the harnesses found at ~/.claude and ~/.codex.</text>
-    <text x="956" y="686">• deveggs uninstall removes the links and the block.</text>
+    <text x="956" y="669">• Every harness found: Claude Code, Codex, Cursor, …</text>
+    <text x="956" y="686">• To uninstall, any agent removes the links and the block.</text>
   </g>
 
   <!-- 5 install: skills bus into the harnesses -->

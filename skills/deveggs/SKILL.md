@@ -84,8 +84,11 @@ Get the origin and trial log from `deveggs show <id>`.
 **Never hatch or crack without the developer's say-so.** If an egg is collecting
 `--bad` feedback, suggest cracking it or rewording it.
 
-After hatching or cracking a skill, run `deveggs install` so every harness picks up
-the change.
+After hatching or cracking a skill, update its symlink in every harness skills
+folder that links into the deveggs repo (for example `~/.claude/skills/`,
+`~/.codex/skills/`). On hatch, repoint the link from `my-basket/skills/eggs/<id>` to
+`my-basket/skills/chickens/<id>`. On crack, remove it. Do the same when you lay a
+new skill, so every harness can use it.
 
 ## Committing
 

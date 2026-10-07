@@ -1,11 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
-import { apply, describe, harnesses, managedBlock, planInstall, planUninstall } from "./install.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
@@ -23,20 +20,12 @@ usage:
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
   deveggs render                       rebuild my-basket/PREFERENCES.md
-  deveggs install [--harness claude,codex] [--dry-run]
-  deveggs uninstall [--harness claude,codex] [--dry-run]
-  deveggs prompt                       print the deveggs prompt for a harness's global instructions
 
 An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
 Every change re-renders PREFERENCES.md.
 
 env:
   DEVEGGS_HOME   repo root holding my-basket/ and skills/ (default: this checkout)`;
-
-const OTHER_HARNESS = `install wires these harnesses when they exist: ${harnesses(homedir()).map((h) => h.name).join(", ")}.
-Running in a different harness? Add this deveggs prompt to that harness's global
-instructions file (the one it reads every session). If it has no such file, give the prompt
-to the developer to paste into its settings, e.g. Cursor's User Rules:`;
 
 const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
 const basket = new Basket(join(repoRoot, "my-basket"));
@@ -81,7 +70,6 @@ function main(argv: string[]): void {
       good: { type: "boolean", default: false },
       bad: { type: "boolean", default: false },
       tier: { type: "string" },
-      "dry-run": { type: "boolean", default: false },
     },
   });
   const harness = values.harness !== undefined ? { harness: values.harness } : {};
@@ -150,22 +138,6 @@ function main(argv: string[]): void {
     case "render":
       basket.render();
       console.log(`wrote ${basket.preferencesPath}`);
-      return;
-    case "install":
-    case "uninstall": {
-      const wanted = values.harness?.split(",").map((s) => s.trim());
-      const targets = harnesses(homedir()).filter((h) => (wanted ? wanted.includes(h.name) : existsSync(h.home)));
-      if (command === "install" && !values["dry-run"]) basket.render();
-      const actions = command === "install" ? planInstall(repoRoot, targets) : planUninstall(repoRoot, targets);
-      for (const a of actions) console.log(describe(a));
-      if (!actions.length) console.log(targets.length ? "nothing to do" : "no known harness found (looked for ~/.claude, ~/.codex)");
-      if (values["dry-run"]) console.log("\n(dry run: nothing changed)");
-      else apply(actions);
-      if (command === "install") console.log(`\n${OTHER_HARNESS}\n\n${managedBlock(repoRoot)}`);
-      return;
-    }
-    case "prompt":
-      console.log(managedBlock(repoRoot));
       return;
     case undefined:
     case "help":
