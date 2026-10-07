@@ -23,7 +23,7 @@ workflows and skills that every coding agent you use reads. New ideas go in as e
 on trial. Only the ones that prove themselves become permanent.
 
 <p align="center">
-  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you say how you like to work. 2: your agent drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
+  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you just work. 2: your agent spots a preference on its own, drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
 </p>
 
 ## How it works
@@ -37,10 +37,10 @@ on trial. Only the ones that prove themselves become permanent.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
-You don't have to tell deveggs anything. Just work. When you correct your agent, say
-"always…" or "never…", or walk it through the same steps again, it notices the
-preference and offers to save it in one line. Say yes and it's laid. Say nothing or
-no and nothing's saved.
+deveggs is a meta skill: you never have to tell it to look for preferences. Just
+work. When you correct your agent, say "always…" or "let's try…", or walk it through
+the same steps again, it spots the preference on its own and asks in one line:
+"Lay an egg for X?" Say yes and it's laid. Say no and nothing's saved.
 
 ## Example
 

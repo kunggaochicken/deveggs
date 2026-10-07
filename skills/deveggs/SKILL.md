@@ -28,6 +28,11 @@ that start with `[egg: on trial]`.
 
 ## Laying eggs
 
+Spot preferences yourself, as the developer works. They never have to ask you to
+look. Corrections, "always/never", "let's try…" and steps they repeat are all
+signals. But **never lay without their yes**: propose each one in one line and lay
+only what they confirm.
+
 | Signal | Command |
 |---|---|
 | "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
