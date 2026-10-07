@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 730" width="880" height="730" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933">
+  <title>How an idea becomes part of every agent's workflow</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa3ab"/>
+    </marker>
+    <style>
+      .t { font-size: 14px; font-weight: 700; }
+      .s { font-size: 12px; fill: #4b5563; }
+      .lbl { font-size: 11.5px; fill: #374151; }
+      .ln { stroke: #4a5560; stroke-width: 1.5; fill: none; }
+      .you { fill: #e8f0fe; stroke: #3b6fd4; stroke-width: 1.5; }
+      .agent { fill: #f1ebfb; stroke: #7c5cc4; stroke-width: 1.5; }
+      .egg { fill: #fbf0d0; stroke: #c49a2c; stroke-width: 1.5; }
+      .chick { fill: #fbe3d8; stroke: #c4552e; stroke-width: 1.5; }
+      .gone { fill: #f1f3f5; stroke: #9aa3ab; stroke-width: 1.3; }
+      .n { font-size: 11px; font-weight: 700; fill: #ffffff; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- card -->
+  <rect x="0.5" y="0.5" width="879" height="729" rx="14" fill="#ffffff" stroke="#d8dce1"/>
+  <text x="30" y="38" font-size="18" font-weight="700">How an idea becomes part of every agent's workflow</text>
+
+  <!-- lanes -->
+  <rect x="20" y="58" width="270" height="616" rx="10" fill="#f6f9ff"/>
+  <rect x="300" y="58" width="270" height="616" rx="10" fill="#faf7fe"/>
+  <rect x="580" y="58" width="280" height="616" rx="10" fill="#fffaf0"/>
+  <rect x="20" y="58" width="270" height="32" rx="10" fill="#3b6fd4"/>
+  <rect x="300" y="58" width="270" height="32" rx="10" fill="#7c5cc4"/>
+  <rect x="580" y="58" width="280" height="32" rx="10" fill="#b8862a"/>
+  <g font-size="13.5" font-weight="700" fill="#ffffff" text-anchor="middle">
+    <text x="155" y="79">You</text>
+    <text x="435" y="79">Your agent (any harness)</text>
+    <text x="720" y="79">Your basket</text>
+  </g>
+
+  <!-- 1 you: say it -->
+  <rect class="you" x="35" y="108" width="240" height="54" rx="9"/>
+  <circle cx="57" cy="135" r="10" fill="#3b6fd4"/><text class="n" x="57" y="139">1</text>
+  <text class="t" x="76" y="131">Say how you like to work</text>
+  <text class="s" x="76" y="149">“always…” or “let's try…”</text>
+  <path class="ln" d="M155,162 V195 H313" marker-end="url(#a)"/>
+
+  <!-- 2 agent: proposes -->
+  <rect class="agent" x="315" y="168" width="240" height="54" rx="9"/>
+  <circle cx="337" cy="195" r="10" fill="#7c5cc4"/><text class="n" x="337" y="199">2</text>
+  <text class="t" x="356" y="191">Drafts an egg, asks you</text>
+  <text class="s" x="356" y="209">“Lay this egg?”</text>
+  <path class="ln" d="M435,222 V255 H277" marker-end="url(#a)"/>
+
+  <!-- 3 you: confirm -->
+  <rect class="you" x="35" y="228" width="240" height="54" rx="9"/>
+  <circle cx="57" cy="255" r="10" fill="#3b6fd4"/><text class="n" x="57" y="259">3</text>
+  <text class="t" x="76" y="251">Say yes</text>
+  <text class="s" x="76" y="269">no → nothing is saved</text>
+  <path class="ln" d="M155,282 V315 H593" marker-end="url(#a)"/>
+  <text class="lbl" x="435" y="308" text-anchor="middle">laid as an egg</text>
+
+  <!-- egg -->
+  <rect class="egg" x="595" y="288" width="240" height="54" rx="9"/>
+  <path d="M619,301 C628,301 630,327 619,327 C608,327 610,301 619,301 Z" fill="#f3e3b5" stroke="#c49a2c" stroke-width="1.4"/>
+  <text class="t" x="642" y="311">Egg · on trial</text>
+  <text class="s" x="642" y="329">a new idea you're testing</text>
+  <path class="ln" d="M715,342 V375 H557" marker-end="url(#a)"/>
+
+  <!-- 4 agent: tries it -->
+  <rect class="agent" x="315" y="348" width="240" height="54" rx="9"/>
+  <circle cx="337" cy="375" r="10" fill="#7c5cc4"/><text class="n" x="337" y="379">4</text>
+  <text class="t" x="356" y="371">Follows it, every session</text>
+  <text class="s" x="356" y="389">logs ✓ helped or ✗ didn't</text>
+  <path class="ln" d="M315,365 C292,365 292,388 313,388" marker-end="url(#a)"/>
+  <path class="ln" d="M435,402 V435 H593" marker-end="url(#a)"/>
+  <text class="lbl" x="515" y="428" text-anchor="middle">3 ✓, no ✗</text>
+
+  <!-- ready -->
+  <rect class="egg" x="595" y="408" width="240" height="54" rx="9"/>
+  <path d="M619,421 C628,421 630,447 619,447 C608,447 610,421 619,421 Z" fill="#f3e3b5" stroke="#c49a2c" stroke-width="1.4"/>
+  <path d="M610,433 l3,-3 l3,3 l3,-3 l3,3 l3,-3 l3,3" fill="none" stroke="#c4552e" stroke-width="1.3"/>
+  <text class="t" x="642" y="431">Ready to hatch</text>
+  <text class="s" x="642" y="449">your agent suggests it</text>
+  <path class="ln" d="M715,462 V495 H277" marker-end="url(#a)"/>
+  <text class="lbl" x="435" y="488" text-anchor="middle">only you decide</text>
+
+  <!-- 5 you: hatch -->
+  <rect class="you" x="35" y="468" width="240" height="54" rx="9"/>
+  <circle cx="57" cy="495" r="10" fill="#3b6fd4"/><text class="n" x="57" y="499">5</text>
+  <text class="t" x="76" y="491">Hatch it</text>
+  <text class="s" x="76" y="509">it earned a permanent spot</text>
+  <path class="ln" d="M155,522 V555 H593" marker-end="url(#a)"/>
+  <text class="lbl" x="435" y="548" text-anchor="middle">hatched</text>
+
+  <!-- chicken -->
+  <rect class="chick" x="595" y="528" width="240" height="54" rx="9"/>
+  <polygon points="606,556 601,548 609,553" fill="#9c4426"/>
+  <ellipse cx="617" cy="559" rx="11" ry="8" fill="#d9704a" stroke="#9c4426" stroke-width="1.2"/>
+  <circle cx="626" cy="546" r="5.5" fill="#d9704a" stroke="#9c4426" stroke-width="1.2"/>
+  <path d="M623,541 l1.5,-4 l1.5,3 l1.5,-3.5 l1.5,4 z" fill="#c0392b"/>
+  <polygon points="631,545 636,547 631,549" fill="#e0a526"/>
+  <text class="t" x="642" y="551">Chicken · permanent</text>
+  <text class="s" x="642" y="569">every agent follows it</text>
+
+  <!-- cracked -->
+  <rect class="gone" x="595" y="610" width="240" height="48" rx="9"/>
+  <path d="M618,623 C611,623 608,647 617,647 l2,-6 l-3,-5 l3,-5 z" fill="#e4e7ea" stroke="#9aa3ab" stroke-width="1.2"/>
+  <path d="M622,623 C629,623 632,647 623,647 l2,-6 l-3,-5 l3,-5 z" fill="#e4e7ea" stroke="#9aa3ab" stroke-width="1.2"/>
+  <text class="t" x="642" y="631" fill="#4b5563">Cracked</text>
+  <text class="s" x="642" y="648">rejected or retired for good</text>
+  <path d="M835,315 H849 V634 H837" fill="none" stroke="#9aa3ab" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#g)"/>
+  <path d="M835,555 H849" fill="none" stroke="#9aa3ab" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text class="lbl" x="864" y="470" fill="#6b7280" text-anchor="middle" transform="rotate(90 864 470)">you can crack an egg or a chicken anytime</text>
+
+  <!-- footer -->
+  <text x="30" y="700" font-size="12.5" fill="#4b5563">Already sure? “Never push to main” can go straight in as a chicken. You still confirm it first.</text>
+</svg>
