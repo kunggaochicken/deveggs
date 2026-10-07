@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/header.jpg" alt="deveggs: a basket of eggs for the agentic developer" width="100%">
+  <img src="assets/header.jpg" alt="deveggs: the developer eggsperience, a basket of eggs for the agentic developer" width="100%">
 </p>
 
 # deveggs 🥚
