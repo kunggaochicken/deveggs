@@ -3,22 +3,29 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { Basket, BasketError, KINDS, type Egg, type Kind, WARM_THRESHOLD } from "./basket.ts";
+import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { apply, describe, harnesses, planInstall, planUninstall } from "./install.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
+  🥚 egg      on trial: a new preference/workflow/script/skill you're playing with
+  🐔 chicken  hatched: you liked it, so it's permanent
+  💥 cracked  rejected: kept so it's never laid again
+
 usage:
-  deveggs lay "<one-sentence fact>" [--kind preference|workflow|script|skill]
-                                     [--tag t1,t2] [--harness name] [--explicit] [--note text]
-  deveggs warm <id> [--harness name]   record another sighting
-  deveggs hatch <id>                   confirm an egg (then re-renders)
-  deveggs crack <id>                   reject an egg (kept so it is never re-laid)
-  deveggs list [--status egg|hatched|cracked|warm] [--kind k]
+  deveggs lay "<one-sentence fact>" [--kind ${KINDS.join("|")}]
+                                     [--tag t1,t2] [--harness name] [--note text] [--chicken]
+  deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
+  deveggs hatch <id>                   egg -> chicken (permanent)
+  deveggs crack <id>                   reject an egg, or retire a chicken
+  deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
   deveggs render                       rebuild basket/PREFERENCES.md
   deveggs install [--harness claude,codex] [--dry-run]
   deveggs uninstall [--harness claude,codex] [--dry-run]
+
+An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
+Every change re-renders PREFERENCES.md.
 
 env:
   DEVEGGS_HOME   repo root holding basket/ and skills/ (default: this checkout)`;
@@ -27,9 +34,10 @@ const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPa
 const basket = new Basket(join(repoRoot, "basket"));
 
 function line(egg: Egg): string {
-  const mark = egg.status === "hatched" ? "🐣" : egg.status === "cracked" ? "💥" : egg.sightings >= WARM_THRESHOLD ? "🔥" : "🥚";
+  const mark = egg.tier === "chicken" ? "🐔" : egg.tier === "cracked" ? "💥" : isReady(egg) ? "🐣" : "🥚";
   const tags = egg.tags.length ? ` [${egg.tags.join(", ")}]` : "";
-  return `${mark} ${egg.id}  (${egg.kind}, ×${egg.sightings})${tags}\n     ${egg.summary}`;
+  const trials = egg.tier === "egg" ? `, ✓${egg.good} ✗${egg.bad}` : "";
+  return `${mark} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
 }
 
 function requireId(positionals: string[]): string {
@@ -47,36 +55,44 @@ function main(argv: string[]): void {
       kind: { type: "string" },
       tag: { type: "string" },
       harness: { type: "string" },
-      explicit: { type: "boolean", default: false },
       note: { type: "string" },
-      status: { type: "string" },
+      chicken: { type: "boolean", default: false },
+      good: { type: "boolean", default: false },
+      bad: { type: "boolean", default: false },
+      tier: { type: "string" },
       "dry-run": { type: "boolean", default: false },
     },
   });
+  const harness = values.harness !== undefined ? { harness: values.harness } : {};
+  const note = values.note !== undefined ? { note: values.note } : {};
 
   switch (command) {
     case "lay": {
       const summary = positionals.join(" ").trim();
       if (!summary) throw new BasketError('usage: deveggs lay "<one-sentence fact>"');
-      const kind = values.kind;
-      if (kind !== undefined && !(KINDS as readonly string[]).includes(kind)) {
-        throw new BasketError(`invalid kind ${JSON.stringify(kind)}; expected one of ${KINDS.join(", ")}`);
+      if (values.kind !== undefined && !isKind(values.kind)) {
+        throw new BasketError(`invalid kind ${JSON.stringify(values.kind)}; expected one of ${KINDS.join(", ")}`);
       }
       const egg = basket.lay({
         summary,
-        source: values.explicit ? "explicit" : "inferred",
+        chicken: values.chicken,
         tags: values.tag?.split(",").map((t) => t.trim()).filter(Boolean) ?? [],
-        ...(kind !== undefined && { kind: kind as Kind }),
-        ...(values.harness !== undefined && { harness: values.harness }),
-        ...(values.note !== undefined && { body: values.note }),
+        ...(values.kind !== undefined && { kind: values.kind }),
+        ...harness,
+        ...note,
       });
-      if (egg.status === "hatched") basket.render();
+      basket.render();
       console.log(line(egg));
+      if (egg.kind === "skill") console.log(`     write it: ${join(basket.skillDir(egg.tier, egg.id), "SKILL.md")}`);
       return;
     }
-    case "warm":
-      console.log(line(basket.warm(requireId(positionals), values.harness)));
+    case "feedback": {
+      if (values.good === values.bad) throw new BasketError("pass exactly one of --good or --bad");
+      const egg = basket.feedback(requireId(positionals), { good: values.good, ...harness, ...note });
+      console.log(line(egg));
+      if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
       return;
+    }
     case "hatch":
       console.log(line(basket.hatch(requireId(positionals))));
       basket.render();
@@ -87,13 +103,18 @@ function main(argv: string[]): void {
       return;
     case "show": {
       const egg = basket.get(requireId(positionals));
-      console.log(`${line(egg)}\n     source: ${egg.source}  harnesses: ${egg.harnesses.join(", ") || "-"}  laid: ${egg.laid}`);
+      console.log(`${line(egg)}\n     harnesses: ${egg.harnesses.join(", ") || "-"}  laid: ${egg.laid}  updated: ${egg.updated}`);
       if (egg.body) console.log(`\n${egg.body}`);
       return;
     }
     case "list": {
-      let eggs = values.status === "warm" ? basket.warmEggs() : basket.all();
-      if (values.status && values.status !== "warm") eggs = eggs.filter((e) => e.status === values.status);
+      const tier = values.tier;
+      if (tier !== undefined && tier !== "ready" && !(TIERS as readonly string[]).includes(tier)) {
+        throw new BasketError(`invalid tier ${JSON.stringify(tier)}; expected one of ${TIERS.join(", ")}, ready`);
+      }
+      let eggs = basket.all();
+      if (tier === "ready") eggs = eggs.filter(isReady);
+      else if (tier) eggs = eggs.filter((e) => e.tier === tier);
       if (values.kind) eggs = eggs.filter((e) => e.kind === values.kind);
       console.log(eggs.length ? eggs.map(line).join("\n") : "basket is empty");
       return;
@@ -105,9 +126,7 @@ function main(argv: string[]): void {
     case "install":
     case "uninstall": {
       const wanted = values.harness?.split(",").map((s) => s.trim());
-      const targets = harnesses(homedir()).filter((h) =>
-        wanted ? wanted.includes(h.name) : existsSync(h.home),
-      );
+      const targets = harnesses(homedir()).filter((h) => (wanted ? wanted.includes(h.name) : existsSync(h.home)));
       if (!targets.length) throw new BasketError("no supported harness found (looked for ~/.claude, ~/.codex)");
       if (command === "install" && !values["dry-run"]) basket.render();
       const actions = command === "install" ? planInstall(repoRoot, targets) : planUninstall(repoRoot, targets);

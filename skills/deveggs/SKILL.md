@@ -1,14 +1,20 @@
 ---
 name: deveggs
-description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "I prefer…", a repeated correction, a workflow or script they keep re-explaining), or asks to remember, review, or hatch their dev preferences. Maintains their harness-agnostic basket of eggs instead of harness-local memory.
+description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "let's try…", "I prefer…", a correction that applies beyond this project, a workflow, script or skill they keep re-explaining), when an on-trial egg clearly helps or hurts, or when they ask to review, hatch or crack their preferences. Tends their harness-agnostic basket of eggs (on trial) and chickens (permanent) instead of harness-local memory.
 ---
 
 # deveggs: tend the developer's basket
 
-The developer keeps a **basket**, one git repo of their agentic-dev preferences,
-workflows, scripts and skills, which is shared across every harness they use. Your
-job is to keep it accurate and growing so they never have to explain the same
-preference twice.
+The developer keeps a **basket**: one git repo holding their agentic-dev preferences,
+workflows, scripts and skills. Every harness they use reads the same basket. It has
+two tiers:
+
+- 🥚 **Eggs are on trial.** These are new ideas the developer wants to play with
+  before committing. Follow them, but watch how they go.
+- 🐔 **Chickens are permanent.** These are eggs the developer liked enough to hatch.
+  Follow them without question.
+
+A chicken outranks an egg, and both outrank harness-local memory.
 
 The basket's location is in the `deveggs` block of your global instructions. If
 that block is missing, use `$DEVEGGS_HOME`. Run all commands through
@@ -16,67 +22,66 @@ that block is missing, use `$DEVEGGS_HOME`. Run all commands through
 
 ## At session start
 
-Read `<basket-repo>/basket/PREFERENCES.md` and follow it. Hatched preferences
-outrank harness-local memory. If the two conflict, the basket wins. Tell the
-developer about the conflict once.
+Read `<basket-repo>/basket/PREFERENCES.md`. It lists the chickens, then the eggs with
+their ids. Skills from both tiers are already installed. Egg skills have descriptions
+that start with `[egg: on trial]`.
 
-## When to lay an egg
-
-Lay an egg whenever you learn something durable about *how this developer works*:
+## Laying eggs
 
 | Signal | Command |
 |---|---|
-| They state it outright: "always…", "never…", "from now on…" | `deveggs lay "<fact>" --explicit --tag <area> --harness <you>` |
-| They correct you, and the correction would apply to other projects | `deveggs lay "<fact>" --tag <area> --harness <you> --note "<evidence>"` |
-| You notice a pattern they haven't stated | `deveggs lay "<fact>" --harness <you> --note "<evidence>"` (inferred) |
-| They re-explain something that's already an egg | `deveggs warm <id> --harness <you>` |
-| They keep running the same multi-step procedure | `--kind workflow` |
-| They keep writing the same shell snippet | `--kind script` |
-| A workflow is solid enough to be a reusable skill | `--kind skill` |
+| "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you>` |
+| "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area>` |
+| A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
+| A shell snippet they keep rewriting | `--kind script`, then write `basket/scripts/<id>` |
+| A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
+| You *noticed* a pattern they never stated | Ask in one line first: "Lay an egg for X?" |
 
 Rules:
 
-- **Use one fact per egg.** Write it as an imperative the next agent can follow, e.g.
-  "Land changes through a PR; never push to main".
+- **Use one fact per egg.** Write it as an imperative the next agent can follow.
 - **Lay only durable, cross-project facts.** Project-specific facts belong in that
   project's own AGENTS.md or CLAUDE.md.
-- **Only explicit statements get `--explicit`.** That flag hatches the egg
-  immediately. Never use it for something you inferred.
-- **Check before laying.** Run `deveggs list` first. If an egg already covers it,
-  `warm` that egg instead of laying a near-duplicate.
-- **Lay quietly.** You don't need permission to lay or warm an egg. Mention it in one
-  line at the end of your turn, e.g. "🥚 laid `prefers-terse-summaries`".
-- **`--harness` is your harness name** (`claude`, `codex`, `cursor`, …). Cross-harness
-  sightings are the strongest evidence.
+- **Don't duplicate.** Run `deveggs list` first. If an egg already covers it, record
+  feedback on that egg instead of laying a new one.
+- **`--chicken` needs an explicit "always/never".** Never use it for something you inferred.
 
-## Hatching (developer confirms)
+## Trying eggs: record feedback
 
-An inferred egg becomes **warm** 🔥 once it's been seen twice. When `deveggs list --status warm`
-shows warm eggs, propose them to the developer at a natural pause, in one batch:
+While an egg is on trial, follow it. Record feedback whenever it clearly helps or
+gets in the way:
 
-> 🔥 These have come up repeatedly. Should I hatch them?
-> 1. `prefers-terse-summaries`: Prefers terse final summaries (×3, claude+codex)
+```
+deveggs feedback <id> --good --harness <you> --note "made the PR summary scannable"
+deveggs feedback <id> --bad  --harness <you> --note "too terse for a design review"
+```
 
-- Yes → `deveggs hatch <id>`. This re-renders PREFERENCES.md.
-- No → `deveggs crack <id>`. The egg is kept so it is never laid again.
+Record feedback when there's a real signal, not every time the egg applies. The
+developer's reactions count most: if they push back on behavior an egg caused,
+that's a `--bad`. Feedback from more than one harness is the strongest evidence.
+Mention each recording in one line at the end of your turn, e.g. "🥚 +1 `terse-summaries`".
+
+## Hatching: the developer decides
+
+`deveggs list --tier ready` shows eggs with enough clean good trials (🐣). At a
+natural pause, propose them in one batch:
+
+> 🐣 These eggs have been working well. Should I hatch them into chickens?
+> 1. `terse-summaries`: End each turn with a one-line summary (✓4 ✗0, claude+codex)
+
+- Yes → `deveggs hatch <id>`. The egg becomes a chicken, and a skill moves to `skills/chickens/`.
+- No, drop it → `deveggs crack <id>`. It's kept so it's never laid again.
+- Not yet → leave it on trial.
 - They reword it → edit the egg file, then hatch it.
 
-**Never hatch an inferred egg without the developer's confirmation.**
+**Never hatch or crack without the developer's say-so.** If an egg is collecting
+`--bad` feedback, suggest cracking it or rewording it.
 
-## Growing hatched eggs into artifacts
+After hatching or cracking a skill, run `deveggs install` so every harness picks up
+the change.
 
-- **workflow**: once hatched, write the procedure to `basket/workflows/<id>.md`.
-- **script**: once hatched, write an executable to `basket/scripts/<id>` with a usage
-  comment. Prefer TypeScript run by Node, or POSIX sh.
-- **skill**: once hatched, create `basket/skills/<id>/SKILL.md` with `name` and
-  `description` frontmatter. Then run `deveggs install` to link it into every harness.
+## Committing
 
-Commit basket changes in the basket repo with a short message such as
-`egg: lay prefers-terse-summaries`. Follow the developer's own git preferences in
-PREFERENCES.md, for example whether changes go through a PR.
-
-## Pruning
-
-If two eggs overlap, merge them: keep the better wording, sum the sightings, and
-crack the other one. If a hatched preference turns out to be wrong, crack it. Don't
-leave a stale preference in place.
+Commit basket changes in the basket repo with messages like `egg: lay terse-summaries`,
+`chicken: hatch terse-summaries` or `crack: tabs`. Follow the developer's own git
+chickens, for example whether changes go through a PR.

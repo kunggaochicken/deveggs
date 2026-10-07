@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Basket, BasketError, parseEgg, serializeEgg, slugify } from "../src/basket.ts";
+import { Basket, BasketError, isReady, parseEgg, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
 
 const fresh = (): Basket => new Basket(mkdtempSync(join(tmpdir(), "deveggs-")));
 
@@ -14,41 +14,68 @@ test("slugify makes short stable ids", () => {
 
 test("serialize/parse round-trips", () => {
   const b = fresh();
-  const egg = b.lay({ summary: "Prefers terse summaries", tags: ["comms"], harness: "claude", body: "seen in grover", today: "2026-10-06" });
-  assert.deepEqual(parseEgg(serializeEgg(egg)), egg);
+  const egg = b.lay({ summary: "Prefers terse summaries", tags: ["comms"], harness: "claude", note: "seen in grover", today: "2026-10-06" });
+  assert.deepEqual(parseEgg(serializeEgg(egg), "egg"), egg);
 });
 
-test("explicit eggs hatch immediately; inferred ones wait", () => {
+test("new things are eggs on trial; --chicken skips the trial", () => {
   const b = fresh();
-  assert.equal(b.lay({ summary: "Never push to main", source: "explicit" }).status, "hatched");
-  assert.equal(b.lay({ summary: "Likes tables" }).status, "egg");
+  assert.equal(b.lay({ summary: "Likes tables" }).tier, "egg");
+  assert.equal(b.lay({ summary: "Never push to main", chicken: true }).tier, "chicken");
+  assert.ok(existsSync(join(b.root, "eggs", "likes-tables.md")));
+  assert.ok(existsSync(join(b.root, "chickens", "never-push-to-main.md")));
+  assert.throws(() => b.lay({ summary: "Likes tables" }), /already an egg/);
 });
 
-test("re-laying warms, tracks harnesses, and surfaces warm eggs", () => {
+test("feedback logs trials and an egg becomes ready after clean good trials", () => {
   const b = fresh();
-  b.lay({ summary: "Likes tables", harness: "claude" });
-  assert.deepEqual(b.warmEggs(), []);
-  const egg = b.lay({ summary: "Likes tables", harness: "codex" });
-  assert.equal(egg.sightings, 2);
+  b.lay({ summary: "Likes tables" });
+  let egg = b.feedback("likes-tables", { good: true, harness: "claude", note: "clearer diff summary", today: "2026-10-06" });
+  for (let i = 1; i < READY_AFTER; i++) egg = b.feedback("likes-tables", { good: true, harness: "codex" });
+  assert.equal(egg.good, READY_AFTER);
   assert.deepEqual(egg.harnesses, ["claude", "codex"]);
-  assert.deepEqual(b.warmEggs().map((e) => e.id), ["likes-tables"]);
+  assert.match(egg.body, /## Trials\n\n- 2026-10-06 ✓ \(claude\) clearer diff summary/);
+  assert.ok(isReady(egg));
+  assert.ok(!isReady(b.feedback("likes-tables", { good: false })));
 });
 
-test("cracked eggs are never re-laid", () => {
+test("hatch moves egg -> chicken; only eggs hatch; chickens take no feedback", () => {
+  const b = fresh();
+  b.lay({ summary: "Likes tables" });
+  const chicken = b.hatch("likes-tables");
+  assert.equal(chicken.tier, "chicken");
+  assert.ok(!existsSync(join(b.root, "eggs", "likes-tables.md")));
+  assert.throws(() => b.hatch("likes-tables"), /only eggs hatch/);
+  assert.throws(() => b.feedback("likes-tables", { good: true }), /not an egg/);
+});
+
+test("skill eggs get a trial-marked SKILL.md that moves and is unmarked on hatch", () => {
+  const b = fresh();
+  b.lay({ summary: "Ship it checklist", kind: "skill" });
+  const eggSkill = join(b.skillDir("egg", "ship-it-checklist"), "SKILL.md");
+  assert.match(readFileSync(eggSkill, "utf8"), new RegExp(`description: \\${TRIAL_PREFIX.trim()} Ship it checklist`));
+  b.hatch("ship-it-checklist");
+  assert.ok(!existsSync(eggSkill));
+  const chickenSkill = readFileSync(join(b.skillDir("chicken", "ship-it-checklist"), "SKILL.md"), "utf8");
+  assert.match(chickenSkill, /^description: Ship it checklist$/m);
+});
+
+test("cracked things are never re-laid", () => {
   const b = fresh();
   b.lay({ summary: "Uses tabs" });
   b.crack("uses-tabs");
   assert.throws(() => b.lay({ summary: "Uses tabs" }), /cracked/);
 });
 
-test("render groups hatched preferences by tag and skips the rest", () => {
+test("render lists chickens as permanent and eggs as on trial", () => {
   const b = fresh();
-  b.lay({ summary: "Never push to main", source: "explicit", tags: ["git"] });
-  b.lay({ summary: "Answer tersely", source: "explicit", tags: ["comms"] });
-  b.lay({ summary: "Maybe likes emoji", tags: ["comms"] });
-  b.lay({ summary: "Release checklist", source: "explicit", kind: "workflow" });
-  b.render();
-  const out = readFileSync(b.preferencesPath, "utf8");
-  assert.match(out, /## comms\n\n- Answer tersely\n\n## git\n\n- Never push to main/);
-  assert.doesNotMatch(out, /emoji|Release/);
+  b.lay({ summary: "Never push to main", chicken: true, tags: ["git"] });
+  b.lay({ summary: "Try terse summaries", tags: ["comms"] });
+  b.lay({ summary: "Rejected idea", tags: ["comms"] });
+  b.crack("rejected-idea");
+  const out = b.render();
+  const [chickens = "", eggs = ""] = out.split("## 🥚 Eggs");
+  assert.match(chickens, /### git\n\n- Never push to main/);
+  assert.match(eggs, /### comms\n\n- Try terse summaries `try-terse-summaries`/);
+  assert.doesNotMatch(out, /Rejected/);
 });
