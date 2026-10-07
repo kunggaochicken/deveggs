@@ -24,8 +24,8 @@ meta-skill that teaches any agent to use it (`skills/deveggs/SKILL.md`).
   chose to share, contributed by PR (see `shared-baskets/README.md`). Before opening
   one, warn the developer to review the Origin and `context` rows for anything
   private.
-- A developer who wants their personal basket synced can fork, remove the
-  `my-basket` lines from `.gitignore` in the fork, and commit it there. PRs to this
+- Install has each developer fork, remove the `my-basket` lines from `.gitignore`
+  in the fork, and commit their basket there so it's saved permanently. PRs to this
   repo must come from a branch without those commits.
 
 ## Working on the basket

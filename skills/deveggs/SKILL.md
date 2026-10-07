@@ -92,9 +92,8 @@ new skill, so every harness can use it.
 
 ## Committing
 
-`my-basket/` is gitignored by default, so basket changes stay local and there's
-nothing to commit. If the developer forked deveggs and un-ignored `my-basket/` to sync
-it, commit there with messages like `egg: lay terse-summaries`,
-`chicken: hatch terse-summaries` or `crack: tabs`, following their own git chickens.
-Never commit `my-basket/` to `kunggaochicken/deveggs` itself. To share, follow
+Install forks deveggs and un-ignores `my-basket/`, so basket changes are committed
+to the developer's fork. Commit them with messages like `egg: lay terse-summaries`,
+`chicken: hatch terse-summaries` or `crack: tabs`, following their own git chickens. If `my-basket/` is still gitignored (a plain
+clone), there's nothing to commit. Never commit `my-basket/` to `kunggaochicken/deveggs` itself. To share, follow
 `shared-baskets/README.md`.

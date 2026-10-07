@@ -47,7 +47,7 @@ https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-That agent clones the repo and wires up every coding agent it finds on your machine.
+That agent forks the repo (so your basket is saved in your own GitHub repo) and wires up every coding agent it finds on your machine.
 It links the deveggs skill into each one and adds a short deveggs prompt to each one's
 global instructions. It shows you the plan and waits for your yes. Requires
 Node >= 22.18 and git.
@@ -66,8 +66,8 @@ deveggs crack <id>                                    # 💥
 
 ## Your basket, and everyone else's
 
-- **`my-basket/`** is yours. It's gitignored, so `git pull` never touches it, and CI
-  keeps it out of upstream PRs.
+- **`my-basket/`** is yours. Your fork commits it, so it's saved and syncs across
+  machines. Upstream ignores it, and CI keeps it out of upstream PRs.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
   it always enters your basket as an egg on trial. To share yours, open a PR that adds
   a reviewed copy under [`shared-baskets/<you>/`](shared-baskets/README.md).

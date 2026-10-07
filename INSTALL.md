@@ -9,14 +9,27 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
 
 1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
    PATH. If not, tell the developer what's missing and stop.
-2. **Get the repo.** Ask where they keep repos (default `~/Projects`).
-   - If `<dir>/deveggs` exists, run `git -C <dir>/deveggs pull`.
-   - Otherwise run `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs`
-     and then `npm install && npm run check` inside it. If anything fails, show the
+2. **Get the repo as a fork.** Ask where they keep repos (default `~/Projects`).
+   The developer's basket lives in the repo, so a fork is how they keep it
+   permanently: it's committed to their own GitHub repo and survives a lost laptop
+   and syncs across machines.
+   - If `<dir>/deveggs` exists, run `git -C <dir>/deveggs pull upstream main`
+     (or `git pull` if it has no `upstream` remote) and skip to step 3.
+   - Otherwise, if `gh` is installed and authenticated, run
+     `gh repo fork kunggaochicken/deveggs --clone -- <dir>/deveggs`. That makes
+     `origin` their fork and `upstream` this repo. **Confirm** first, since it
+     creates a repo on their GitHub account. If they don't have `gh`, have them fork
+     on github.com and `git clone` their fork, then
+     `git remote add upstream https://github.com/kunggaochicken/deveggs`.
+   - In the fork, remove the `/my-basket/**` lines (and their comment) from
+     `.gitignore` and commit that as `chore: track my basket`, then push.
+   - Run `npm install && npm run check` inside it. If anything fails, show the
      output and stop.
 
-   A plain clone is all you need. No fork. Below, `<repo>` is the absolute path of
-   that clone.
+   If they'd rather not fork, a plain
+   `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs` works too:
+   leave `.gitignore` alone and tell them their basket then lives only on this
+   machine. Below, `<repo>` is the absolute path of the clone either way.
 3. **Find every harness.** Look in the developer's home directory for each harness
    below. A harness counts as installed if its home folder exists. Also include any
    other coding agent you know is installed: you know its global instructions file
@@ -69,11 +82,11 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
 7. **Report.** List the harnesses you wired and anything you skipped. Mention that:
    - every wired agent picks up deveggs in its next session. They don't need to
      paste anything again, though they can for a harness they install later.
-   - `git pull` gets tool updates and new shared baskets without touching `my-basket/`
+   - `git pull upstream main` gets tool updates and new shared baskets without
+     touching `my-basket/`, and `git push` backs their basket up to their fork
+   - PRs to `kunggaochicken/deveggs` must come from a branch off `upstream/main`,
+     never from their fork's `main`, which carries their basket
    - to uninstall, ask any agent to remove the deveggs symlinks and the
      `deveggs:begin` … `deveggs:end` block from each harness
    - to share their basket, they can open a PR with a reviewed copy in
-     `shared-baskets/<username>/`. GitHub creates the fork for them.
-
-Optional: to sync `my-basket/` across machines, fork the repo, remove the
-`my-basket` lines from `.gitignore` in the fork, and commit it there.
+     `shared-baskets/<username>/`.
