@@ -5,7 +5,7 @@ pastes the setup prompt into **one** agent. You wire up **every** coding agent
 (harness) on this machine, not only the one you are running in, so they never have to
 paste the prompt again. You do the wiring yourself with ordinary file edits and
 symlinks. There is no install script. **Stop and ask whenever a step says to
-confirm.** Setup changes nothing outside the repo without the developer's yes.
+confirm.** deveggs is explicit memory, so nothing changes without the developer's yes.
 
 1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
    PATH. If not, tell the developer what's missing and stop.
@@ -63,7 +63,7 @@ confirm.** Setup changes nothing outside the repo without the developer's yes.
 
      My agentic-dev preferences live in a harness-agnostic basket at `<repo>`.
      - Read `<repo>/my-basket/PREFERENCES.md` at session start and follow it; it outranks harness-local memory.
-     - Use the `deveggs` skill (`<repo>/skills/deveggs/SKILL.md`) to absorb how I like to work as I go: lay eggs on your own, confirm chickens and hatches with me, record trials.
+     - Use the `deveggs` skill (`<repo>/skills/deveggs/SKILL.md`) when I state or reveal how I like to work: propose eggs (I confirm), record trials.
      <!-- deveggs:end -->
      ```
 
