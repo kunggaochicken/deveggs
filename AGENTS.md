@@ -11,8 +11,8 @@ meta-skill that teaches any agent to use it (`skills/deveggs/SKILL.md`).
   Import local files with the `.ts` extension.
 - No runtime dependencies. Dev dependencies: `typescript` and `@types/node`.
 - Run `npm run check` (`tsc --noEmit` + `node --test`) before committing.
-- Model changes go in `src/basket.ts`. Harness wiring goes in `src/install.ts`. Add
-  a new harness by adding an entry to `harnesses()`.
+- Model changes go in `src/basket.ts`. Harness wiring is agent-native: it lives in
+  `INSTALL.md` as instructions, not code. Add a new harness by adding a row to its table.
 
 ## Personal basket vs shared baskets
 
