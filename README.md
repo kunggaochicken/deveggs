@@ -4,8 +4,6 @@
 
 # deveggs 🥚
 
-*The **dev**eloper **egg**sperience: a basket of eggs for the agentic developer.*
-
 Every developer works with agents differently. deveggs gives you **one personal
 basket** of preferences, workflows and skills. Every coding agent you use (Claude Code,
 Codex, …) reads it. New ideas go in as eggs on trial. Only the ones that
