@@ -87,13 +87,18 @@ function exists(path: string): boolean {
   }
 }
 
-/** Skills to expose: the meta-skill plus every hatched skill in the basket. */
-function skillSources(repoRoot: string): Array<{ name: string; dir: string }> {
+/**
+ * Skills to expose: the meta-skill, every chicken skill, and every egg skill on trial.
+ * Chickens outrank eggs, so an egg skill is skipped if a chicken already has its name.
+ */
+export function skillSources(repoRoot: string): Array<{ name: string; dir: string }> {
   const out = [{ name: "deveggs", dir: join(repoRoot, "skills", "deveggs") }];
-  const hatched = join(repoRoot, "basket", "skills");
-  if (existsSync(hatched)) {
-    for (const name of readdirSync(hatched).sort()) {
-      if (existsSync(join(hatched, name, "SKILL.md"))) out.push({ name, dir: join(hatched, name) });
+  for (const tier of ["chickens", "eggs"]) {
+    const base = join(repoRoot, "basket", "skills", tier);
+    if (!existsSync(base)) continue;
+    for (const name of readdirSync(base).sort()) {
+      if (out.some((s) => s.name === name)) continue;
+      if (existsSync(join(base, name, "SKILL.md"))) out.push({ name, dir: join(base, name) });
     }
   }
   return out;
@@ -101,16 +106,28 @@ function skillSources(repoRoot: string): Array<{ name: string; dir: string }> {
 
 export function planInstall(repoRoot: string, targets: Harness[]): Action[] {
   const actions: Action[] = [];
+  const sources = skillSources(repoRoot);
   for (const h of targets) {
-    for (const skill of skillSources(repoRoot)) {
+    for (const skill of sources) {
       const path = join(h.skillsDir, skill.name);
       const current = linkTarget(path);
       if (current === skill.dir) continue;
+      // A link into this repo that's now dangling (e.g. the skill hatched and moved) is ours to repoint.
       if (exists(path) && (current === undefined || !current.startsWith(repoRoot))) {
         actions.push({ type: "skip", harness: h.name, path, reason: "exists and is not managed by deveggs" });
         continue;
       }
       actions.push({ type: "link", harness: h.name, path, target: skill.dir });
+    }
+    // Drop our links to skills that were cracked or removed.
+    if (existsSync(h.skillsDir)) {
+      for (const name of readdirSync(h.skillsDir)) {
+        const path = join(h.skillsDir, name);
+        const current = linkTarget(path);
+        if (current?.startsWith(repoRoot) && !sources.some((s) => s.name === name)) {
+          actions.push({ type: "unlink", harness: h.name, path });
+        }
+      }
     }
     const existing = existsSync(h.instructionsFile) ? readFileSync(h.instructionsFile, "utf8") : "";
     const next = upsertBlock(existing, managedBlock(repoRoot));

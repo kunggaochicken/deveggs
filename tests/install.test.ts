@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -10,8 +10,10 @@ function setup() {
   const home = mkdtempSync(join(tmpdir(), "deveggs-home-"));
   mkdirSync(join(root, "skills", "deveggs"), { recursive: true });
   writeFileSync(join(root, "skills", "deveggs", "SKILL.md"), "x");
-  mkdirSync(join(root, "basket", "skills", "ship-it"), { recursive: true });
-  writeFileSync(join(root, "basket", "skills", "ship-it", "SKILL.md"), "x");
+  for (const [tier, name] of [["chickens", "ship-it"], ["eggs", "try-me"], ["eggs", "ship-it"]] as const) {
+    mkdirSync(join(root, "basket", "skills", tier, name), { recursive: true });
+    writeFileSync(join(root, "basket", "skills", tier, name, "SKILL.md"), "x");
+  }
   const [claude] = harnesses(home);
   assert.ok(claude);
   mkdirSync(claude.home, { recursive: true });
@@ -30,7 +32,9 @@ test("install links skills + writes block; reinstall is a no-op; uninstall rever
   const { root, claude } = setup();
   apply(planInstall(root, [claude]));
   assert.equal(readlinkSync(join(claude.skillsDir, "deveggs")), join(root, "skills", "deveggs"));
-  assert.equal(readlinkSync(join(claude.skillsDir, "ship-it")), join(root, "basket", "skills", "ship-it"));
+  // chickens outrank an egg of the same name; eggs on trial are linked too
+  assert.equal(readlinkSync(join(claude.skillsDir, "ship-it")), join(root, "basket", "skills", "chickens", "ship-it"));
+  assert.equal(readlinkSync(join(claude.skillsDir, "try-me")), join(root, "basket", "skills", "eggs", "try-me"));
   assert.match(readFileSync(claude.instructionsFile, "utf8"), /keep me[\s\S]*deveggs:begin/);
   assert.deepEqual(planInstall(root, [claude]), []);
 
@@ -44,4 +48,14 @@ test("install never clobbers a skill it does not own", () => {
   mkdirSync(join(claude.skillsDir, "deveggs"), { recursive: true });
   const plan = planInstall(root, [claude]);
   assert.ok(plan.some((a) => a.type === "skip" && a.path.endsWith("deveggs")));
+});
+
+test("install drops links to skills that were cracked", () => {
+  const { root, claude } = setup();
+  apply(planInstall(root, [claude]));
+  rmSync(join(root, "basket", "skills", "eggs", "try-me"), { recursive: true });
+  const plan = planInstall(root, [claude]);
+  assert.deepEqual(plan.map((a) => a.type), ["unlink"]);
+  apply(plan);
+  assert.equal(existsSync(join(claude.skillsDir, "try-me")), false);
 });

@@ -1,42 +1,69 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const KINDS = ["preference", "workflow", "script", "skill"] as const;
 export type Kind = (typeof KINDS)[number];
 
-export const STATUSES = ["egg", "hatched", "cracked"] as const;
-export type Status = (typeof STATUSES)[number];
+/**
+ * Lifecycle tiers. The tier is the folder an egg lives in, not a frontmatter field,
+ * so the basket's file tree shows what's on trial and what's permanent.
+ *   egg      on trial: followed, but agents record how it goes
+ *   chicken  hatched: permanent, followed without question
+ *   cracked  rejected: kept only so it is never laid again
+ */
+export const TIERS = ["egg", "chicken", "cracked"] as const;
+export type Tier = (typeof TIERS)[number];
 
-/** How the egg was laid. Explicit = the developer said it outright; inferred = an agent noticed it. */
-export const SOURCES = ["explicit", "inferred"] as const;
-export type Source = (typeof SOURCES)[number];
+const TIER_DIR: Record<Tier, string> = { egg: "eggs", chicken: "chickens", cracked: "cracked" };
 
-/** An inferred egg is "warm" (ready to propose hatching) once seen this many times. */
-export const WARM_THRESHOLD = 2;
+/** An egg is ready to propose hatching after this many good trials and no bad ones. */
+export const READY_AFTER = 3;
+
+/** Prefix on an egg skill's description so agents know it's still on trial. */
+export const TRIAL_PREFIX = "[egg: on trial] ";
 
 export interface Egg {
   id: string;
   kind: Kind;
-  status: Status;
-  source: Source;
+  tier: Tier;
   tags: string[];
-  sightings: number;
   harnesses: string[];
+  good: number;
+  bad: number;
   laid: string; // ISO date
   updated: string; // ISO date
   /** First line of the body: the one-sentence fact. */
   summary: string;
-  /** Free-form Markdown notes / evidence. */
+  /** Free-form Markdown: notes, then the trial log. */
   body: string;
 }
 
 export interface LayInput {
   summary: string;
   kind?: Kind;
-  source?: Source;
   tags?: string[];
   harness?: string;
-  body?: string;
+  note?: string;
+  /** Skip the trial: the developer is already sure. */
+  chicken?: boolean;
+  origin?: Origin;
+  today?: string;
+}
+
+/** Where an egg came from, so whoever decides to hatch it can see why it exists. */
+export interface Origin {
+  /** The developer's own words that prompted the egg, verbatim. */
+  quote?: string;
+  /** Repo (or project) the session was in. */
+  repo?: string;
+  /** Harness session id, if known. */
+  session?: string;
+}
+
+export interface Feedback {
+  good: boolean;
+  harness?: string;
+  note?: string;
   today?: string;
 }
 
@@ -54,21 +81,25 @@ export function slugify(text: string): string {
   return slug;
 }
 
+/** Local calendar date (YYYY-MM-DD), so eggs are dated the way the developer sees the day. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function oneOf<T extends string>(allowed: readonly T[], value: string | undefined, field: string): T {
-  if (value !== undefined && (allowed as readonly string[]).includes(value)) return value as T;
-  throw new BasketError(`invalid ${field} ${JSON.stringify(value)}; expected one of ${allowed.join(", ")}`);
+  return new Date().toLocaleDateString("en-CA");
 }
 
 const list = (value: string | undefined): string[] =>
   (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
+export function isKind(value: string | undefined): value is Kind {
+  return (KINDS as readonly string[]).includes(value ?? "");
+}
+
+export function isReady(egg: Egg): boolean {
+  return egg.tier === "egg" && egg.good >= READY_AFTER && egg.bad === 0;
+}
+
 // --- serialization -----------------------------------------------------------
 
-export function parseEgg(text: string): Egg {
+export function parseEgg(text: string, tier: Tier): Egg {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
   if (!match) throw new BasketError("egg is missing frontmatter");
   const [, front = "", rest = ""] = match;
@@ -79,15 +110,17 @@ export function parseEgg(text: string): Egg {
   }
   const id = meta.get("id");
   if (!id) throw new BasketError("egg is missing an id");
+  const kind = meta.get("kind");
+  if (!isKind(kind)) throw new BasketError(`egg ${id} has invalid kind ${JSON.stringify(kind)}`);
   const [summary = "", ...bodyLines] = rest.trim().split("\n");
   return {
     id,
-    kind: oneOf(KINDS, meta.get("kind"), "kind"),
-    status: oneOf(STATUSES, meta.get("status"), "status"),
-    source: oneOf(SOURCES, meta.get("source"), "source"),
+    kind,
+    tier,
     tags: list(meta.get("tags")),
-    sightings: Number(meta.get("sightings") ?? "1") || 1,
     harnesses: list(meta.get("harnesses")),
+    good: Number(meta.get("good") ?? "0") || 0,
+    bad: Number(meta.get("bad") ?? "0") || 0,
     laid: meta.get("laid") ?? today(),
     updated: meta.get("updated") ?? meta.get("laid") ?? today(),
     summary: summary.trim(),
@@ -99,16 +132,39 @@ export function serializeEgg(egg: Egg): string {
   const front = [
     `id: ${egg.id}`,
     `kind: ${egg.kind}`,
-    `status: ${egg.status}`,
-    `source: ${egg.source}`,
     `tags: ${egg.tags.join(", ")}`,
-    `sightings: ${egg.sightings}`,
     `harnesses: ${egg.harnesses.join(", ")}`,
+    `good: ${egg.good}`,
+    `bad: ${egg.bad}`,
     `laid: ${egg.laid}`,
     `updated: ${egg.updated}`,
   ].join("\n");
   const body = egg.body ? `\n\n${egg.body}` : "";
   return `---\n${front}\n---\n${egg.summary}${body}\n`;
+}
+
+export function formatOrigin(date: string, harness: string | undefined, origin: Origin): string {
+  const quote = origin.quote?.trim();
+  const where = [date, harness, origin.repo, origin.session && `session ${origin.session}`].filter(Boolean);
+  const lines = ["## Origin", ""];
+  if (quote) lines.push(...quote.split("\n").map((l) => `> ${l}`), "");
+  lines.push(`- ${where.join(" · ")}`);
+  return lines.join("\n");
+}
+
+function skillStub(egg: Egg): string {
+  const prefix = egg.tier === "egg" ? TRIAL_PREFIX : "";
+  return [
+    "---",
+    `name: ${egg.id}`,
+    `description: ${prefix}${egg.summary}`,
+    "---",
+    "",
+    `# ${egg.id}`,
+    "",
+    "<!-- Write the skill here. While it's an egg, record trials with `deveggs feedback`. -->",
+    "",
+  ].join("\n");
 }
 
 // --- basket ------------------------------------------------------------------
@@ -120,111 +176,174 @@ export class Basket {
     this.root = root;
   }
 
-  get eggsDir(): string {
-    return join(this.root, "eggs");
+  dir(tier: Tier): string {
+    return join(this.root, TIER_DIR[tier]);
+  }
+
+  /** Skill folders are tiered the same way: basket/skills/{eggs,chickens,cracked}/<id>/SKILL.md */
+  skillDir(tier: Tier, id?: string): string {
+    const base = join(this.root, "skills", TIER_DIR[tier]);
+    return id ? join(base, id) : base;
   }
 
   get preferencesPath(): string {
     return join(this.root, "PREFERENCES.md");
   }
 
-  get skillsDir(): string {
-    return join(this.root, "skills");
+  private path(tier: Tier, id: string): string {
+    return join(this.dir(tier), `${id}.md`);
   }
 
-  private path(id: string): string {
-    return join(this.eggsDir, `${id}.md`);
+  private find(id: string): Tier | undefined {
+    return TIERS.find((t) => existsSync(this.path(t, id)));
   }
 
   all(): Egg[] {
-    if (!existsSync(this.eggsDir)) return [];
-    return readdirSync(this.eggsDir)
-      .filter((f) => f.endsWith(".md"))
-      .sort()
-      .map((f) => parseEgg(readFileSync(join(this.eggsDir, f), "utf8")));
-  }
-
-  get(id: string): Egg {
-    const p = this.path(id);
-    if (!existsSync(p)) throw new BasketError(`no egg named ${JSON.stringify(id)}`);
-    return parseEgg(readFileSync(p, "utf8"));
-  }
-
-  save(egg: Egg): Egg {
-    mkdirSync(this.eggsDir, { recursive: true });
-    writeFileSync(this.path(egg.id), serializeEgg(egg));
-    return egg;
-  }
-
-  /**
-   * Lay a new egg. Explicit eggs hatch immediately: the developer said it on purpose.
-   * Laying an egg that already exists warms it instead; a cracked egg is never re-laid.
-   */
-  lay(input: LayInput): Egg {
-    const id = slugify(input.summary);
-    const date = input.today ?? today();
-    if (existsSync(this.path(id))) {
-      const existing = this.get(id);
-      if (existing.status === "cracked") {
-        throw new BasketError(`${id} was cracked (rejected) before; edit or delete it to revive`);
-      }
-      return this.warm(id, input.harness, date);
-    }
-    const source = input.source ?? "inferred";
-    return this.save({
-      id,
-      kind: input.kind ?? "preference",
-      status: source === "explicit" ? "hatched" : "egg",
-      source,
-      tags: input.tags ?? [],
-      sightings: 1,
-      harnesses: input.harness ? [input.harness] : [],
-      laid: date,
-      updated: date,
-      summary: input.summary.trim(),
-      body: input.body?.trim() ?? "",
+    return TIERS.flatMap((tier) => {
+      const dir = this.dir(tier);
+      if (!existsSync(dir)) return [];
+      return readdirSync(dir)
+        .filter((f) => f.endsWith(".md"))
+        .sort()
+        .map((f) => parseEgg(readFileSync(join(dir, f), "utf8"), tier));
     });
   }
 
-  /** Record another sighting of an egg, optionally from another harness. */
-  warm(id: string, harness?: string, date: string = today()): Egg {
-    const egg = this.get(id);
-    egg.sightings += 1;
-    if (harness && !egg.harnesses.includes(harness)) egg.harnesses.push(harness);
-    egg.updated = date;
-    return this.save(egg);
+  get(id: string): Egg {
+    const tier = this.find(id);
+    if (!tier) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}`);
+    return parseEgg(readFileSync(this.path(tier, id), "utf8"), tier);
   }
 
-  hatch(id: string, date: string = today()): Egg {
-    return this.save({ ...this.get(id), status: "hatched", updated: date });
+  private save(egg: Egg): Egg {
+    mkdirSync(this.dir(egg.tier), { recursive: true });
+    writeFileSync(this.path(egg.tier, egg.id), serializeEgg(egg));
+    return egg;
   }
 
-  crack(id: string, date: string = today()): Egg {
-    return this.save({ ...this.get(id), status: "cracked", updated: date });
-  }
-
-  /** Inferred eggs seen often enough that the agent should propose hatching them. */
-  warmEggs(): Egg[] {
-    return this.all().filter((e) => e.status === "egg" && e.sightings >= WARM_THRESHOLD);
-  }
-
-  /** Render hatched preference eggs into PREFERENCES.md, grouped by first tag. */
-  render(): string {
-    const groups = new Map<string, Egg[]>();
-    for (const egg of this.all()) {
-      if (egg.status !== "hatched" || egg.kind !== "preference") continue;
-      const tag = egg.tags[0] ?? "general";
-      groups.set(tag, [...(groups.get(tag) ?? []), egg]);
+  /** Move an egg (and its skill folder, if any) to another tier. */
+  private move(egg: Egg, to: Tier, date: string): Egg {
+    const from = egg.tier;
+    if (from === to) return egg;
+    rmSync(this.path(from, egg.id));
+    if (egg.kind === "skill" && existsSync(this.skillDir(from, egg.id))) {
+      mkdirSync(this.skillDir(to), { recursive: true });
+      renameSync(this.skillDir(from, egg.id), this.skillDir(to, egg.id));
+      this.retitleSkill(egg.id, to);
     }
-    const sections = [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([tag, eggs]) => `## ${tag}\n\n${eggs.map((e) => `- ${e.summary}`).join("\n")}`);
+    return this.save({ ...egg, tier: to, updated: date });
+  }
+
+  /** Keep the trial marker on a skill's description in sync with its tier. */
+  private retitleSkill(id: string, tier: Tier): void {
+    const file = join(this.skillDir(tier, id), "SKILL.md");
+    if (!existsSync(file)) return;
+    const text = readFileSync(file, "utf8").replace(/^description: (.*)$/m, (_line, desc: string) => {
+      const bare = desc.startsWith(TRIAL_PREFIX) ? desc.slice(TRIAL_PREFIX.length) : desc;
+      return `description: ${tier === "egg" ? TRIAL_PREFIX : ""}${bare}`;
+    });
+    writeFileSync(file, text);
+  }
+
+  /** Lay a new egg to try out, or a chicken straight away if the developer is already sure. */
+  lay(input: LayInput): Egg {
+    const id = slugify(input.summary);
+    const existing = this.find(id);
+    if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete it to revive`);
+    if (existing) throw new BasketError(`${id} is already a${existing === "egg" ? "n egg" : " chicken"}; use feedback instead`);
+    const date = input.today ?? today();
+    const egg = this.save({
+      id,
+      kind: input.kind ?? "preference",
+      tier: input.chicken ? "chicken" : "egg",
+      tags: input.tags ?? [],
+      harnesses: input.harness ? [input.harness] : [],
+      good: 0,
+      bad: 0,
+      laid: date,
+      updated: date,
+      summary: input.summary.trim(),
+      body: [input.note?.trim(), formatOrigin(date, input.harness, input.origin ?? {})].filter(Boolean).join("\n\n"),
+    });
+    if (egg.kind === "skill") {
+      mkdirSync(this.skillDir(egg.tier, id), { recursive: true });
+      writeFileSync(join(this.skillDir(egg.tier, id), "SKILL.md"), skillStub(egg));
+    }
+    return egg;
+  }
+
+  /** Record how a trial of an egg went. */
+  feedback(id: string, fb: Feedback): Egg {
+    const egg = this.get(id);
+    if (egg.tier !== "egg") throw new BasketError(`${id} is a ${egg.tier}, not an egg on trial`);
+    const date = fb.today ?? today();
+    const via = fb.harness ? ` (${fb.harness})` : "";
+    const entry = `- ${date} ${fb.good ? "✓" : "✗"}${via}${fb.note ? ` ${fb.note.trim()}` : ""}`;
+    const hasLog = /^## Trials$/m.test(egg.body);
+    const body = hasLog ? `${egg.body}\n${entry}` : `${egg.body}${egg.body ? "\n\n" : ""}## Trials\n\n${entry}`;
+    const harnesses = fb.harness && !egg.harnesses.includes(fb.harness) ? [...egg.harnesses, fb.harness] : egg.harnesses;
+    return this.save({
+      ...egg,
+      good: egg.good + (fb.good ? 1 : 0),
+      bad: egg.bad + (fb.good ? 0 : 1),
+      harnesses,
+      body,
+      updated: date,
+    });
+  }
+
+  /** The developer liked it: hatch the egg into a permanent chicken. */
+  hatch(id: string, date: string = today()): Egg {
+    const egg = this.get(id);
+    if (egg.tier !== "egg") throw new BasketError(`${id} is a ${egg.tier}; only eggs hatch`);
+    return this.move(egg, "chicken", date);
+  }
+
+  /** Reject an egg (or retire a chicken). Kept so it is never laid again. */
+  crack(id: string, date: string = today()): Egg {
+    return this.move(this.get(id), "cracked", date);
+  }
+
+  /** Render chickens (permanent) and eggs (on trial) into PREFERENCES.md. */
+  render(): string {
+    const eggs = this.all();
+    const section = (tier: Tier): string => {
+      const groups = new Map<string, Egg[]>();
+      for (const e of eggs) {
+        if (e.tier !== tier) continue;
+        const tag = e.tags[0] ?? "general";
+        groups.set(tag, [...(groups.get(tag) ?? []), e]);
+      }
+      if (!groups.size) return "_None yet._";
+      return [...groups.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([tag, es]) => {
+          const items = es.map((e) => {
+            const kind = e.kind === "preference" ? "" : ` _(${e.kind})_`;
+            const id = tier === "egg" ? ` \`${e.id}\`` : "";
+            return `- ${e.summary}${kind}${id}`;
+          });
+          return `### ${tag}\n\n${items.join("\n")}`;
+        })
+        .join("\n\n");
+    };
     const out = [
       "# Developer preferences",
       "",
-      "<!-- Generated by `deveggs render` from hatched eggs in basket/eggs/. Do not edit by hand. -->",
+      "<!-- Generated by `deveggs render` from basket/chickens and basket/eggs. Do not edit by hand. -->",
       "",
-      sections.length ? sections.join("\n\n") : "_No hatched preferences yet._",
+      "## 🐔 Chickens: permanent",
+      "",
+      "Follow these. They outrank any harness-local memory.",
+      "",
+      section("chicken"),
+      "",
+      "## 🥚 Eggs: on trial",
+      "",
+      "Follow these too, but they're experiments. When one clearly helps or hurts, record it:",
+      "`deveggs feedback <id> --good|--bad --note \"…\"`. A chicken wins if an egg conflicts with it.",
+      "",
+      section("egg"),
       "",
     ].join("\n");
     writeFileSync(this.preferencesPath, out);
