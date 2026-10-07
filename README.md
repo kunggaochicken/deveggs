@@ -23,7 +23,7 @@ workflows and skills that every coding agent you use reads. New ideas go in as e
 on trial. Only the ones that prove themselves become permanent.
 
 <p align="center">
-  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you say how you like to work. 2: your agent drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
+  <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you just work. 2: your agent spots a preference on its own, drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
 </p>
 
 ## How it works
@@ -37,10 +37,40 @@ on trial. Only the ones that prove themselves become permanent.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
+deveggs is a meta skill: you never have to tell it to look for preferences. Just
+work. When you correct your agent, say "always…" or "let's try…", or walk it through
+the same steps again, it spots the preference on its own and asks in one line:
+"Lay an egg for X?" Say yes and it's laid. Say no and nothing's saved.
+
 ## Example
 
-After a session where you corrected your agent a few times, run `/deveggs`. The
-agent turns what you said into eggs and asks before laying any of them:
+Mid-task, you just say what you'd want and keep going. The agent spots the preference
+and asks:
+
+```text
+> when i need something complex explained we should draw a visual diagram for it
+
+Lay an egg for "When explaining something complex, draw a visual diagram"?
+
+> yes
+
+🥚 Laid when-explaining-something-complex-draw-a-visual-diagram (on trial, tag: explaining)
+   When explaining something complex, draw a visual diagram alongside the explanation.
+   From your words: "when i need something complex explained we should draw a visual
+   diagram for it"
+```
+
+From then on, every agent draws a diagram when it explains something complex, and
+logs whether the diagram helped:
+
+```text
+🥚 +1 when-explaining-something-complex-draw-a-visual-diagram
+```
+
+After three of those and no misses, your agent asks whether to hatch it into a chicken.
+
+To review a whole session at once, run `/deveggs`. The agent turns what you said into
+eggs and asks before laying any of them:
 
 ```text
 > /deveggs
@@ -65,28 +95,7 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
 ```
 
 Your words become eggs on trial. Rules you've already stated as "always" or "never"
-go straight in as chickens. Once laid, every agent you use follows them.
-
-You don't have to run `/deveggs` at all. Say a preference mid-task and the agent lays
-it on the spot:
-
-```text
-> when i need something complex explained we should draw a visual diagram for it
-
-🥚 Laid when-explaining-something-complex-draw-a-visual-diagram (on trial, tag: explaining)
-   When explaining something complex, draw a visual diagram alongside the explanation.
-   From your words: "when i need something complex explained we should draw a visual
-   diagram for it"
-```
-
-From then on, every agent draws a diagram when it explains something complex, and
-logs whether the diagram helped:
-
-```text
-🥚 +1 when-explaining-something-complex-draw-a-visual-diagram
-```
-
-After three of those and no misses, your agent asks whether to hatch it into a chicken.
+go straight in as chickens, once you say yes. Once laid, every agent you use follows them.
 
 ## Install
 
