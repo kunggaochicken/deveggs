@@ -16,8 +16,8 @@ two tiers:
 
 A chicken outranks an egg, and both outrank harness-local memory.
 
-The basket's location is in the `deveggs` block of your global instructions. If
-that block is missing, use `$DEVEGGS_HOME`. Run all commands through
+The basket's location is in the deveggs prompt in your global instructions. If
+that prompt is missing, use `$DEVEGGS_HOME`. Run all commands through
 `<basket-repo>/bin/deveggs`.
 
 ## At session start

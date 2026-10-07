@@ -182,7 +182,7 @@ export function describe(a: Action): string {
     case "unlink":
       return `[${a.harness}] unlink ${a.path}`;
     case "block":
-      return `[${a.harness}] update ${a.path} (managed deveggs block)`;
+      return `[${a.harness}] update ${a.path} (deveggs prompt)`;
     case "skip":
       return `[${a.harness}] skip   ${a.path}: ${a.reason}`;
   }

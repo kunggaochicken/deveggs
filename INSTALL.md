@@ -17,16 +17,13 @@ memory, so nothing changes without the developer's yes.
      output and stop.
 
    A plain clone is all you need. No fork.
-3. **Wire up the harnesses.** Show the developer the exact changes, **confirm**, then
-   apply them.
-   - Run `<dir>/deveggs/bin/deveggs install --dry-run` to show the plan, then
-     `<dir>/deveggs/bin/deveggs install`. It finds every harness it knows on this
-     machine (today Claude Code and Codex) and links the deveggs skill into each one.
-   - **If you are a harness it doesn't know:** run `<dir>/deveggs/bin/deveggs block`
-     and add its output to your own global instructions file (the one you read in every session). If
-     you have a global skills folder, also symlink `<dir>/deveggs/skills/deveggs`
-     into it. If you have no global instructions file, give the block to the
-     developer and tell them where to paste it, for example Cursor's User Rules.
+3. **Wire up the harnesses.** Run `<dir>/deveggs/bin/deveggs install --dry-run`, show
+   the developer the plan, **confirm**, then run `<dir>/deveggs/bin/deveggs install`.
+   It links the deveggs skill into every harness it knows (Claude Code, Codex) and
+   prints the deveggs prompt. If you are running in a harness it didn't wire, do what
+   the output says: add that prompt to your own global instructions file, or give it
+   to the developer to paste. If you have a global skills folder, also symlink
+   `<dir>/deveggs/skills/deveggs` into it.
 4. **Learn the skill.** Read `<dir>/deveggs/skills/deveggs/SKILL.md` so you know how
    to lay eggs, record trials and propose hatching.
 5. **Offer to seed the basket. Don't do it automatically.** Ask whether they want to
@@ -38,7 +35,7 @@ memory, so nothing changes without the developer's yes.
    other agent they use. Mention that:
    - `git pull` gets tool updates and new shared baskets without touching `my-basket/`
    - `deveggs uninstall` reverts the wiring. For other harnesses, delete the
-     `deveggs:begin` … `deveggs:end` block.
+     deveggs prompt (`deveggs:begin` … `deveggs:end`) from their instructions.
    - to share their basket, they can open a PR with a reviewed copy in
      `shared-baskets/<username>/`. GitHub creates the fork for them.
 
