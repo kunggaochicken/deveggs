@@ -44,8 +44,33 @@ the same steps again, it spots the preference on its own and asks in one line:
 
 ## Example
 
-To catch anything it missed, run `/deveggs` at the end of a session. The
-agent turns what you said into eggs and asks before laying any of them:
+Mid-task, you just say what you'd want and keep going. The agent spots the preference
+and asks:
+
+```text
+> when i need something complex explained we should draw a visual diagram for it
+
+Lay an egg for "When explaining something complex, draw a visual diagram"?
+
+> yes
+
+🥚 Laid when-explaining-something-complex-draw-a-visual-diagram (on trial, tag: explaining)
+   When explaining something complex, draw a visual diagram alongside the explanation.
+   From your words: "when i need something complex explained we should draw a visual
+   diagram for it"
+```
+
+From then on, every agent draws a diagram when it explains something complex, and
+logs whether the diagram helped:
+
+```text
+🥚 +1 when-explaining-something-complex-draw-a-visual-diagram
+```
+
+After three of those and no misses, your agent asks whether to hatch it into a chicken.
+
+To review a whole session at once, run `/deveggs`. The agent turns what you said into
+eggs and asks before laying any of them:
 
 ```text
 > /deveggs
@@ -70,28 +95,7 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
 ```
 
 Your words become eggs on trial. Rules you've already stated as "always" or "never"
-go straight in as chickens. Once laid, every agent you use follows them.
-
-You don't have to run `/deveggs` at all. Say a preference mid-task and the agent lays
-it on the spot:
-
-```text
-> when i need something complex explained we should draw a visual diagram for it
-
-🥚 Laid when-explaining-something-complex-draw-a-visual-diagram (on trial, tag: explaining)
-   When explaining something complex, draw a visual diagram alongside the explanation.
-   From your words: "when i need something complex explained we should draw a visual
-   diagram for it"
-```
-
-From then on, every agent draws a diagram when it explains something complex, and
-logs whether the diagram helped:
-
-```text
-🥚 +1 when-explaining-something-complex-draw-a-visual-diagram
-```
-
-After three of those and no misses, your agent asks whether to hatch it into a chicken.
+go straight in as chickens, once you say yes. Once laid, every agent you use follows them.
 
 ## Install
 
