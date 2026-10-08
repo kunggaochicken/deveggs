@@ -1,8 +1,8 @@
 # deveggs: agent instructions
 
-This repo is the deveggs **code**: the tooling (`src/`, `bin/deveggs`), the shared
-baskets (`shared-baskets/`) and the meta-skill that teaches any agent to use it
-(`skills/deveggs/SKILL.md`). A developer's own basket is **data** and lives outside
+This repo is the deveggs **code**: the tooling (`src/`, `bin/deveggs`) and the
+meta-skill that teaches any agent to use it (`skills/deveggs/SKILL.md`). Shared baskets
+live in a separate repo, `kunggaochicken/deveggs-baskets`. A developer's own basket is **data** and lives outside
 it, like `~/.claude` or `~/.codex`: `~/.deveggs/` (or `$DEVEGGS_BASKET`), its own git
 repo. `deveggs where` prints the path.
 
@@ -26,10 +26,11 @@ repo. `deveggs where` prints the path.
 - `my-basket/` inside this repo is the legacy location; `deveggs migrate` moves it to
   `~/.deveggs`. It stays gitignored. **Never commit its contents to this repo**, and
   never `git add -f` it. CI on `kunggaochicken/deveggs` rejects it.
-- `shared-baskets/<github-username>/` is the **repository of baskets** that people
-  chose to share, contributed by PR (see `shared-baskets/README.md`). Before opening
-  one, warn the developer to review the Origin and `context` rows for anything
-  private.
+- Shared baskets live in **`kunggaochicken/deveggs-baskets`**, under
+  `baskets/<github-username>/`, never in this repo. `shared-baskets/` here holds only
+  a README pointing there; CI rejects anything else under it. `deveggs share --dry-run`
+  then `deveggs share` publishes a sanitized copy by PR; `deveggs browse` and
+  `deveggs import <username>/<id>` read from it.
 
 ## Working on the basket
 

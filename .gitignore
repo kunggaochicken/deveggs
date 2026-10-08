@@ -3,5 +3,5 @@ node_modules/
 
 # Legacy personal basket. Baskets now live in ~/.deveggs (their own git repo);
 # `deveggs migrate` moves an old my-basket/ there. Keep it ignored so a local one is
-# never committed. Share a reviewed copy under shared-baskets/<you>/ instead.
+# never committed. Share a sanitized copy with `deveggs share` instead.
 /my-basket/

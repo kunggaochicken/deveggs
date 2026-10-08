@@ -79,7 +79,8 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
    eggs, record trials and propose hatching.
 7. **Offer to seed the basket. Don't do it automatically.** Ask whether they want to
    import preferences from the instructions files you just found. Mention that
-   `shared-baskets/` has community baskets they can borrow eggs from. If they say
+   community baskets can be browsed with `<repo>/bin/deveggs browse` and borrowed from
+   with `<repo>/bin/deveggs import <username>/<id>`. If they say
    yes, propose each candidate one at a time: suggest a rule, a trigger, and egg or
    chicken. Lay only what they confirm, and pass their original wording as `--quote`.
 8. **Offer to save the basket on GitHub and keep it synced.** Until it's pushed, the
@@ -95,9 +96,9 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
 9. **Report.** List the harnesses you wired and anything you skipped. Mention that:
    - every wired agent picks up deveggs in its next session. They don't need to
      paste anything again, though they can for a harness they install later.
-   - `git -C <repo> pull` gets tool updates and new shared baskets without
-     touching their basket, and `deveggs push` backs the basket up (automatically
-     after every change once `deveggs autopush on` is set)
+   - `git -C <repo> pull` gets tool updates without touching their basket,
+     `deveggs browse` shows what others have shared, and `deveggs push` backs the
+     basket up (automatically after every change once `deveggs autopush on` is set)
    - on a new machine, clone their basket repo into `~/.deveggs/` and follow this
      guide again
    - to uninstall, ask any agent to remove the deveggs symlinks and the

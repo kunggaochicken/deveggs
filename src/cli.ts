@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
+import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
@@ -36,6 +37,12 @@ usage:
                                      share a sanitized copy of your basket by PR (default
                                      ${DEFAULT_SHARE_REPO}, baskets/<you>/). Prints
                                      what's shared and redacted first; run --dry-run first
+  deveggs browse [<username>] [--tag t] [--kind k] [--repo owner/name]
+                                     list shared baskets, or one basket's items (default
+                                     ${DEFAULT_SHARE_REPO}; read-only)
+  deveggs import <username>/<id> [--repo owner/name]
+                                     borrow a shared egg or chicken (and its skill) into
+                                     your basket as an egg on trial, trials ✓0 ✗0
   deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
                                      --relink repoints harness skill links to it
 
@@ -129,13 +136,65 @@ interface ShareFlags {
   dir?: string | undefined;
 }
 
+/** Where repos are cloned from; tests point it at local bare repos. */
+const gitBase = process.env["DEVEGGS_GIT_BASE"] ?? "https://github.com/";
+
+const fetchBaskets: FetchBaskets = (repo) => cloneBaskets(repo, gitBase);
+
+function bagRepo(repo: string | undefined): string {
+  const name = repo ?? DEFAULT_SHARE_REPO;
+  if (!/^[\w.-]+\/[\w.-]+$/.test(name)) throw new BasketError(`invalid --repo ${JSON.stringify(name)}; expected owner/name`);
+  return name;
+}
+
+function browse(user: string | undefined, values: { tag?: string | undefined; kind?: string | undefined; repo?: string | undefined }): void {
+  if (values.kind !== undefined && !isKind(values.kind)) {
+    throw new BasketError(`invalid kind ${JSON.stringify(values.kind)}; expected one of ${KINDS.join(", ")}`);
+  }
+  const repo = bagRepo(values.repo);
+  const filter = { tag: values.tag, kind: values.kind };
+  const out = withBaskets(fetchBaskets, repo, (dir) => {
+    if (user !== undefined) {
+      const b = sharedBasket(dir, user);
+      const heading = `${user}'s basket in ${repo}${b.about ? `: ${b.about}` : ""}`;
+      return formatItems(b.items.filter((i) => matches(i, filter)), heading, terminalOptions(), user);
+    }
+    const baskets = sharedBaskets(dir);
+    if (!filter.tag && !filter.kind) return formatBaskets(baskets, repo, terminalOptions());
+    const what = [filter.tag && `tag ${filter.tag}`, filter.kind && `kind ${filter.kind}`].filter(Boolean).join(", ");
+    const items = baskets.flatMap((b) => b.items).filter((i) => matches(i, filter));
+    return formatItems(items, `shared items in ${repo} with ${what}`, terminalOptions());
+  });
+  console.log(out);
+}
+
+function borrow(ref: string | undefined, repoFlag: string | undefined): void {
+  const { user, id } = parseRef(ref);
+  const repo = bagRepo(repoFlag);
+  // Refuse before fetching anything when the id is already taken (or was cracked).
+  const here = existsSync(basketRoot) ? basket.tierOf(id) : undefined;
+  if (here === "cracked") throw new BasketError(`${id} was cracked (rejected) in your basket before; it isn't borrowed again`);
+  if (here) throw new BasketError(`your basket already has ${id} (${here}); deveggs show ${id}`);
+  const egg = withBaskets(fetchBaskets, repo, (dir) => {
+    const item = findShared(dir, user, id);
+    prepare();
+    return basket.borrow(item.egg, { user, repo }, item.skill);
+  });
+  basket.render();
+  save(`egg: import ${egg.id} from ${user}`);
+  console.log(line(egg));
+  console.log(`     borrowed from ${user}'s basket in ${repo}; on trial in your basket`);
+  const skill = join(basket.skillDir("egg", egg.id), "SKILL.md");
+  if (existsSync(skill)) console.log(`     skill: ${skill}`);
+}
+
 function share(values: ShareFlags): void {
   if (missing()) throw new BasketError(`nothing to share; ${emptyNote()}`);
   const repo = values.repo ?? DEFAULT_SHARE_REPO;
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new BasketError(`invalid --repo ${JSON.stringify(repo)}; expected owner/name`);
   const user = values.as ?? ghUser() ?? (values["dry-run"] ? "you" : undefined);
   if (!user) throw new BasketError("who are you sharing as? pass --as <github-username> (or log in with gh auth login)");
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(user)) throw new BasketError(`invalid --as ${JSON.stringify(user)}; expected a GitHub username`);
+  if (!isGitHubUser(user)) throw new BasketError(`invalid --as ${JSON.stringify(user)}; expected a GitHub username`);
   const dir = (values.dir ?? shareDir(user)).replace(/^\/+|\/+$/g, "");
   if (!dir || dir.split("/").some((part) => part === ".." || part === "." || part === "")) throw new BasketError(`invalid --dir ${JSON.stringify(values.dir)}`);
   const plan = planShare(
@@ -160,7 +219,7 @@ function share(values: ShareFlags): void {
     repo,
     dir,
     user,
-    gitBase: process.env["DEVEGGS_SHARE_GIT_BASE"] ?? "https://github.com/",
+    gitBase,
     log: (l) => console.log(l),
     confirm: (review) => {
       console.log(`\n${review}`);
@@ -312,6 +371,12 @@ function main(argv: string[]): void {
       share(values);
       return;
     }
+    case "browse":
+      browse(positionals[0], values);
+      return;
+    case "import":
+      borrow(positionals[0], values.repo);
+      return;
     case "autopush": {
       const mode = positionals[0];
       if (mode === "on" || mode === "off") setAutopush(basketRoot, mode === "on");

@@ -146,6 +146,8 @@ deveggs push                                                            # save y
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
 deveggs share --dry-run --as <you>                                      # preview sharing your basket
+deveggs browse [<username>]                                             # browse shared baskets
+deveggs import <username>/<id>                                          # borrow one as an egg
 ```
 
 ## Your basket, and everyone else's
@@ -157,11 +159,12 @@ deveggs share --dry-run --as <you>                                      # previe
   you clone that repo into `~/.deveggs/`. It starts with a README (from
   [`templates/basket-README.md`](templates/basket-README.md)) that explains how to work
   with it and how to contribute back.
-- **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
-  it always enters your basket as an egg on trial. To share yours, run
-  `deveggs share --dry-run` to see what would go out and what it redacts, then
-  `deveggs share` opens a PR to
-  [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets).
+- **[kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets)**
+  holds baskets people chose to share, apart from this repo so it stays small.
+  `deveggs browse` lists them and `deveggs browse <username>` shows one;
+  `deveggs import <username>/<id>` borrows an item, which always enters your basket as
+  an egg on trial. To share yours, run `deveggs share --dry-run` to see what would go
+  out and what it redacts, then `deveggs share` opens a PR there.
 
 ## Why
 
@@ -175,8 +178,10 @@ deveggs share --dry-run --as <you>                                      # previe
 
 ## Contributing
 
-Fixes, harness wiring and shared baskets are welcome by PR. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Fixes and harness wiring are welcome by PR. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Shared baskets go to
+[kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets)
+with `deveggs share`.
 
 Under the hood: [architecture](assets/architecture.svg) ·
 [repo setup](assets/setup.svg) · [AGENTS.md](AGENTS.md)

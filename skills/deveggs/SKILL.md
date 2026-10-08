@@ -1,6 +1,6 @@
 ---
 name: deveggs
-description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "let's try…", "I prefer…", a correction that applies beyond this project, a workflow, script or skill they keep re-explaining), when an on-trial egg clearly helps or hurts, or when they ask to review, hatch or crack their preferences. Tends their harness-agnostic basket of eggs (on trial) and chickens (permanent) instead of harness-local memory.
+description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "let's try…", "I prefer…", a correction that applies beyond this project, a workflow, script or skill they keep re-explaining), when an on-trial egg clearly helps or hurts, when they ask to review, hatch or crack their preferences, or when they want ideas or to borrow from other developers' shared baskets. Tends their harness-agnostic basket of eggs (on trial) and chickens (permanent) instead of harness-local memory.
 ---
 
 # deveggs: tend the developer's basket
@@ -68,6 +68,10 @@ Show it right after `lay` or `hatch`. It answers "what will agents do differentl
 | **Works with** | `parallel-subagents` (more agents, more load) |
 
 On hatch, use 🐔 and add its trial record (✓/✗ by harness) to the card.
+
+On import, use 🥚 and add a **Borrowed from** row (`<username>`'s basket, and whether it
+was their 🐔 chicken or 🥚 egg). The trials always start at ✓0 ✗0: it hasn't been tried
+in this developer's loop yet.
 
 ### Verdict card: on feedback, crack and hatch-ready
 
@@ -162,6 +166,33 @@ above still applies the rest of the time.
   held you to. Propose candidates as one table
   (`# | tier | proposed rule | from your words | tag`) and lay only what they confirm.
   Also show any hatch-ready eggs (`deveggs list --tier ready`).
+
+## Borrowing from shared baskets
+
+Other developers share their baskets in
+[kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets)
+(`baskets/<github-username>/`). When the developer wants ideas ("how do others…",
+"anything good for PR reviews?") or names something to borrow, browse it. Both commands
+only read that repo.
+
+| Want | Command |
+|---|---|
+| Which baskets exist | `deveggs browse` |
+| One developer's eggs and chickens | `deveggs browse <username>` |
+| Items on a topic, across every basket | `deveggs browse --tag <t>` or `--kind <k>` |
+| Borrow one | `deveggs import <username>/<id>` |
+
+- **Propose before importing.** Show the candidates as one table
+  (`# | their tier | id | fact | from`), saying which ones the developer's basket already
+  covers (`deveggs list`). Import only what they confirm, one `import` per item.
+- `import` adds it as a 🥚 egg, never a chicken, even if it was a chicken for its owner:
+  trials reset to ✓0 ✗0, the trial log cleared, and an Origin row records where it came
+  from. It copies a skill to `skills/eggs/<id>/` with `[egg: on trial]` on its description.
+  It refuses an id already in the basket, and one the developer cracked: cracked items
+  are never laid again. If an id clashes but the idea is new, lay it with another `--id` instead.
+- After importing, **show an egg card** for each item (see "Show, don't tell"). Then
+  trial it like any other egg. For a skill, link it into every harness skills folder,
+  as when you lay a skill.
 
 ## Trying eggs: record feedback
 

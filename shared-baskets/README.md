@@ -1,27 +1,25 @@
-# Shared baskets
+# Shared baskets have moved
 
-Community baskets: developers who chose to publish how they work with agents.
-Browse them for ideas, and borrow anything that looks useful.
+Shared baskets live in their own repo,
+[kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets), under
+`baskets/<github-username>/`, so this tool repo stays small. Nothing else goes in this
+folder: CI rejects anything here but this README.
 
-## Borrowing an egg
+## Share yours
 
-Copy the file into your own basket's `eggs/` folder, **never** into `chickens/`.
-Someone else's chicken is only an egg for you: it hasn't been tried in your loop.
-Clear the `trials` row (`✓0 ✗0`) and the `## Trials` log. Then add a line to its
-`context` saying where you borrowed it from, and try it like any other egg.
+```bash
+deveggs share --dry-run   # preview what's shared and what's redacted; nothing leaves your machine
+deveggs share             # open a PR adding baskets/<you>/ to kunggaochicken/deveggs-baskets
+```
 
-Borrowed skills work the same way: copy `skills/chickens/<id>/` into your
-`~/.deveggs/skills/eggs/<id>/` and add `[egg: on trial] ` to the start of its description.
+## Borrow from others
 
-## Sharing yours
+```bash
+deveggs browse                          # list shared baskets
+deveggs browse <username> [--tag t]     # one basket's eggs and chickens
+deveggs import <username>/<id>          # borrow one into your basket
+```
 
-1. **Review before you share.** An egg's Origin section and `context` row hold your
-   verbatim words, repo names and session details. Remove anything private:
-   client names, internal repos, credentials, anything from work you can't publish.
-   Consider leaving out `cracked/`.
-2. Copy your basket into `shared-baskets/<your-github-username>/`, keeping the same layout
-   (`eggs/`, `chickens/`, `skills/`, …). Optionally add a `README.md` about how you work.
-3. Open a PR to `kunggaochicken/deveggs` from a branch based on its `main`. It should touch only `shared-baskets/<your-github-username>/`.
-
-Your personal basket (`~/.deveggs/`) itself must never be committed here, because
-everyone would pull your eggs into their own basket.
+`import` always adds the item as an egg on trial (✓0 ✗0), even if it was someone else's
+chicken, notes where it came from, copies its skill if it has one, and refuses an id
+already in your basket or one you cracked.

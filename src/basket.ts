@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { markdownTable } from "./table.ts";
 
@@ -61,6 +61,14 @@ export interface Origin {
   repo?: string;
   /** Harness session id, if known. */
   session?: string;
+}
+
+/** Where a borrowed egg came from: someone's shared basket in a baskets repo. */
+export interface BorrowedFrom {
+  /** GitHub username whose shared basket it is. */
+  user: string;
+  /** owner/name of the baskets repo. */
+  repo: string;
 }
 
 export interface Feedback {
@@ -201,6 +209,11 @@ export class Basket {
     return TIERS.find((t) => existsSync(this.path(t, id)));
   }
 
+  /** The tier holding `id`, or undefined when the basket has no such item. */
+  tierOf(id: string): Tier | undefined {
+    return this.find(id);
+  }
+
   all(): Egg[] {
     return TIERS.flatMap((tier) => {
       const dir = this.dir(tier);
@@ -238,7 +251,7 @@ export class Basket {
   }
 
   /** Keep the trial marker on a skill's description in sync with its tier. */
-  private retitleSkill(id: string, tier: Tier): void {
+  retitleSkill(id: string, tier: Tier): void {
     const file = join(this.skillDir(tier, id), "SKILL.md");
     if (!existsSync(file)) return;
     const text = readFileSync(file, "utf8").replace(/^description: (.*)$/m, (_line, desc: string) => {
@@ -254,9 +267,7 @@ export class Basket {
       throw new BasketError(`invalid id ${JSON.stringify(input.id)}; use lowercase words joined by dashes, e.g. pr-screenshots`);
     }
     const id = input.id ?? slugify(input.summary);
-    const existing = this.find(id);
-    if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete it to revive`);
-    if (existing) throw new BasketError(`${id} is already a${existing === "egg" ? "n egg" : " chicken"}; use feedback instead`);
+    this.refuseExisting(id);
     const date = input.today ?? today();
     const egg = this.save({
       id,
@@ -274,6 +285,49 @@ export class Basket {
     if (egg.kind === "skill") {
       mkdirSync(this.skillDir(egg.tier, id), { recursive: true });
       writeFileSync(join(this.skillDir(egg.tier, id), "SKILL.md"), skillStub(egg));
+    }
+    return egg;
+  }
+
+  /** An id already in the basket can't be laid or borrowed again; a cracked one never comes back. */
+  private refuseExisting(id: string): void {
+    const existing = this.find(id);
+    if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete it to revive`);
+    if (existing) throw new BasketError(`${id} is already a${existing === "egg" ? "n egg" : " chicken"}; use feedback instead`);
+  }
+
+  /**
+   * Borrow an egg or chicken from someone's shared basket. It always arrives as an egg:
+   * someone else's chicken hasn't been tried in this developer's loop. Trials reset to
+   * ✓0 ✗0, the trial log and harnesses are dropped, and its Origin gets a row saying
+   * where it was borrowed from. `skill` is the item's skill folder in the shared basket,
+   * copied to skills/eggs/<id>/ with the trial marker on its description.
+   */
+  borrow(source: Egg, from: BorrowedFrom, skill?: string, date: string = today()): Egg {
+    if (slugify(source.id) !== source.id) throw new BasketError(`invalid id ${JSON.stringify(source.id)} in ${from.user}'s basket`);
+    this.refuseExisting(source.id);
+    if (skill && existsSync(this.skillDir("egg", source.id))) {
+      throw new BasketError(`your basket already has a skill folder ${this.skillDir("egg", source.id)}; move it away to borrow ${source.id}`);
+    }
+    const row = `- ${date} · borrowed from ${from.user} · ${from.repo}`;
+    const parts = source.body.split(/^(?=## )/m).filter((part) => !/^## Trials\s*$/m.test(part.split("\n")[0] ?? ""));
+    const origin = parts.findIndex((part) => /^## Origin\s*$/.test(part.split("\n")[0] ?? ""));
+    if (origin >= 0) parts[origin] = `${(parts[origin] ?? "").trimEnd()}\n${row}`;
+    else parts.push(`## Origin\n\n${row}`);
+    const egg = this.save({
+      ...source,
+      tier: "egg",
+      harnesses: [],
+      good: 0,
+      bad: 0,
+      laid: date,
+      updated: date,
+      body: parts.map((part) => part.trim()).filter(Boolean).join("\n\n"),
+    });
+    if (skill) {
+      mkdirSync(this.skillDir("egg"), { recursive: true });
+      cpSync(skill, this.skillDir("egg", egg.id), { recursive: true });
+      this.retitleSkill(egg.id, "egg");
     }
     return egg;
   }

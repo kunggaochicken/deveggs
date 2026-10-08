@@ -58,10 +58,10 @@
   <text class="small muted" x="58" y="278">installed by git clone, not npm</text>
 
   <rect class="sharebox" x="46" y="306" width="248" height="90" rx="8"/>
-  <text class="b" x="58" y="326" fill="#2f7f86">shared-baskets/&lt;user&gt;/</text>
+  <text class="b" x="58" y="326" fill="#2f7f86">deveggs-baskets repo</text>
   <text class="small" x="58" y="344">baskets people chose to share,</text>
-  <text class="small" x="58" y="359">public and browsable</text>
-  <text class="small muted" x="58" y="382">added by PR, one folder per user</text>
+  <text class="small" x="58" y="359">in a separate public repo</text>
+  <text class="small muted" x="58" y="382">baskets/&lt;user&gt;/, added by deveggs share</text>
 
   <rect x="46" y="406" width="248" height="82" rx="8" fill="#ffffff" stroke="#9c4426" stroke-width="1.2"/>
   <text class="b" x="58" y="426" fill="#9c4426">CI upstream guard</text>
@@ -118,14 +118,12 @@
   <rect class="band-share" x="368" y="306" width="516" height="90" rx="4"/>
   <g class="mono">
     <text x="376" y="324" font-weight="bold" fill="#2f7f86">├ shared-baskets/</text>
-    <text x="376" y="343">│ ├ README.md</text>
-    <text x="376" y="362">│ ├ &lt;user&gt;/</text>
-    <text x="376" y="381">│ └ &lt;you&gt;/</text>
-  </g>
-  <text class="small b" x="590" y="324" fill="#2f7f86">PUBLIC · repository of baskets</text>
-  <text class="small" x="590" y="343">how to borrow and share</text>
-  <text class="small" x="590" y="362">eggs/ chickens/ skills/ …</text>
-  <text class="small" x="590" y="381">your reviewed copy, to PR</text>
+    <text x="376" y="343">│ └ README.md</text>
+          </g>
+  <text class="small b" x="590" y="324" fill="#2f7f86">POINTER · baskets live in deveggs-baskets</text>
+  <text class="small" x="590" y="343">how to browse, import and share</text>
+  <text class="small" x="590" y="362">CI rejects anything else here</text>
+  <text class="small" x="590" y="381">deveggs browse · import · share</text>
 
   <!-- personal band -->
   <rect class="band-mine" x="368" y="406" width="516" height="164" rx="4"/>
@@ -159,11 +157,11 @@
   <text class="b" x="376" y="604">Flows</text>
   <g class="small">
     <circle class="badge" cx="384" cy="619" r="7"/><text class="bt" x="384" y="622.5" font-size="9">1</text>
-    <text x="398" y="623"><tspan font-weight="bold">git pull</tspan>: tool updates and new shared baskets; never touches my-basket/</text>
+    <text x="398" y="623"><tspan font-weight="bold">git pull</tspan>: tool updates; never touches my-basket/</text>
     <circle class="badge" cx="384" cy="637" r="7"/><text class="bt" x="384" y="640.5" font-size="9">2</text>
-    <text x="398" y="641"><tspan font-weight="bold">borrow</tspan>: copy an item into my-basket/eggs/; always an egg, trials reset to ✓0 ✗0</text>
+    <text x="398" y="641"><tspan font-weight="bold">borrow</tspan>: deveggs import &lt;user&gt;/&lt;id&gt;; always an egg, trials reset to ✓0 ✗0</text>
     <circle class="badge" cx="384" cy="655" r="7"/><text class="bt" x="384" y="658.5" font-size="9">3</text>
-    <text x="398" y="659"><tspan font-weight="bold">share</tspan>: review origin quotes and repo names, copy to shared-baskets/&lt;you&gt;/, open a PR</text>
+    <text x="398" y="659"><tspan font-weight="bold">share</tspan>: deveggs share redacts a copy and opens a PR to deveggs-baskets</text>
     <circle class="badge" cx="384" cy="673" r="7"/><text class="bt" x="384" y="676.5" font-size="9">4</text>
     <text x="398" y="677"><tspan font-weight="bold">sync</tspan> (optional): fork, un-ignore my-basket/, commit it in the fork</text>
     <circle class="badge" cx="384" cy="691" r="7"/><text class="bt" x="384" y="694.5" font-size="9">5</text>
@@ -342,8 +340,8 @@
 
   <!-- caption -->
   <g font-family="Georgia, 'Times New Roman', serif" font-size="12.5">
-    <text x="30" y="918"><tspan font-weight="bold">Figure 2.</tspan> How the deveggs repo is set up. (a) Upstream holds the tool and the shared baskets; CI keeps upstream my-basket/ empty. (b) In the local clone, the tool</text>
-    <text x="30" y="936">and shared-baskets/ arrive by git pull while my-basket/ stays personal and gitignored; numbered arrows are the flows listed in (b). (c) Install is a git clone plus a confirmed</text>
+    <text x="30" y="918"><tspan font-weight="bold">Figure 2.</tspan> How the deveggs repo is set up. (a) Upstream holds the tool; shared baskets live in deveggs-baskets; CI keeps my-basket/ empty. (b) In the local clone, the tool</text>
+    <text x="30" y="936">arrives by git pull while my-basket/ stays personal and gitignored; numbered arrows are the flows listed in (b). (c) Install is a git clone plus a confirmed</text>
     <text x="30" y="954">install step that an agent runs from INSTALL.md. (d) install symlinks skills and adds a managed block to each harness. (e) At runtime the agent reads the basket and changes it only through the CLI.</text>
   </g>
 </svg>

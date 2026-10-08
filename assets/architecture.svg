@@ -198,7 +198,7 @@
   <!-- basket -->
   <rect class="basketbox" x="662" y="466" width="252" height="250" rx="8"/>
   <text class="b c" x="788" y="488" fill="#5f7f4a">Your personal basket</text>
-  <text class="small c muted" x="788" y="503">gitignored; share a copy via shared-baskets/</text>
+  <text class="small c muted" x="788" y="503">gitignored; share a copy with deveggs share</text>
   <g class="mono">
     <text x="678" y="528">my-basket/</text>
     <text x="678" y="546">├ eggs/</text><text x="790" y="546" class="muted">trial</text>
@@ -284,7 +284,7 @@
   <!-- caption -->
   <g font-family="Georgia, 'Times New Roman', serif" font-size="12.5">
     <text x="30" y="944"><tspan font-weight="bold">Figure 1.</tspan> (a) An egg enters the basket only after explicit developer confirmation, is followed as a trial with structured ✓/✗ feedback, and becomes a permanent chicken only</text>
-    <text x="30" y="962">when the developer hatches it. (b) The repo holds the tool, a personal my-basket/ (gitignored) and a repository of shared-baskets/. The personal basket is compiled into an always-loaded block and</text>
+    <text x="30" y="962">when the developer hatches it. (b) The repo holds the tool and a personal my-basket/ (gitignored); shared baskets live in deveggs-baskets. The personal basket is compiled into an always-loaded block and</text>
     <text x="30" y="980">per-context skills that every harness loads natively. (c) The agent's per-session loop. (d) The egg template. Design target: triggers, compile and deveggs-lay are specified, not yet built.</text>
   </g>
 </svg>
