@@ -1,7 +1,7 @@
 {
   "name": "deveggs",
   "version": "0.1.0",
-  "description": "A basket of eggs for the agentic developer: a harness-agnostic home for your agent preferences, workflows, scripts and skills.",
+  "description": "deveggs captures your developer experience as you work with agents, so you never lose how you work with them.",
   "type": "module",
   "license": "MIT",
   "bin": { "deveggs": "bin/deveggs" },
