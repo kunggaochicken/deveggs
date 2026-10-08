@@ -1,9 +1,7 @@
 node_modules/
 .DS_Store
 
-# Personal basket: local by default, so it's never committed by accident.
-# Install deletes these lines in your own fork so your basket is committed there.
-# Never commit it upstream; share a reviewed copy under shared-baskets/<you>/ instead.
-/my-basket/**
-!/my-basket/**/
-!/my-basket/**/.gitkeep
+# Legacy personal basket. Baskets now live in ~/.deveggs (their own git repo);
+# `deveggs migrate` moves an old my-basket/ there. Keep it ignored so a local one is
+# never committed. Share a reviewed copy under shared-baskets/<you>/ instead.
+/my-basket/
