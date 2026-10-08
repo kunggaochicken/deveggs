@@ -133,6 +133,8 @@ function fixture(): string {
   b.crack("rejected");
   b.lay({ id: "client-zeta-deploy", summary: "Deploy via the zeta pipeline" });
   b.lay({ id: "skip-me", summary: "Something embarrassing" });
+  b.lay({ id: "work-account", summary: "Use the work GitHub account", tags: ["git", "private"] });
+  b.lay({ id: "local-tool", kind: "skill", summary: "Run the in-house tool", tags: ["private"] });
   b.lay({ id: "review", kind: "skill", summary: "Review a PR", chicken: true });
   writeFileSync(join(b.skillDir("chicken", "review"), "SKILL.md"), `---\nname: review\n---\nRun /home/jdoe/bin/lint with ${GHP}\n`);
   b.lay({ id: "old-skill", kind: "skill", summary: "Old skill" });
@@ -163,6 +165,9 @@ test("planShare shares sanitized chickens, eggs and skills, and leaves out the r
   assert.equal(byPath(plan, "cracked/old-skill.md").why, "cracked");
   assert.equal(byPath(plan, "skills/cracked/old-skill/SKILL.md").why, "cracked");
   assert.equal(byPath(plan, "eggs/skip-me.md").why, "skipped (--skip)");
+  assert.equal(byPath(plan, "eggs/work-account.md").why, "tagged private");
+  assert.equal(byPath(plan, "eggs/local-tool.md").why, "tagged private");
+  assert.equal(byPath(plan, "skills/eggs/local-tool/SKILL.md").why, "tagged private");
   assert.match(byPath(plan, "eggs/client-zeta-deploy.md").why ?? "", /private term/);
   assert.match(byPath(plan, "scripts/guard").why ?? "", /--include-scripts/);
   assert.ok(plan.terms.includes("zeta") && plan.terms.includes("moonjelly") && plan.terms.includes("jdoe"));

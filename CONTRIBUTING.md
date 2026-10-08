@@ -88,12 +88,13 @@ What it does by default:
 | **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), and their skills |
 | **Removed** | Origin quotes (`--keep-quotes` keeps them, redacted), `context` rows (date · harness · repo · session), harnesses, notes and the `## Trials` log |
 | **Redacted** in everything shared | Emails, tokens and secrets (`ghp_`, `github_pat_`, `sk-`, `AKIA`, Slack, JWTs, private keys, `key=value` secrets, long hex/base64), URLs and git remotes, session ids, home paths (to `~`), and private terms |
-| **Left out** | `cracked/` and cracked skills, `scripts/` (`--include-scripts` adds them, redacted), binary files, `--skip id1,id2`, ids containing a private term, and the rest of the basket (`logs/`, `README.md`, `PREFERENCES.md`) |
+| **Left out** | `cracked/` and cracked skills, items tagged `private` and their skills, `scripts/` (`--include-scripts` adds them, redacted), binary files, `--skip id1,id2`, ids containing a private term, and the rest of the basket (`logs/`, `README.md`, `PREFERENCES.md`) |
 
 Private terms are the repo names your eggs were laid in, your home folder's name,
 `--private t1,t2`, and one per line in `private-terms.txt` in your basket. Pattern
 matching can't spot people, clients or internal hosts written in prose, so **read the
-preview** and add those as private terms or `--skip` the item. `--repo owner/name` and
+preview** and add those as private terms or `--skip` the item. To keep an item out for
+good, tag it `private` (`deveggs lay … --tag private`, or add `private` to its `tags:`). `--repo owner/name` and
 `--dir path` send it somewhere else.
 
 Don't open a PR here that adds a basket: anything under `shared-baskets/` other than its

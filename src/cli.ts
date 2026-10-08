@@ -20,6 +20,7 @@ const USAGE = `deveggs: a basket of eggs for the agentic developer
 usage:
   deveggs lay "<one-sentence fact>" [--id short-name] [--kind ${KINDS.join("|")}]
                                      [--tag t1,t2] [--harness name] [--note text] [--chicken]
+                                     (tag "private" keeps it out of deveggs share)
                                      [--quote "<developer's words>"] [--repo name] [--session id]
   deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
   deveggs hatch <id>                   egg -> chicken (permanent)

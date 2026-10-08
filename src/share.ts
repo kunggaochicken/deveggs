@@ -25,6 +25,9 @@ export const shareDir = (user: string): string => `baskets/${user}`;
 /** One private term per line in the basket; `#` starts a comment. Redacted wherever they appear. */
 export const PRIVATE_TERMS_FILE = "private-terms.txt";
 
+/** Items tagged with this never leave the basket: `deveggs share` leaves them out whole. */
+export const PRIVATE_TAG = "private";
+
 /** Repo names that are public by definition, so never auto-added as private terms. */
 const PUBLIC_TERMS = new Set(["deveggs"]);
 
@@ -268,8 +271,8 @@ export function readPrivateTerms(root: string): string[] {
  * what it redacted or left out. Reads the basket; writes nothing.
  *
  * Shared: chickens and eggs (sanitized) and their skills (redacted).
- * Left out: cracked items and their skills, skipped ids, ids that contain a private
- * term, scripts/ (unless includeScripts), binary files, and everything else in the
+ * Left out: cracked items and their skills, items tagged `private` and their skills,
+ * skipped ids, ids that contain a private term, scripts/ (unless includeScripts), binary files, and everything else in the
  * basket (README.md, PREFERENCES.md, logs/, private-terms.txt, dotfiles).
  */
 export function planShare(root: string, options: ShareOptions = {}, publicNames: string[] = []): SharePlan {
@@ -284,14 +287,17 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
   const files: ShareFile[] = [];
   const items: ShareItem[] = [];
   const idLeaks = (id: string): boolean => terms.some((t) => termPattern(t).test(id));
+  const tagged = new Set(eggs.filter((e) => e.tags.includes(PRIVATE_TAG)).map((e) => e.id));
   const excluded = (id: string, tier: Tier): string | undefined =>
     tier === "cracked"
       ? "cracked"
-      : skip.has(id)
-        ? "skipped (--skip)"
-        : idLeaks(id)
-          ? "id has a private term; rename it or --skip it"
-          : undefined;
+      : tagged.has(id)
+        ? `tagged ${PRIVATE_TAG}`
+        : skip.has(id)
+          ? "skipped (--skip)"
+          : idLeaks(id)
+            ? "id has a private term; rename it or --skip it"
+            : undefined;
 
   for (const [tier, dir] of TIER_DIRS) {
     for (const egg of eggs.filter((e) => e.tier === tier)) {
@@ -453,7 +459,7 @@ export function publishShare(plan: SharePlan, options: PublishOptions): Publishe
       `Adds ${options.user}'s basket to \`${options.dir}/\`, made with \`deveggs share\`.`,
       "",
       "Sanitized before pushing: origin quotes, context rows, harnesses, notes and trial logs removed;",
-      "emails, tokens, URLs, session ids, home paths and private terms redacted; cracked items and scripts left out.",
+      "emails, tokens, URLs, session ids, home paths and private terms redacted; cracked items, items tagged private and scripts left out.",
       "",
       ...plan.items.filter((i) => i.shared).map((i) => `- \`${i.path}\``),
     ].join("\n");
