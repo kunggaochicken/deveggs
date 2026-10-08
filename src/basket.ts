@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { markdownTable } from "./table.ts";
 
 export const KINDS = ["preference", "workflow", "script", "skill"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -304,29 +305,17 @@ export class Basket {
     return this.move(this.get(id), "cracked", date);
   }
 
-  /** Render chickens (permanent) and eggs (on trial) into PREFERENCES.md. */
+  /** Render chickens (permanent) and eggs (on trial) into PREFERENCES.md, as Markdown tables. */
   render(): string {
-    const eggs = this.all();
-    const section = (tier: Tier): string => {
-      const groups = new Map<string, Egg[]>();
-      for (const e of eggs) {
-        if (e.tier !== tier) continue;
-        const tag = e.tags[0] ?? "general";
-        groups.set(tag, [...(groups.get(tag) ?? []), e]);
-      }
-      if (!groups.size) return "_None yet._";
-      return [...groups.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([tag, es]) => {
-          const items = es.map((e) => {
-            const kind = e.kind === "preference" ? "" : ` _(${e.kind})_`;
-            const id = tier === "egg" ? ` \`${e.id}\`` : "";
-            return `- ${e.summary}${kind}${id}`;
-          });
-          return `### ${tag}\n\n${items.join("\n")}`;
-        })
-        .join("\n\n");
-    };
+    const byTag = (tier: Tier): Egg[] =>
+      this.all()
+        .filter((e) => e.tier === tier)
+        .sort((a, b) => (a.tags[0] ?? "general").localeCompare(b.tags[0] ?? "general") || a.id.localeCompare(b.id));
+    const fact = (e: Egg): string => (e.kind === "preference" ? e.summary : `${e.summary} _(${e.kind})_`);
+    const tags = (e: Egg): string => e.tags.join(", ") || "general";
+    const chickens = byTag("chicken");
+    const eggs = byTag("egg");
+    const section = (rows: Egg[], table: () => string): string => (rows.length ? table() : "_None yet._");
     const out = [
       "# Developer preferences",
       "",
@@ -336,14 +325,19 @@ export class Basket {
       "",
       "Follow these. They outrank any harness-local memory.",
       "",
-      section("chicken"),
+      section(chickens, () => markdownTable(["id", "fact", "tags"], chickens.map((e) => [`\`${e.id}\``, fact(e), tags(e)]))),
       "",
       "## 🥚 Eggs: on trial",
       "",
       "Follow these too, but they're experiments. When one clearly helps or hurts, record it:",
       "`deveggs feedback <id> --good|--bad --note \"…\"`. A chicken wins if an egg conflicts with it.",
+      `🐣 marks an egg ready to propose hatching (${READY_AFTER} ✓ and no ✗).`,
       "",
-      section("egg"),
+      section(eggs, () =>
+        markdownTable(
+          ["", "id", "fact", "tags", "trials"],
+          eggs.map((e) => [isReady(e) ? "🐣" : "🥚", `\`${e.id}\``, fact(e), tags(e), `✓${e.good} ✗${e.bad}`]),
+        )),
       "",
     ].join("\n");
     writeFileSync(this.preferencesPath, out);
