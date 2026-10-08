@@ -50,8 +50,8 @@ table, for several) and lay only what they confirm.
 
 | Signal | Command |
 |---|---|
-| "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
-| "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area> --harness <you> --quote "<their words>"` |
+| "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --id <short-name> --tag <area> --harness <you> --quote "<their words>"` |
+| "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --id <short-name> --chicken --tag <area> --harness <you> --quote "<their words>"` |
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
 | A shell snippet they keep rewriting | `--kind script`, then write `~/.deveggs/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
@@ -60,6 +60,8 @@ table, for several) and lay only what they confirm.
 Rules:
 
 - **Use one fact per egg.** Write it as an imperative the next agent can follow.
+- **Name it with `--id`.** Use 2-4 lowercase words joined by dashes that say what it's
+  about, e.g. `pr-ui-screenshots`, not the first words of the fact.
 - **Lay only durable, cross-project facts.** Project-specific facts belong in that
   project's own AGENTS.md or CLAUDE.md.
 - **Don't duplicate.** Run `deveggs list` first. If an egg already covers it, record

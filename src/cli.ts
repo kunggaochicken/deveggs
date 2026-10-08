@@ -15,7 +15,7 @@ const USAGE = `deveggs: a basket of eggs for the agentic developer
   💥 cracked  rejected: kept so it's never laid again
 
 usage:
-  deveggs lay "<one-sentence fact>" [--kind ${KINDS.join("|")}]
+  deveggs lay "<one-sentence fact>" [--id short-name] [--kind ${KINDS.join("|")}]
                                      [--tag t1,t2] [--harness name] [--note text] [--chicken]
                                      [--quote "<developer's words>"] [--repo name] [--session id]
   deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
@@ -91,6 +91,7 @@ function main(argv: string[]): void {
     allowPositionals: true,
     options: {
       kind: { type: "string" },
+      id: { type: "string" },
       tag: { type: "string" },
       harness: { type: "string" },
       note: { type: "string" },
@@ -122,6 +123,7 @@ function main(argv: string[]): void {
       prepare();
       const egg = basket.lay({
         summary,
+        ...(values.id !== undefined && { id: values.id }),
         chicken: values.chicken,
         origin: {
           ...(values.quote !== undefined && { quote: values.quote }),

@@ -12,6 +12,15 @@ test("slugify makes short stable ids", () => {
   assert.throws(() => slugify("!!!"), BasketError);
 });
 
+test("lay takes a short id instead of the first words of the fact", () => {
+  const b = fresh();
+  const egg = b.lay({ id: "deveggs-github-account", summary: "Everything related to deveggs uses the kunggaochicken GitHub account" });
+  assert.equal(egg.id, "deveggs-github-account");
+  assert.ok(existsSync(join(b.root, "eggs", "deveggs-github-account.md")));
+  assert.throws(() => b.lay({ id: "Deveggs GitHub", summary: "Bad id" }), /invalid id/);
+  assert.throws(() => b.lay({ id: "deveggs-github-account", summary: "Same id" }), /already an egg/);
+});
+
 test("serialize/parse round-trips", () => {
   const b = fresh();
   const egg = b.lay({ summary: "Prefers terse summaries", tags: ["comms"], harness: "claude", note: "seen in grover", today: "2026-10-06" });

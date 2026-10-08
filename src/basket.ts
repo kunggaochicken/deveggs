@@ -41,6 +41,8 @@ export interface Egg {
 
 export interface LayInput {
   summary: string;
+  /** A short name for the egg. Defaults to the first words of the summary. */
+  id?: string;
   kind?: Kind;
   tags?: string[];
   harness?: string;
@@ -248,7 +250,10 @@ export class Basket {
 
   /** Lay a new egg to try out, or a chicken straight away if the developer is already sure. */
   lay(input: LayInput): Egg {
-    const id = slugify(input.summary);
+    if (input.id !== undefined && slugify(input.id) !== input.id) {
+      throw new BasketError(`invalid id ${JSON.stringify(input.id)}; use lowercase words joined by dashes, e.g. pr-screenshots`);
+    }
+    const id = input.id ?? slugify(input.summary);
     const existing = this.find(id);
     if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete it to revive`);
     if (existing) throw new BasketError(`${id} is already a${existing === "egg" ? "n egg" : " chicken"}; use feedback instead`);
