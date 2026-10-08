@@ -18,9 +18,11 @@ Every developer works with agents differently. Stacks like
 signals. Harness-local memory (Claude Code memory, Codex memories, Cursor rules, …)
 helps, but each harness keeps its own copy and puts its own slant on it.
 
-deveggs gives you **one personal basket** to build your own loop: preferences,
-workflows and skills that every coding agent you use reads. New ideas go in as eggs
-on trial. Only the ones that prove themselves become permanent.
+deveggs captures **your developer experience**, the way you like to work with
+agents, so any agent can reproduce it just the way you want. It lives in one personal
+basket of preferences, workflows and skills that every coding agent you use reads. You
+get there by trial and error: new ideas go in as eggs on trial, and only the ones that
+prove themselves become permanent.
 
 <p align="center">
   <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you just work. 2: your agent spots a preference on its own, drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
@@ -102,7 +104,8 @@ go straight in as chickens, once you say yes. Once laid, every agent you use fol
 Run `/deveggs` at the end of any session that captured a recurring pattern in how
 you like to work: a habit, a workflow, a standard you hold, or something you had to
 repeat or spell out very clearly. The agent mines that session for eggs. Do it
-regularly and you farm the preferences you like.
+regularly and your basket captures more of your experience each time, until every
+agent works the way you do.
 
 Agents spot eggs on their own as you work, but `/deveggs` is the reliable trigger.
 You can also pass your own preference to lay it on the spot:
