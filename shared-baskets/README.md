@@ -3,6 +3,16 @@
 Community baskets: developers who chose to publish how they work with agents.
 Browse them for ideas, and borrow anything that looks useful.
 
+## Baskets
+
+| Basket | What's in it |
+| --- | --- |
+| [`gstack/`](gstack/) | The 3 principles of Garry Tan's [gstack](https://github.com/garrytan/gstack) Builder Ethos |
+| [`pstack/`](pstack/) | The 24 principles of Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) |
+
+These two are imports of published stacks, named after the stack, not a GitHub user. Every
+item links to its source.
+
 ## Borrowing an egg
 
 Copy the file into your own basket's `eggs/` folder, **never** into `chickens/`.
