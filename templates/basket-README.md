@@ -1,4 +1,4 @@
-# <owner>'s deveggs basket
+# My deveggs basket
 
 My agentic-dev preferences, workflows, scripts and skills, kept harness-agnostic by
 [deveggs](https://github.com/kunggaochicken/deveggs). Every coding agent I use reads
@@ -24,6 +24,7 @@ the same basket, so I only teach a habit once.
 This basket lives at `~/.deveggs/`, apart from the deveggs tool:
 
 1. Clone this repo there: `git clone https://github.com/<owner>/my-basket ~/.deveggs`
+   (`deveggs push` prints its URL).
 2. Ask any agent to set up deveggs by following
    [INSTALL.md](https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md). It
    clones the tool, wires up every harness on the machine and renders `PREFERENCES.md`.
@@ -38,7 +39,7 @@ it creates a private repo, after that it pushes.
 
 ## Contributing back
 
-- **Share this basket.** Copy a reviewed version into `shared-baskets/<owner>/` and open
+- **Share this basket.** Copy a reviewed version into `shared-baskets/<your-github-username>/` and open
   a PR to [kunggaochicken/deveggs](https://github.com/kunggaochicken/deveggs). Strip private
   details from Origin sections and `context` rows first. See
   [shared-baskets/README.md](https://github.com/kunggaochicken/deveggs/blob/main/shared-baskets/README.md).
