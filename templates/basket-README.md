@@ -21,20 +21,20 @@ the same basket, so I only teach a habit once.
 
 ## Using it on a new machine
 
-This basket lives at `deveggs/my-basket/`:
+This basket lives at `~/.deveggs/`, apart from the deveggs tool:
 
-1. Clone deveggs: `git clone https://github.com/kunggaochicken/deveggs ~/Projects/deveggs`
-   (or clone your fork, which already holds the basket, and skip step 2).
-2. Clone this repo into it: `git clone https://github.com/<owner>/my-basket ~/Projects/deveggs/my-basket`
-3. Ask any agent to follow `~/Projects/deveggs/INSTALL.md`. It wires up every harness
-   on the machine and renders `PREFERENCES.md`.
+1. Clone this repo there: `git clone https://github.com/<owner>/my-basket ~/.deveggs`
+2. Ask any agent to set up deveggs by following
+   [INSTALL.md](https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md). It
+   clones the tool, wires up every harness on the machine and renders `PREFERENCES.md`.
 
 ## How agents tend it
 
 Agents use the [deveggs skill](https://github.com/kunggaochicken/deveggs/blob/main/skills/deveggs/SKILL.md):
 they propose eggs when I state how I like to work (I confirm), record trials, and
-suggest hatching or cracking. Nothing changes without my yes. Commit and push here
-after a session to back it up.
+suggest hatching or cracking. Nothing changes without my yes. Every change is
+committed here automatically. Run `deveggs push` to save it to GitHub: the first time
+it creates a private repo, after that it pushes.
 
 ## Contributing back
 

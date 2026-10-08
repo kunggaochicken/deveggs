@@ -11,7 +11,7 @@ Clear the `trials` row (`✓0 ✗0`) and the `## Trials` log. Then add a line to
 `context` saying where you borrowed it from, and try it like any other egg.
 
 Borrowed skills work the same way: copy `skills/chickens/<id>/` into your
-`my-basket/skills/eggs/<id>/` and add `[egg: on trial] ` to the start of its description.
+`~/.deveggs/skills/eggs/<id>/` and add `[egg: on trial] ` to the start of its description.
 
 ## Sharing yours
 
@@ -23,5 +23,5 @@ Borrowed skills work the same way: copy `skills/chickens/<id>/` into your
    (`eggs/`, `chickens/`, `skills/`, …). Optionally add a `README.md` about how you work.
 3. Open a PR to `kunggaochicken/deveggs` from a branch based on its `main`. It should touch only `shared-baskets/<your-github-username>/`.
 
-Your personal `my-basket/` itself must never be committed here. CI rejects any change to
-it, because everyone would pull your eggs into their own basket.
+Your personal basket (`~/.deveggs/`) itself must never be committed here, because
+everyone would pull your eggs into their own basket.
