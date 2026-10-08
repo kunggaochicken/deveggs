@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
-import { basketPath, commitBasket, ensureBasket, pushBasket } from "./store.ts";
+import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { formatList, formatShow, mark, terminalOptions } from "./view.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
@@ -27,12 +27,14 @@ usage:
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
+  deveggs autopush on|off|status       push the basket after every change (default off;
+                                     needs deveggs push first)
   deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
                                      --relink repoints harness skill links to it
 
 An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
 Every change re-renders PREFERENCES.md and is committed in the basket's own git repo
-(never pushed automatically).
+(pushed too only when deveggs autopush is on).
 
 env:
   DEVEGGS_BASKET  your basket, a git repo of its own (default: ~/.deveggs)
@@ -51,9 +53,9 @@ function prepare(): void {
   warnings.forEach(warn);
 }
 
-/** Commit a write in the basket repo. Warns, never fails. */
+/** Commit a write in the basket repo, and push it when autopush is on. Warns, never fails. */
 function save(message: string): void {
-  const warning = commitBasket(basketRoot, message);
+  const warning = saveBasket(basketRoot, message);
   if (warning) warn(warning);
 }
 
@@ -207,6 +209,16 @@ function main(argv: string[]): void {
     case "push": {
       prepare();
       console.log(`🧺 basket saved to ${pushBasket(basketRoot, values.repo)}`);
+      return;
+    }
+    case "autopush": {
+      const mode = positionals[0];
+      if (mode === "on" || mode === "off") setAutopush(basketRoot, mode === "on");
+      else if (mode !== "status") throw new BasketError("usage: deveggs autopush on|off|status");
+      const remote = originUrl(basketRoot);
+      const on = autopushEnabled(basketRoot);
+      const where = remote ? `${on ? "pushes" : "remote"}: ${webUrl(remote)}` : "no remote yet; save the basket with: deveggs push";
+      console.log(`autopush ${on ? "on" : "off"} (${where})`);
       return;
     }
     case undefined:
