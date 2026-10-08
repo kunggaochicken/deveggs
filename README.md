@@ -146,8 +146,18 @@ deveggs crack <id>                                    # 💥
 
 ## Your basket, and everyone else's
 
-- **`my-basket/`** is yours. Your fork commits it, so it's saved and syncs across
-  machines. Upstream ignores it, and CI keeps it out of upstream PRs.
+- **`my-basket/`** is yours. Install saves it in a repo you own, so it's backed up and
+  syncs across machines:
+  - **Fork (default):** your fork of deveggs commits `my-basket/`.
+  - **Private basket repo:** if you can't fork (GitHub won't fork a repo into the
+    account that owns it) or would rather not, `my-basket/` becomes its own private
+    repo (`<you>/my-basket`) inside a plain clone. On a new machine, clone it back into
+    `deveggs/my-basket/`.
+
+  Either way, your basket starts with a README (from
+  [`templates/basket-README.md`](templates/basket-README.md)) that explains how to work
+  with it and how to contribute back. Upstream ignores `my-basket/`, and CI keeps it
+  out of upstream PRs.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
   it always enters your basket as an egg on trial. To share yours, open a PR that adds
   a reviewed copy under [`shared-baskets/<you>/`](shared-baskets/README.md).
