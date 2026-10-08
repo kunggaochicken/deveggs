@@ -40,9 +40,10 @@ export interface Ensured {
 
 /**
  * Make sure the basket exists before a write: scaffold its folders, seed README.md
- * from templates/basket-README.md, and `git init` it. Never sets a git identity.
+ * from templates/basket-README.md, and `git init` it (committing as `initMessage`).
+ * Never sets a git identity.
  */
-export function ensureBasket(root: string, templates: string): Ensured {
+export function ensureBasket(root: string, templates: string, initMessage = "basket: create"): Ensured {
   const created = !existsSync(root);
   const warnings: string[] = [];
   for (const dir of SCAFFOLD) {
@@ -59,7 +60,7 @@ export function ensureBasket(root: string, templates: string): Ensured {
     if (init.missing) warnings.push("git not found; your basket isn't version-controlled (install git to back it up)");
     else if (init.status !== 0) warnings.push(`git init failed: ${firstLine(init.stderr)}`);
     else {
-      const warning = commitBasket(root, "basket: create");
+      const warning = commitBasket(root, initMessage);
       if (warning) warnings.push(warning);
     }
   }

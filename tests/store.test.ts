@@ -1,69 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { basketPath, webUrl } from "../src/store.ts";
-
-const repoRoot = join(import.meta.dirname, "..");
-const cliPath = join(repoRoot, "src", "cli.ts");
-const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
-
-interface Sandbox {
-  dir: string;
-  basket: string;
-  env: NodeJS.ProcessEnv;
-}
-
-/** A temp HOME and basket, and a git that ignores the developer's own config. */
-function sandbox(gitconfig = ""): Sandbox {
-  const dir = mkdtempSync(join(tmpdir(), "deveggs-store-"));
-  const home = join(dir, "home");
-  mkdirSync(home);
-  writeFileSync(join(dir, "gitconfig"), gitconfig);
-  const basket = join(dir, "basket");
-  const env: NodeJS.ProcessEnv = {
-    PATH: process.env["PATH"],
-    HOME: home,
-    DEVEGGS_BASKET: basket,
-    GIT_CONFIG_GLOBAL: join(dir, "gitconfig"),
-    GIT_CONFIG_NOSYSTEM: "1",
-    ...(gitconfig === "" && {
-      GIT_AUTHOR_NAME: "Tester",
-      GIT_AUTHOR_EMAIL: "tester@example.com",
-      GIT_COMMITTER_NAME: "Tester",
-      GIT_COMMITTER_EMAIL: "tester@example.com",
-    }),
-  };
-  return { dir, basket, env };
-}
-
-/** A PATH holding only a real git (unless left out) and the given fake scripts. */
-function fakePath(box: Sandbox, scripts: Record<string, string>, git = true): string {
-  const bin = join(box.dir, "bin");
-  mkdirSync(bin, { recursive: true });
-  if (git) symlinkSync(realGit, join(bin, "git"));
-  for (const [name, body] of Object.entries(scripts)) {
-    writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
-    chmodSync(join(bin, name), 0o755);
-  }
-  return bin;
-}
-
-function cli(box: Sandbox, ...args: string[]): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", cliPath, ...args], {
-    env: box.env,
-    cwd: box.dir,
-    encoding: "utf8",
-  });
-  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
-}
-
-const git = (box: Sandbox, cwd: string, ...args: string[]): string =>
-  execFileSync(realGit, args, { cwd, env: box.env, encoding: "utf8" }).trim();
-
-const subjects = (box: Sandbox): string[] => git(box, box.basket, "log", "--format=%s").split("\n");
+import { cli, fakePath, git, repoRoot, sandbox, subjects } from "./sandbox.ts";
 
 test("the basket is $DEVEGGS_BASKET, else ~/.deveggs", () => {
   assert.equal(basketPath({ DEVEGGS_BASKET: "/tmp/elsewhere/basket" }), "/tmp/elsewhere/basket");

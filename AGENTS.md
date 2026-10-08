@@ -21,9 +21,9 @@ repo. `deveggs where` prints the path.
 - The personal basket is `~/.deveggs/`, a separate git repo. Every write command
   scaffolds it on first use and commits each change there; `deveggs push` saves it to
   a private GitHub repo. Nothing is ever pushed automatically.
-- `my-basket/` inside this repo is the legacy location. It stays gitignored. **Never
-  commit its contents to this repo**, and never `git add -f` it. CI on
-  `kunggaochicken/deveggs` rejects it.
+- `my-basket/` inside this repo is the legacy location; `deveggs migrate` moves it to
+  `~/.deveggs`. It stays gitignored. **Never commit its contents to this repo**, and
+  never `git add -f` it. CI on `kunggaochicken/deveggs` rejects it.
 - `shared-baskets/<github-username>/` is the **repository of baskets** that people
   chose to share, contributed by PR (see `shared-baskets/README.md`). Before opening
   one, warn the developer to review the Origin and `context` rows for anything

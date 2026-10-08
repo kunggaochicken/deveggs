@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
+import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
 import { basketPath, commitBasket, ensureBasket, pushBasket } from "./store.ts";
 import { formatList, formatShow, mark, terminalOptions } from "./view.ts";
 
@@ -26,6 +27,8 @@ usage:
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
+  deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
+                                     --relink repoints harness skill links to it
 
 An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
 Every change re-renders PREFERENCES.md and is committed in the basket's own git repo
@@ -93,11 +96,16 @@ function main(argv: string[]): void {
       repo: { type: "string" },
       session: { type: "string" },
       chicken: { type: "boolean", default: false },
+      relink: { type: "boolean", default: false },
       good: { type: "boolean", default: false },
       bad: { type: "boolean", default: false },
       tier: { type: "string" },
     },
   });
+  const legacy = legacyBasket(repoRoot);
+  if (command !== "migrate" && hasContent(legacy) && !hasContent(basketRoot)) {
+    console.error(`deveggs: your basket is still in ${legacy}; move it to ${basketRoot} with: deveggs migrate`);
+  }
   const harness = values.harness !== undefined ? { harness: values.harness } : {};
   const note = values.note !== undefined ? { note: values.note } : {};
 
@@ -180,6 +188,19 @@ function main(argv: string[]): void {
       save("render");
       console.log(`wrote ${basket.preferencesPath}`);
       return;
+    case "migrate": {
+      const result = migrate(legacy, basketRoot, join(repoRoot, "templates"));
+      result.messages.forEach((m) => console.log(m));
+      if (result.relinks.length && values.relink) {
+        relink(result.relinks);
+        for (const r of result.relinks) console.log(`relinked ${r.link} -> ${r.to}`);
+      } else if (result.relinks.length) {
+        console.log("these harness skill links still point into the old basket; repoint them with deveggs migrate --relink, or:");
+        for (const r of result.relinks) console.log(`  ${lnCommand(r)}`);
+      }
+      for (const file of result.staleMentions) console.log(`${file} still mentions ${legacy}; point it at ${basketRoot}`);
+      return;
+    }
     case "where":
       console.log(basketRoot);
       return;
