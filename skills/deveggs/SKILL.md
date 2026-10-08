@@ -35,6 +35,82 @@ not a list, marked with 🥚 egg, 🐔 chicken, 🐣 ready, 💥 cracked, and �
 | 1 | 🥚 | Draw a diagram when explaining something complex | "we should draw a visual diagram for it" | explaining |
 | 2 | 🐔 | Never push to main | "never push to main" | git |
 
+## Show, don't tell: visual cards
+
+Every time the basket changes, show the developer **what** changed and **why it
+matters** as a visual, not a sentence. A one-line "🥚 laid `x`" leaves them to work out
+what the egg will do. A card makes it obvious at a glance. Pick whatever conveys the
+meaning most strongly: a table for comparisons and fields, a diagram (in a fenced
+block, so it renders in a terminal) for flows, cause and effect, and how eggs relate.
+Make it striking, but make every cell and arrow carry meaning. No filler.
+
+### Egg card: on lay and on hatch
+
+Show it right after `lay` or `hatch`. It answers "what will agents do differently now?"
+
+```
+🥚 memory-guardian                                   script · workflow · ✓0 ✗0
+"basically we should have a memory guardian that protects our computer from subagents"
+
+  subagents spawn ──▶ test browsers ──▶ memory pressure ──▶ 💥 machine crashes
+  Chrome, node, vite      pile up           rises                (before)
+
+  subagents spawn ──▶ 🛡 guardian checks ──▶ kills extras ──▶ ✅ machine stays up
+                         every 15 s          and runaways         (after)
+```
+
+| | |
+|---|---|
+| **Rule** | Run a memory guardian that kills agent-spawned test browsers and runaway dev processes |
+| **Fires when** | A test browser count or memory pressure crosses its limit |
+| **Before → after** | Machine crashes under subagent load → agents' processes are culled first |
+| **Judged by** | ✓ no crash and nothing of yours killed · ✗ it kills work you needed |
+| **Works with** | `parallel-subagents` (more agents, more load) |
+
+On hatch, use 🐔 and add its trial record (✓/✗ by harness) to the card.
+
+### Verdict card: on feedback, crack and hatch-ready
+
+Show it whenever you record a trial (`--good` or `--bad`), propose a crack or propose a
+hatch. It answers "why did the egg work or fail **in this scenario**, and how should
+the spec change?" Diagnose first, then recommend.
+
+```
+✗ terse-summaries  in a design review (grover, claude)
+
+  egg said:  "end each turn with a one-line summary"
+  scenario:  design review with 4 trade-offs to weigh
+  result:    summary dropped the trade-offs ──▶ developer asked "what were the options?"
+  cause:     the rule has no exception for decisions the developer must make
+```
+
+| # | Tuning | Change to the egg spec | Captures |
+|---|---|---|---|
+| 1 | **Narrow** (recommended) | "…one-line summary, **except** when the developer must choose: then a table of the options" | this ✗ without losing the ✓s |
+| 2 | **Complement** | Lay `decision-tables`: "show choices as a table of trade-offs" | the decision case, as its own egg |
+| 3 | **Crack** | Retire it | only if the ✗s keep coming |
+
+Diagnose with these causes, and name the one that fits:
+
+| Cause | Looks like | Usual tuning |
+|---|---|---|
+| Too broad | Fired where it doesn't belong | Narrow: add a scope or an exception |
+| Too narrow | Didn't fire where it should have | Widen the trigger |
+| Ambiguous wording | Two agents read it differently | Reword as one concrete imperative |
+| Missing companion | Right rule, but a gap next to it | Lay a complementary egg |
+| Conflicts with another egg | Two eggs pulled opposite ways | Merge them, or rank one above the other |
+| Wrong tier | Proven but still on trial, or failing as a chicken | Hatch, or crack |
+
+When several eggs bear on the scenario, draw how they relate: which complement each
+other, which conflict, and which one should give way. Batch several recordings into
+one card table rather than one card each.
+
+Tunings are proposals: **apply them only with the developer's yes.** Reword or narrow
+→ edit the egg's first body line in `<basket>/eggs/<id>.md`, keep its trials, and run
+`deveggs render`. Complement → `deveggs lay` the new egg. Then record the tuning:
+`deveggs feedback <id> --note "tuned: <what changed and why>"` with the trial's
+`--good`/`--bad`.
+
 ## At session start
 
 Read `~/.deveggs/PREFERENCES.md` (or `PREFERENCES.md` in the folder `deveggs where`
@@ -100,7 +176,8 @@ deveggs feedback <id> --bad  --harness <you> --note "too terse for a design revi
 Record feedback when there's a real signal, not every time the egg applies. The
 developer's reactions count most: if they push back on behavior an egg caused,
 that's a `--bad`. Feedback from more than one harness is the strongest evidence.
-Mention each recording in one line at the end of your turn, e.g. "🥚 +1 `terse-summaries`".
+Show each recording as a verdict card (see "Show, don't tell"), batched into one table
+when there are several.
 
 ## Hatching: the developer decides
 
@@ -113,7 +190,8 @@ natural pause, propose them in one batch:
 > |---|---|---|---|---|
 > | 1 | `terse-summaries` | End each turn with a one-line summary | ✓4 ✗0 (claude, codex) | "can you just give me one line at the end" (grover, 2026-10-06) |
 
-Get the origin and trial log from `deveggs show <id>`.
+Get the origin and trial log from `deveggs show <id>`. Follow the table with a verdict
+card for any egg whose trials are mixed, so the developer sees why before deciding.
 
 - Yes → `deveggs hatch <id>`. The egg becomes a chicken, and a skill moves to `skills/chickens/`.
 - No, drop it → `deveggs crack <id>`. It's kept so it's never laid again.
