@@ -74,8 +74,9 @@ above still applies the rest of the time.
   `deveggs list` to dedupe, draft one egg (a chicken if it says always/never), pass
   their words verbatim as `--quote`, confirm in one line and lay.
 - **Without text**: scan this session for corrections, instructions they repeated or
-  re-specified, and always/never statements. Propose candidates as above and lay only
-  what they confirm. Also show any hatch-ready eggs (`deveggs list --tier ready`).
+  re-specified, and always/never statements. Propose candidates as one table
+  (`# | tier | proposed rule | from your words | tag`) and lay only what they confirm.
+  Also show any hatch-ready eggs (`deveggs list --tier ready`).
 
 ## Trying eggs: record feedback
 
