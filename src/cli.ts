@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
-import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, saveBasket, setAutopush, webUrl } from "./store.ts";
+import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
+import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, mark, terminalOptions } from "./view.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
@@ -29,6 +31,11 @@ usage:
                                      a private repo with gh, default name my-basket)
   deveggs autopush on|off|status       push the basket after every change (default off;
                                      needs deveggs push first)
+  deveggs share [--dry-run] [--as github-user] [--yes] [--keep-quotes] [--include-scripts]
+                [--private t1,t2] [--skip id1,id2] [--repo owner/name] [--dir path]
+                                     share a sanitized copy of your basket by PR (default
+                                     ${DEFAULT_SHARE_REPO}, baskets/<you>/). Prints
+                                     what's shared and redacted first; run --dry-run first
   deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
                                      --relink repoints harness skill links to it
 
@@ -84,6 +91,86 @@ function requireId(positionals: string[]): string {
   return id;
 }
 
+const csv = (value: string | undefined): string[] => value?.split(",").map((t) => t.trim()).filter(Boolean) ?? [];
+
+/** Read one line from stdin, synchronously (stdin is a terminal here). */
+function ask(question: string): string {
+  process.stdout.write(question);
+  const byte = Buffer.alloc(1);
+  let answer = "";
+  for (;;) {
+    let n = 0;
+    try {
+      n = readSync(0, byte, 0, 1, null);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EAGAIN") continue;
+      throw err;
+    }
+    if (n === 0 || byte[0] === 10) return answer.trim();
+    answer += String.fromCharCode(byte[0] ?? 0);
+  }
+}
+
+/** The GitHub login gh is signed in as, if any. */
+function ghUser(): string | undefined {
+  const r = run("gh", ["api", "user", "--jq", ".login"]);
+  return r.status === 0 ? r.stdout.trim() || undefined : undefined;
+}
+
+interface ShareFlags {
+  "dry-run": boolean;
+  as?: string | undefined;
+  yes: boolean;
+  "keep-quotes": boolean;
+  "include-scripts": boolean;
+  private?: string | undefined;
+  skip?: string | undefined;
+  repo?: string | undefined;
+  dir?: string | undefined;
+}
+
+function share(values: ShareFlags): void {
+  if (missing()) throw new BasketError(`nothing to share; ${emptyNote()}`);
+  const repo = values.repo ?? DEFAULT_SHARE_REPO;
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new BasketError(`invalid --repo ${JSON.stringify(repo)}; expected owner/name`);
+  const user = values.as ?? ghUser() ?? (values["dry-run"] ? "you" : undefined);
+  if (!user) throw new BasketError("who are you sharing as? pass --as <github-username> (or log in with gh auth login)");
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(user)) throw new BasketError(`invalid --as ${JSON.stringify(user)}; expected a GitHub username`);
+  const dir = (values.dir ?? shareDir(user)).replace(/^\/+|\/+$/g, "");
+  if (!dir || dir.split("/").some((part) => part === ".." || part === "." || part === "")) throw new BasketError(`invalid --dir ${JSON.stringify(values.dir)}`);
+  const plan = planShare(
+    basketRoot,
+    {
+      keepQuotes: values["keep-quotes"],
+      includeScripts: values["include-scripts"],
+      privateTerms: csv(values.private),
+      skip: csv(values.skip),
+      home: homedir(),
+    },
+    [user],
+  );
+  console.log(formatPreview(plan, `${repo}: ${dir}/`, terminalOptions()));
+  if (values["dry-run"]) {
+    console.log("\n--dry-run: nothing written or pushed. Share it with: deveggs share" + (values.as ? ` --as ${user}` : ""));
+    return;
+  }
+  if (!plan.files.length) throw new BasketError("nothing to share: every item was left out");
+  if (!values.yes && !process.stdin.isTTY) throw new BasketError("not pushing without a yes: review the preview above, then rerun with --yes");
+  const result = publishShare(plan, {
+    repo,
+    dir,
+    user,
+    gitBase: process.env["DEVEGGS_SHARE_GIT_BASE"] ?? "https://github.com/",
+    log: (l) => console.log(l),
+    confirm: (review) => {
+      console.log(`\n${review}`);
+      if (values.yes) return true;
+      return /^y(es)?$/i.test(ask(`Push to ${repo} and open a PR? [y/N] `));
+    },
+  });
+  console.log(result.pushed ? `🧺 ${result.message}` : result.message);
+}
+
 function main(argv: string[]): void {
   const [command, ...rest] = argv;
   const { values, positionals } = parseArgs({
@@ -103,6 +190,14 @@ function main(argv: string[]): void {
       good: { type: "boolean", default: false },
       bad: { type: "boolean", default: false },
       tier: { type: "string" },
+      "dry-run": { type: "boolean", default: false },
+      as: { type: "string" },
+      yes: { type: "boolean", default: false },
+      "keep-quotes": { type: "boolean", default: false },
+      "include-scripts": { type: "boolean", default: false },
+      private: { type: "string" },
+      skip: { type: "string" },
+      dir: { type: "string" },
     },
   });
   const legacy = legacyBasket(repoRoot);
@@ -211,6 +306,10 @@ function main(argv: string[]): void {
     case "push": {
       prepare();
       console.log(`🧺 basket saved to ${pushBasket(basketRoot, values.repo)}`);
+      return;
+    }
+    case "share": {
+      share(values);
       return;
     }
     case "autopush": {

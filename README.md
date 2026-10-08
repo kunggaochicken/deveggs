@@ -145,6 +145,7 @@ deveggs crack <id>                                                      # 💥
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
+deveggs share --dry-run --as <you>                                      # preview sharing your basket
 ```
 
 ## Your basket, and everyone else's
@@ -157,8 +158,10 @@ deveggs where                                                           # print 
   [`templates/basket-README.md`](templates/basket-README.md)) that explains how to work
   with it and how to contribute back.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
-  it always enters your basket as an egg on trial. To share yours, open a PR that adds
-  a reviewed copy under [`shared-baskets/<you>/`](shared-baskets/README.md).
+  it always enters your basket as an egg on trial. To share yours, run
+  `deveggs share --dry-run` to see what would go out and what it redacts, then
+  `deveggs share` opens a PR to
+  [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets).
 
 ## Why
 

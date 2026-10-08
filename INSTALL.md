@@ -102,5 +102,6 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      guide again
    - to uninstall, ask any agent to remove the deveggs symlinks and the
      `deveggs:begin` … `deveggs:end` block from each harness
-   - to share their basket, they can open a PR with a reviewed copy in
-     `shared-baskets/<username>/`.
+   - to share their basket, `deveggs share --dry-run` shows what would be shared
+     and what it redacts; `deveggs share` then opens a PR to
+     `kunggaochicken/deveggs-baskets`.

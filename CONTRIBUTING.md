@@ -8,7 +8,7 @@ PR: a fix to the tool, a clearer instruction for agents, or a basket you chose t
 This repo is the deveggs **code**:
 
 - `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `hatch`, `crack`, `render`,
-  `push`, `autopush`, `migrate`, …).
+  `push`, `autopush`, `share`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
 - `templates/`: files new baskets start with.
@@ -52,6 +52,7 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | CLI commands and flags | `src/cli.ts` |
 | Terminal output (`list`, `show`, tables) | `src/view.ts`, `src/table.ts` |
 | Moving a legacy `my-basket/` | `src/migrate.ts` |
+| `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
 | Harness wiring (Claude Code, Codex, Cursor, …) | `INSTALL.md`, as instructions, not code. Add a harness by adding a row to its table. |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |
@@ -61,13 +62,34 @@ wherever they describe it, in the same PR.
 
 ## Sharing your basket
 
-Shared baskets come in by PR. Follow [`shared-baskets/README.md`](shared-baskets/README.md):
-copy a reviewed copy of your basket into `shared-baskets/<your-github-username>/`, and
-touch nothing else in that PR.
+Shared baskets live in their own repo,
+[kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets), under
+`baskets/<your-github-username>/`. Share yours with `deveggs share`, starting with a dry run:
 
-**Review it for privacy first.** Each egg's Origin section and `context` row hold your
-verbatim words, repo names and session details. Remove client names, internal repos,
-credentials and anything from work you can't publish. Consider leaving out `cracked/`.
+```bash
+deveggs share --dry-run --as <your-github-username>   # preview: nothing leaves your machine
+deveggs share --as <your-github-username>             # branch, commit, confirm, push, open the PR
+```
+
+It builds a sanitized copy of your basket and prints, per item, what it shares and what
+it removed or redacted. Nothing is pushed until you confirm (or pass `--yes`). It clones
+the baskets repo into a temp folder and commits only `baskets/<you>/`, so your personal
+basket is never committed. If you can't push to the repo, it pushes to your fork.
+
+What it does by default:
+
+| | |
+|---|---|
+| **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), and their skills |
+| **Removed** | Origin quotes (`--keep-quotes` keeps them, redacted), `context` rows (date · harness · repo · session), harnesses, notes and the `## Trials` log |
+| **Redacted** in everything shared | Emails, tokens and secrets (`ghp_`, `github_pat_`, `sk-`, `AKIA`, Slack, JWTs, private keys, `key=value` secrets, long hex/base64), URLs and git remotes, session ids, home paths (to `~`), and private terms |
+| **Left out** | `cracked/` and cracked skills, `scripts/` (`--include-scripts` adds them, redacted), binary files, `--skip id1,id2`, ids containing a private term, and the rest of the basket (`logs/`, `README.md`, `PREFERENCES.md`) |
+
+Private terms are the repo names your eggs were laid in, your home folder's name,
+`--private t1,t2`, and one per line in `private-terms.txt` in your basket. Pattern
+matching can't spot people, clients or internal hosts written in prose, so **read the
+preview** and add those as private terms or `--skip` the item. `--repo owner/name` and
+`--dir path` send it somewhere else.
 
 ## Changing the meta-skill or the egg model
 
