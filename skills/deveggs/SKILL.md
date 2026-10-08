@@ -73,8 +73,10 @@ above still applies the rest of the time.
 - **With text** (`/deveggs always draw a diagram…`): it's their own preference. Run
   `deveggs list` to dedupe, draft one egg (a chicken if it says always/never), pass
   their words verbatim as `--quote`, confirm in one line and lay.
-- **Without text**: scan this session for corrections, instructions they repeated or
-  re-specified, and always/never statements. Propose candidates as one table
+- **Without text**: scan this session for anything that reflects a recurring pattern
+  in how they work: corrections, instructions they repeated or re-specified,
+  always/never statements, workflows they walked you through, and standards they
+  held you to. Propose candidates as one table
   (`# | tier | proposed rule | from your words | tag`) and lay only what they confirm.
   Also show any hatch-ready eggs (`deveggs list --tier ready`).
 
