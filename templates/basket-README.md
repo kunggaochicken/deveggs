@@ -35,7 +35,8 @@ Agents use the [deveggs skill](https://github.com/kunggaochicken/deveggs/blob/ma
 they propose eggs when I state how I like to work (I confirm), record trials, and
 suggest hatching or cracking. Nothing changes without my yes. Every change is
 committed here automatically. Run `deveggs push` to save it to GitHub: the first time
-it creates a private repo, after that it pushes.
+it creates a private repo, after that it pushes. Run `deveggs autopush on` to push
+after every change instead, so it stays synced (`deveggs autopush off` to stop).
 
 ## Contributing back
 

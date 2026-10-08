@@ -131,8 +131,12 @@ new skill, so every harness can use it.
 
 The basket is its own git repo. `lay`, `feedback`, `hatch`, `crack` and `render`
 commit there automatically, so you don't commit basket changes yourself, and nothing
-is lost even offline. Nothing pushes automatically: **never push without the
-developer's yes.** If the basket has no remote yet (`git -C ~/.deveggs remote` prints
-nothing), you may offer `deveggs push`, which saves it to a private GitHub repo on
-their account. Never commit a basket to `kunggaochicken/deveggs` itself. To share,
+is lost even offline. Nothing pushes unless the developer chose it: **never push
+without the developer's yes.** `deveggs autopush status` shows where things stand.
+If the basket has no remote yet, you may offer `deveggs push`, which saves it to a
+private GitHub repo on their account. If it has a remote and autopush is off, you may
+offer `deveggs autopush on`; never turn it on without their yes. With autopush on,
+every command that changes the basket also pushes it, so you don't push yourself. If
+a push fails (offline, auth), the change is still committed locally; `deveggs push`
+catches up later. Never commit a basket to `kunggaochicken/deveggs` itself. To share,
 follow `shared-baskets/README.md`.

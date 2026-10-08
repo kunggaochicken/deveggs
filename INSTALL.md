@@ -28,7 +28,8 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      into the old path.
    - Otherwise, if `~/.deveggs/` doesn't exist, ask whether they already have a
      basket repo on GitHub (for example from another machine). If so, clone it:
-     `git clone https://github.com/<user>/my-basket ~/.deveggs`.
+     `git clone https://github.com/<user>/my-basket ~/.deveggs`. Step 8 offers to
+     keep it synced.
    - Otherwise, there's nothing to do yet. The first deveggs command that writes
      creates it (folders, a README and `git init`), and `deveggs render` in step 5
      does that.
@@ -81,17 +82,22 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
    `shared-baskets/` has community baskets they can borrow eggs from. If they say
    yes, propose each candidate one at a time: suggest a rule, a trigger, and egg or
    chicken. Lay only what they confirm, and pass their original wording as `--quote`.
-8. **Offer to save the basket on GitHub.** Until it's pushed, the basket lives
-   only on this machine. If it has no remote yet (`git -C ~/.deveggs remote` prints
-   nothing), offer to run `<repo>/bin/deveggs push`. It creates a private repo,
-   `my-basket` by default (`--repo <owner>/<name>` to choose), on their GitHub
-   account and pushes to it. **Confirm** first. If they'd rather wait, tell them any
-   agent can run it later, for example after their first few eggs.
+8. **Offer to save the basket on GitHub and keep it synced.** Until it's pushed, the
+   basket lives only on this machine. Run `<repo>/bin/deveggs autopush status`.
+   - If it says `no remote yet`, offer to run `<repo>/bin/deveggs push`. It creates a
+     private repo, `my-basket` by default (`--repo <owner>/<name>` to choose), on
+     their GitHub account and pushes to it. **Confirm** first. If they'd rather wait,
+     tell them any agent can run it later, for example after their first few eggs.
+   - Once it has a remote (just pushed, or cloned in step 3) and autopush is `off`,
+     offer to run `<repo>/bin/deveggs autopush on`: every change to the basket is then
+     pushed to GitHub as it happens, so it stays synced across machines. **Confirm**
+     first. `deveggs autopush off` turns it off again.
 9. **Report.** List the harnesses you wired and anything you skipped. Mention that:
    - every wired agent picks up deveggs in its next session. They don't need to
      paste anything again, though they can for a harness they install later.
    - `git -C <repo> pull` gets tool updates and new shared baskets without
-     touching their basket, and `deveggs push` backs the basket up
+     touching their basket, and `deveggs push` backs the basket up (automatically
+     after every change once `deveggs autopush on` is set)
    - on a new machine, clone their basket repo into `~/.deveggs/` and follow this
      guide again
    - to uninstall, ask any agent to remove the deveggs symlinks and the
