@@ -67,17 +67,28 @@ test("cracked things are never re-laid", () => {
   assert.throws(() => b.lay({ summary: "Uses tabs" }), /cracked/);
 });
 
-test("render lists chickens as permanent and eggs as on trial", () => {
+test("render writes chickens and eggs as Markdown tables", () => {
   const b = fresh();
   b.lay({ summary: "Never push to main", chicken: true, tags: ["git"] });
   b.lay({ summary: "Try terse summaries", tags: ["comms"] });
+  b.lay({ summary: "Run tests | then commit", kind: "workflow", tags: ["git", "testing"] });
+  for (let i = 0; i < READY_AFTER; i++) b.feedback("try-terse-summaries", { good: true });
+  b.feedback("run-tests-then-commit", { good: false });
   b.lay({ summary: "Rejected idea", tags: ["comms"] });
   b.crack("rejected-idea");
   const out = b.render();
+  assert.equal(readFileSync(b.preferencesPath, "utf8"), out);
   const [chickens = "", eggs = ""] = out.split("## 🥚 Eggs");
-  assert.match(chickens, /### git\n\n- Never push to main/);
-  assert.match(eggs, /### comms\n\n- Try terse summaries `try-terse-summaries`/);
+  assert.match(chickens, /\| id \| fact \| tags \|\n\|---\|---\|---\|\n\| `never-push-to-main` \| Never push to main \| git \|/);
+  assert.match(eggs, /\|  \| id \| fact \| tags \| trials \|/);
+  assert.match(eggs, /\| 🐣 \| `try-terse-summaries` \| Try terse summaries \| comms \| ✓3 ✗0 \|/);
+  assert.match(eggs, /\| 🥚 \| `run-tests-then-commit` \| Run tests \\\| then commit _\(workflow\)_ \| git, testing \| ✓0 ✗1 \|/);
   assert.doesNotMatch(out, /Rejected/);
+});
+
+test("render says so when a tier is empty", () => {
+  const out = fresh().render();
+  assert.equal(out.match(/_None yet\._/g)?.length, 2);
 });
 
 test("lay records where the egg came from, ahead of the trial log", () => {

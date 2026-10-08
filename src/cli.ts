@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
+import { formatList, formatShow, mark, terminalOptions } from "./view.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
@@ -31,10 +32,9 @@ const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPa
 const basket = new Basket(join(repoRoot, "my-basket"));
 
 function line(egg: Egg): string {
-  const mark = egg.tier === "chicken" ? "🐔" : egg.tier === "cracked" ? "💥" : isReady(egg) ? "🐣" : "🥚";
   const tags = egg.tags.length ? ` [${egg.tags.join(", ")}]` : "";
   const trials = egg.tier === "egg" ? `, ✓${egg.good} ✗${egg.bad}` : "";
-  return `${mark} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
+  return `${mark(egg)} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
 }
 
 /** Name of the git repo the command runs in, used as the egg's origin when --repo is absent. */
@@ -118,9 +118,7 @@ function main(argv: string[]): void {
       basket.render();
       return;
     case "show": {
-      const egg = basket.get(requireId(positionals));
-      console.log(`${line(egg)}\n     harnesses: ${egg.harnesses.join(", ") || "-"}  laid: ${egg.laid}  updated: ${egg.updated}`);
-      if (egg.body) console.log(`\n${egg.body}`);
+      console.log(formatShow(basket.get(requireId(positionals)), terminalOptions()));
       return;
     }
     case "list": {
@@ -132,7 +130,7 @@ function main(argv: string[]): void {
       if (tier === "ready") eggs = eggs.filter(isReady);
       else if (tier) eggs = eggs.filter((e) => e.tier === tier);
       if (values.kind) eggs = eggs.filter((e) => e.kind === values.kind);
-      console.log(eggs.length ? eggs.map(line).join("\n") : "basket is empty");
+      console.log(formatList(eggs, terminalOptions()));
       return;
     }
     case "render":

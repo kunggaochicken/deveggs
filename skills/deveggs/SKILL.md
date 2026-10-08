@@ -20,6 +20,16 @@ The basket's location is in the deveggs prompt in your global instructions. If
 that prompt is missing, use `$DEVEGGS_HOME`. Run all commands through
 `<basket-repo>/bin/deveggs`.
 
+## Presenting to the developer
+
+Show proposals (eggs to lay, hatch candidates, a basket overview) as a Markdown table,
+not a list, marked with 🥚 egg, 🐔 chicken, 🐣 ready, 💥 cracked, and ✓/✗ for trials:
+
+| # | tier | proposed rule | from your words | tag |
+|---|---|---|---|---|
+| 1 | 🥚 | Draw a diagram when explaining something complex | "we should draw a visual diagram for it" | explaining |
+| 2 | 🐔 | Never push to main | "never push to main" | git |
+
 ## At session start
 
 Read `<basket-repo>/my-basket/PREFERENCES.md`. It lists the chickens, then the eggs with
@@ -30,8 +40,8 @@ that start with `[egg: on trial]`.
 
 Spot preferences yourself, as the developer works. They never have to ask you to
 look. Corrections, "always/never", "let's try…" and steps they repeat are all
-signals. But **never lay without their yes**: propose each one in one line and lay
-only what they confirm.
+signals. But **never lay without their yes**: propose each one in one line (or a
+table, for several) and lay only what they confirm.
 
 | Signal | Command |
 |---|---|
@@ -76,8 +86,10 @@ Mention each recording in one line at the end of your turn, e.g. "🥚 +1 `terse
 natural pause, propose them in one batch:
 
 > 🐣 These eggs have been working well. Should I hatch them into chickens?
-> 1. `terse-summaries`: End each turn with a one-line summary (✓4 ✗0, claude+codex)
->    from: "can you just give me one line at the end" (grover, 2026-10-06)
+>
+> | # | egg | rule | trials | from your words |
+> |---|---|---|---|---|
+> | 1 | `terse-summaries` | End each turn with a one-line summary | ✓4 ✗0 (claude, codex) | "can you just give me one line at the end" (grover, 2026-10-06) |
 
 Get the origin and trial log from `deveggs show <id>`.
 
