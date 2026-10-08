@@ -143,6 +143,7 @@ deveggs feedback <id> --good                          # log a trial
 deveggs hatch <id>                                    # 🥚 -> 🐔
 deveggs crack <id>                                    # 💥
 deveggs push                                          # save your basket to GitHub
+deveggs autopush on                                   # then push after every change
 deveggs where                                         # print your basket's path
 ```
 
@@ -150,8 +151,9 @@ deveggs where                                         # print your basket's path
 
 - **`~/.deveggs/`** is yours: your basket, kept apart from the tool like `~/.claude`
   or `~/.codex`. It's its own git repo, and every change is committed locally, so
-  nothing is lost. `deveggs push` saves it to a private GitHub repo, and on a new
-  machine you clone that repo into `~/.deveggs/`. It starts with a README (from
+  nothing is lost. `deveggs push` saves it to a private GitHub repo, and
+  `deveggs autopush on` keeps it synced there after every change. On a new machine
+  you clone that repo into `~/.deveggs/`. It starts with a README (from
   [`templates/basket-README.md`](templates/basket-README.md)) that explains how to work
   with it and how to contribute back.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
