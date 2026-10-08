@@ -5,6 +5,10 @@ description: Use when the developer states or reveals how they like to work with
 
 # deveggs: tend the developer's basket
 
+The goal is to capture the developer's experience, how they like to work with agents,
+so any agent can reproduce it just the way they want. It's refined by trial and error:
+eggs are tried, and only what proves itself is kept.
+
 The developer keeps a **basket**: one git repo holding their agentic-dev preferences,
 workflows, scripts and skills. Every harness they use reads the same basket. It has
 two tiers:
