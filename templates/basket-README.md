@@ -40,10 +40,10 @@ after every change instead, so it stays synced (`deveggs autopush off` to stop).
 
 ## Contributing back
 
-- **Share this basket.** Copy a reviewed version into `shared-baskets/<your-github-username>/` and open
-  a PR to [kunggaochicken/deveggs](https://github.com/kunggaochicken/deveggs). Strip private
-  details from Origin sections and `context` rows first. See
-  [shared-baskets/README.md](https://github.com/kunggaochicken/deveggs/blob/main/shared-baskets/README.md).
+- **Share this basket.** Run `deveggs share --dry-run` to see what would be shared and what
+  it redacts, then `deveggs share` to open a PR to
+  [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets). Add
+  anything else private (client names, people, internal hosts) to `private-terms.txt` here.
 - **Improve the tool.** File feedback or bugs as
   [issues](https://github.com/kunggaochicken/deveggs/issues), or open a PR from a branch
   off upstream `main`.

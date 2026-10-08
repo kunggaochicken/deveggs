@@ -219,4 +219,6 @@ offer `deveggs autopush on`; never turn it on without their yes. With autopush o
 every command that changes the basket also pushes it, so you don't push yourself. If
 a push fails (offline, auth), the change is still committed locally; `deveggs push`
 catches up later. Never commit a basket to `kunggaochicken/deveggs` itself. To share,
-follow `shared-baskets/README.md`.
+run `deveggs share --dry-run` and show the developer its preview (what's shared, what
+was redacted). Only run `deveggs share` once they've reviewed it and said yes, and
+never pass `--yes` for them.
