@@ -7,11 +7,12 @@ Browse them for ideas, and borrow anything that looks useful.
 
 | Basket | What's in it |
 | --- | --- |
-| [`gstack/`](gstack/) | The 3 principles of Garry Tan's [gstack](https://github.com/garrytan/gstack) Builder Ethos |
-| [`pstack/`](pstack/) | The 24 principles of Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack) |
+| [`gstack/`](gstack/) | All of Garry Tan's [gstack](https://github.com/garrytan/gstack), vendored: 57 skills, their scripts and the browse tool, plus its 3 ETHOS principles |
+| [`pstack/`](pstack/) | All of Lauren Tan's [pstack](https://github.com/cursor/plugins/tree/main/pstack), vendored: 54 skills (24 principles), playbooks, scripts and guide |
 
-These two are imports of published stacks, named after the stack, not a GitHub user. Every
-item links to its source.
+These two are full copies of published stacks, named after the stack, not a GitHub user.
+They're self-contained: borrowing one reproduces the stack without fetching it. Each
+item's Origin records the upstream commit it came from.
 
 ## Borrowing an egg
 

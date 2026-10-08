@@ -1,12 +1,32 @@
 # gstack
 
-The principles from the [gstack Builder Ethos](https://github.com/garrytan/gstack/blob/main/ETHOS.md)
-by Garry Tan (MIT), as chickens. Each file links to its section of `ETHOS.md`, and its Origin
-quotes that section verbatim.
+All of [gstack](https://github.com/garrytan/gstack) by Garry Tan (MIT, see
+[`LICENSE`](LICENSE)), vendored from `garrytan/gstack@f67c478` as a deveggs basket.
+Nothing here links out to work: the full source is in [`gstack/`](gstack/).
 
-This is an import, not a basket the author contributed. The gstack skills themselves
-(`/office-hours`, `/review`, `/ship`, …) aren't copied here. Install
-[gstack](https://github.com/garrytan/gstack) for those.
+| Path | What's there |
+| --- | --- |
+| `gstack/` | The gstack repo, verbatim, minus its `test/` suite and git history |
+| `chickens/<id>.md` | One 🐔 per skill (57, including the `gstack` router), plus the 3 [ETHOS](gstack/ETHOS.md) principles |
+| `skills/chickens/<id>` | Symlinks into `gstack/<id>`, so each skill is tracked like any deveggs skill |
 
-Watch out: [`user-sovereignty`](chickens/user-sovereignty.md) conflicts with pstack's
-[`never-block-on-the-human`](../pstack/chickens/never-block-on-the-human.md). Borrow one, not both.
+gstack's skills expect the whole repo at `~/.claude/skills/gstack/`. They call its
+`bin/` scripts, docs and each other there over 1,000 times. So the source stays
+whole and unedited, and setup links it into place instead of rewriting paths.
+
+## Borrowing it
+
+1. Copy `chickens/` into your basket's `eggs/` (see [`../README.md`](../README.md#borrowing-an-egg)),
+   and copy `gstack/` to your basket's root.
+2. Link it where its skills look for it, then run gstack's own setup. It builds the
+   `browse` binary with [bun](https://bun.sh) and registers the skills with every agent it finds:
+
+   ```bash
+   ln -s ~/.deveggs/gstack ~/.claude/skills/gstack
+   ~/.claude/skills/gstack/setup --host auto
+   ```
+
+   gstack's setup links the skills itself, so don't link them a second time.
+
+`user-sovereignty` conflicts with pstack's `principle-never-block-on-the-human`.
+Borrow one, not both.
