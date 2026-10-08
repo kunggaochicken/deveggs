@@ -14,7 +14,7 @@ const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
 /** A temp basket with a chicken, a plain egg, an egg with mixed trials, a ready egg and a cracked one. */
 function seeded(): { home: string; basket: Basket } {
   const home = mkdtempSync(join(tmpdir(), "deveggs-view-"));
-  const b = new Basket(join(home, "my-basket"));
+  const b = new Basket(join(home, "basket"));
   b.lay({ summary: "Never push to main", chicken: true, tags: ["git"] });
   b.lay({ summary: "Post before and after screenshots for UI changes", tags: ["pull-requests"] });
   b.lay({ summary: "Draw a diagram for complex explanations", tags: ["explaining"] });
@@ -130,7 +130,7 @@ test("markdownTable escapes pipes and newlines", () => {
 test("the CLI prints plain text when piped, even with color allowed", () => {
   const { home } = seeded();
   const cli = join(import.meta.dirname, "..", "src", "cli.ts");
-  const env: NodeJS.ProcessEnv = { ...process.env, DEVEGGS_HOME: home, COLUMNS: "" };
+  const env: NodeJS.ProcessEnv = { ...process.env, DEVEGGS_BASKET: join(home, "basket"), COLUMNS: "" };
   delete env["NO_COLOR"];
   const out = execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", cli, "list"], { env, encoding: "utf8" });
   assert.ok(!out.includes(ESC));
