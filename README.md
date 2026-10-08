@@ -137,14 +137,14 @@ Node >= 22.18 and git.
 You mostly just talk to your agent. It runs these for you:
 
 ```bash
-deveggs lay "End each turn with a one-line summary"   # 🥚 try it out
-deveggs lay "Never push to main" --chicken            # 🐔 already sure
-deveggs feedback <id> --good                          # log a trial
-deveggs hatch <id>                                    # 🥚 -> 🐔
-deveggs crack <id>                                    # 💥
-deveggs push                                          # save your basket to GitHub
-deveggs autopush on                                   # then push after every change
-deveggs where                                         # print your basket's path
+deveggs lay "End each turn with a one-line summary" --id turn-summary   # 🥚 try it out
+deveggs lay "Never push to main" --id no-push-main --chicken            # 🐔 already sure
+deveggs feedback <id> --good                                            # log a trial
+deveggs hatch <id>                                                      # 🥚 -> 🐔
+deveggs crack <id>                                                      # 💥
+deveggs push                                                            # save your basket to GitHub
+deveggs autopush on                                                     # then push after every change
+deveggs where                                                           # print your basket's path
 ```
 
 ## Your basket, and everyone else's
