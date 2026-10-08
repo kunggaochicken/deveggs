@@ -97,6 +97,22 @@ Eggs from this session. Say the numbers you want laid; I won't lay any without y
 Your words become eggs on trial. Rules you've already stated as "always" or "never"
 go straight in as chickens, once you say yes. Once laid, every agent you use follows them.
 
+### Make it a habit
+
+After any session where you had to repeat yourself or spell something out very
+clearly, run `/deveggs`. The agent mines that session for eggs. Do it regularly and
+you farm the preferences you like.
+
+Agents spot eggs on their own as you work, but `/deveggs` is the reliable trigger.
+You can also pass your own preference to lay it on the spot:
+
+```text
+> /deveggs always draw a diagram when explaining something complex
+> /deveggs let's try ending each turn with a one-line summary
+```
+
+In an agent without slash commands, just say `deveggs: <preference>`.
+
 ## Install
 
 Paste this into **one** coding agent (Claude Code, Codex, Cursor, …):
