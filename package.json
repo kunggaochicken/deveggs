@@ -1,7 +1,7 @@
 {
   "name": "deveggs",
   "version": "0.1.0",
-  "description": "deveggs captures your developer eggsperience as you work with agents, so you never lose how you work with them.",
+  "description": "Capture your developer eggsperience through trial and error. Every agent you use.",
   "type": "module",
   "license": "MIT",
   "bin": { "deveggs": "bin/deveggs" },
