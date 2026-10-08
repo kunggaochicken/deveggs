@@ -11,8 +11,6 @@
   <img src="assets/header.jpg" alt="deveggs, the developer eggsperience: you tell your agents preferences and ask for skills, each is laid as an egg on trial, tried across Claude Code, Codex and Cursor, and you hatch it into a permanent chicken or crack it. One basket, every agent." width="100%">
 </p>
 
-> **deveggs captures your developer eggsperience as you work with agents, so you never lose how you work with them.**
-
 Every developer works with agents differently. Stacks like
 [gstack](https://github.com/garrytan/gstack) and
 [pstack](https://github.com/cursor/plugins/blob/main/pstack) are great, but they are
