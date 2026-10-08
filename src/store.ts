@@ -24,10 +24,11 @@ interface Run {
   stderr: string;
 }
 
-export function run(cmd: string, args: string[], cwd?: string): Run {
-  const r = spawnSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  const missing = (r.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
-  return { missing, status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+export function run(cmd: string, args: string[], cwd?: string, options: { timeout?: number; env?: NodeJS.ProcessEnv } = {}): Run {
+  const r = spawnSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options });
+  const code = (r.error as NodeJS.ErrnoException | undefined)?.code;
+  const timedOut = code === "ETIMEDOUT" ? "timed out" : "";
+  return { missing: code === "ENOENT", status: r.error ? null : r.status, stdout: r.stdout ?? "", stderr: r.stderr || timedOut };
 }
 
 const firstLine = (text: string): string => text.trim().split("\n").find(Boolean)?.trim() ?? "";
@@ -72,18 +73,80 @@ export function ensureBasket(root: string, templates: string, initMessage = "bas
  * throwing: a failed commit must never fail the developer's command.
  */
 export function commitBasket(root: string, message: string): string | undefined {
-  if (!existsSync(join(root, ".git"))) return undefined;
+  return commit(root, message).warning;
+}
+
+interface Committed {
+  /** A new commit was made (false when there was nothing to commit or it failed). */
+  committed: boolean;
+  warning?: string;
+}
+
+function commit(root: string, message: string): Committed {
+  const fail = (warning: string): Committed => ({ committed: false, warning });
+  if (!existsSync(join(root, ".git"))) return { committed: false };
   const add = run("git", ["add", "-A"], root);
-  if (add.missing) return "git not found; basket change saved but not committed";
-  if (add.status !== 0) return `git add failed, change not committed: ${firstLine(add.stderr)}`;
-  if (run("git", ["diff", "--cached", "--quiet"], root).status === 0) return undefined;
-  const commit = run("git", ["commit", "-q", "-m", message], root);
-  if (commit.status === 0) return undefined;
-  const why = `${commit.stderr}\n${commit.stdout}`;
+  if (add.missing) return fail("git not found; basket change saved but not committed");
+  if (add.status !== 0) return fail(`git add failed, change not committed: ${firstLine(add.stderr)}`);
+  if (run("git", ["diff", "--cached", "--quiet"], root).status === 0) return { committed: false };
+  const done = run("git", ["commit", "-q", "-m", message], root);
+  if (done.status === 0) return { committed: true };
+  const why = `${done.stderr}\n${done.stdout}`;
   if (/tell me who you are|user\.email|user\.name|auto-detect|empty ident/i.test(why)) {
-    return 'basket change not committed: git has no identity. Set one with git config --global user.name "…" and user.email "…"';
+    return fail('basket change not committed: git has no identity. Set one with git config --global user.name "…" and user.email "…"');
   }
-  return `basket change not committed: ${firstLine(why) || "git commit failed"}`;
+  return fail(`basket change not committed: ${firstLine(why) || "git commit failed"}`);
+}
+
+/** The basket's `origin` URL, if it has one. */
+export function originUrl(root: string): string | undefined {
+  if (!existsSync(join(root, ".git"))) return undefined;
+  const origin = run("git", ["remote", "get-url", "origin"], root);
+  return origin.status === 0 ? origin.stdout.trim() || undefined : undefined;
+}
+
+/** Autopush is on when the basket repo's git config has deveggs.autopush=true. Default off. */
+export function autopushEnabled(root: string): boolean {
+  if (!existsSync(join(root, ".git"))) return false;
+  return run("git", ["config", "--bool", "--get", "deveggs.autopush"], root).stdout.trim() === "true";
+}
+
+/** Turn autopush on or off. Turning it on needs an `origin` (made by `deveggs push`). */
+export function setAutopush(root: string, on: boolean): void {
+  if (!existsSync(join(root, ".git"))) {
+    if (!on) return;
+    throw new BasketError("autopush needs your basket on GitHub first; run deveggs push, then deveggs autopush on");
+  }
+  if (on && !originUrl(root)) {
+    throw new BasketError("autopush needs your basket on GitHub first; run deveggs push, then deveggs autopush on");
+  }
+  const set = on
+    ? run("git", ["config", "deveggs.autopush", "true"], root)
+    : run("git", ["config", "--unset-all", "deveggs.autopush"], root);
+  // --unset-all exits 5 when the key was never set: already off.
+  if (set.status !== 0 && !(set.status === 5 && !on)) {
+    throw new BasketError(`git config failed: ${firstLine(set.stderr) || "unknown error"}`);
+  }
+}
+
+/** How long an autopush may take before it gives up, so a slow network never stalls a command. */
+export const AUTOPUSH_TIMEOUT_MS = 15_000;
+
+/**
+ * Commit a write in the basket, then push it if autopush is on. Returns one-line
+ * warnings instead of throwing: neither step may fail the developer's command.
+ */
+export function saveBasket(root: string, message: string): string | undefined {
+  const { committed, warning } = commit(root, message);
+  if (warning || !committed || !autopushEnabled(root)) return warning;
+  const push = run("git", ["push", "-q", "origin", "HEAD"], root, {
+    timeout: AUTOPUSH_TIMEOUT_MS,
+    // Never stop to ask for credentials: fail fast and let the developer push later.
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" },
+  });
+  if (push.status === 0) return undefined;
+  const why = push.missing ? "git not found" : firstLine(push.stderr) || "git push failed";
+  return `autopush failed (${why}); your basket is committed locally. Run deveggs push later.`;
 }
 
 /** https://github.com/o/n for git@github.com:o/n.git, https://…/n.git, ssh://…; anything else unchanged. */

@@ -20,7 +20,8 @@ repo. `deveggs where` prints the path.
 
 - The personal basket is `~/.deveggs/`, a separate git repo. Every write command
   scaffolds it on first use and commits each change there; `deveggs push` saves it to
-  a private GitHub repo. Nothing is ever pushed automatically.
+  a private GitHub repo. Nothing is pushed automatically unless the developer turns on
+  `deveggs autopush on`.
 - `my-basket/` inside this repo is the legacy location; `deveggs migrate` moves it to
   `~/.deveggs`. It stays gitignored. **Never commit its contents to this repo**, and
   never `git add -f` it. CI on `kunggaochicken/deveggs` rejects it.
