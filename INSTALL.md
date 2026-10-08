@@ -22,7 +22,9 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      on github.com and `git clone` their fork, then
      `git remote add upstream https://github.com/kunggaochicken/deveggs`.
    - In the fork, remove the `/my-basket/**` lines (and their comment) from
-     `.gitignore` and commit that as `chore: track my basket`, then push.
+     `.gitignore`. Copy `templates/basket-README.md` to `my-basket/README.md`,
+     replacing `<owner>` with their GitHub username, so the basket explains itself
+     and links back here. Commit both as `chore: track my basket`, then push.
    - Run `npm install && npm run check` inside it. If anything fails, show the
      output and stop.
 
@@ -31,8 +33,9 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
    `git clone https://github.com/kunggaochicken/deveggs <dir>/deveggs` and leave
    `.gitignore` alone. Then offer to make `my-basket/` its own private repo so the
    basket is still saved: **confirm**, then `gh repo create <user>/my-basket --private`,
-   `git -C <dir>/deveggs/my-basket init -b main`, commit everything in it as
-   `basket: initial import`, add the remote and push. Upstream already ignores the
+   `git -C <dir>/deveggs/my-basket init -b main`, copy `templates/basket-README.md`
+   to `my-basket/README.md` (replacing `<owner>` with `<user>`), commit everything in
+   it as `basket: initial import`, add the remote and push. Upstream already ignores the
    folder, so the two repos never mix. If they decline, tell them their basket lives
    only on this machine. Below, `<repo>` is the absolute path of the clone either way.
 3. **Find every harness.** Look in the developer's home directory for each harness

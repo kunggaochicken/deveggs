@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -99,4 +99,18 @@ test("lay records where the egg came from, ahead of the trial log", () => {
 
 test("origin without a quote still records when and where", () => {
   assert.equal(formatOrigin("2026-10-06", undefined, {}), "## Origin\n\n- 2026-10-06");
+});
+
+test("a README.md at the basket root is not an egg", () => {
+  const b = fresh();
+  writeFileSync(join(b.root, "README.md"), "# my basket\n");
+  b.lay({ summary: "Likes tables" });
+  assert.deepEqual(b.all().map((e) => e.id), ["likes-tables"]);
+  assert.doesNotMatch(b.render(), /my basket/);
+});
+
+test("the basket README template ships outside my-basket/", () => {
+  const template = readFileSync(new URL("../templates/basket-README.md", import.meta.url), "utf8");
+  assert.match(template, /<owner>/);
+  assert.match(template, /https:\/\/github\.com\/kunggaochicken\/deveggs/);
 });
