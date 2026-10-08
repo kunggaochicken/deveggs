@@ -99,9 +99,10 @@ go straight in as chickens, once you say yes. Once laid, every agent you use fol
 
 ### Make it a habit
 
-After any session where you had to repeat yourself or spell something out very
-clearly, run `/deveggs`. The agent mines that session for eggs. Do it regularly and
-you farm the preferences you like.
+Run `/deveggs` at the end of any session that captured a recurring pattern in how
+you like to work: a habit, a workflow, a standard you hold, or something you had to
+repeat or spell out very clearly. The agent mines that session for eggs. Do it
+regularly and you farm the preferences you like.
 
 Agents spot eggs on their own as you work, but `/deveggs` is the reliable trigger.
 You can also pass your own preference to lay it on the spot:
