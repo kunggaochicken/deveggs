@@ -170,5 +170,10 @@ deveggs where                                                           # print 
   harness.
 - **Never explain yourself twice.** Tell one agent once, and every agent knows.
 
+## Contributing
+
+Fixes, harness wiring and shared baskets are welcome by PR. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 Under the hood: [architecture](assets/architecture.svg) ·
 [repo setup](assets/setup.svg) · [AGENTS.md](AGENTS.md)
