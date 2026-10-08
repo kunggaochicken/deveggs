@@ -20,9 +20,10 @@ two tiers:
 
 A chicken outranks an egg, and both outrank harness-local memory.
 
-The basket's location is in the deveggs prompt in your global instructions. If
-that prompt is missing, use `$DEVEGGS_HOME`. Run all commands through
-`<basket-repo>/bin/deveggs`.
+The basket lives in `~/.deveggs/` (`$DEVEGGS_BASKET` overrides it; `deveggs where`
+prints it), apart from the deveggs repo that holds the tool. The deveggs prompt in
+your global instructions says where that repo is. If the prompt is missing, use
+`$DEVEGGS_HOME`. Run all commands through `<deveggs-repo>/bin/deveggs`.
 
 ## Presenting to the developer
 
@@ -36,8 +37,8 @@ not a list, marked with 🥚 egg, 🐔 chicken, 🐣 ready, 💥 cracked, and �
 
 ## At session start
 
-Read `<basket-repo>/my-basket/PREFERENCES.md`. It lists the chickens, then the eggs with
-their ids. Skills from both tiers are already installed. Egg skills have descriptions
+Read `~/.deveggs/PREFERENCES.md` (or `PREFERENCES.md` in the folder `deveggs where`
+prints). It lists the chickens, then the eggs with their ids. Skills from both tiers are already installed. Egg skills have descriptions
 that start with `[egg: on trial]`.
 
 ## Laying eggs
@@ -52,7 +53,7 @@ table, for several) and lay only what they confirm.
 | "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --tag <area> --harness <you> --quote "<their words>"` |
 | "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --chicken --tag <area> --harness <you> --quote "<their words>"` |
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
-| A shell snippet they keep rewriting | `--kind script`, then write `my-basket/scripts/<id>` |
+| A shell snippet they keep rewriting | `--kind script`, then write `~/.deveggs/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
 | You *noticed* a pattern they never stated | Ask in one line first: "Lay an egg for X?" |
 
@@ -121,16 +122,17 @@ Get the origin and trial log from `deveggs show <id>`.
 `--bad` feedback, suggest cracking it or rewording it.
 
 After hatching or cracking a skill, update its symlink in every harness skills
-folder that links into the deveggs repo (for example `~/.claude/skills/`,
-`~/.codex/skills/`). On hatch, repoint the link from `my-basket/skills/eggs/<id>` to
-`my-basket/skills/chickens/<id>`. On crack, remove it. Do the same when you lay a
+folder that links into the basket (for example `~/.claude/skills/`,
+`~/.codex/skills/`). On hatch, repoint the link from `~/.deveggs/skills/eggs/<id>` to
+`~/.deveggs/skills/chickens/<id>`. On crack, remove it. Do the same when you lay a
 new skill, so every harness can use it.
 
 ## Committing
 
-Install forks deveggs and un-ignores `my-basket/`, so basket changes are committed
-to the developer's fork. Commit them with messages like `egg: lay terse-summaries`,
-`chicken: hatch terse-summaries` or `crack: tabs`, following their own git chickens. If `my-basket/` has its own `.git`
-(a separate private basket repo), commit and push there instead. If `my-basket/` is still gitignored and has no `.git` (a
-plain clone), there's nothing to commit. Never commit `my-basket/` to `kunggaochicken/deveggs` itself. To share, follow
-`shared-baskets/README.md`.
+The basket is its own git repo. `lay`, `feedback`, `hatch`, `crack` and `render`
+commit there automatically, so you don't commit basket changes yourself, and nothing
+is lost even offline. Nothing pushes automatically: **never push without the
+developer's yes.** If the basket has no remote yet (`git -C ~/.deveggs remote` prints
+nothing), you may offer `deveggs push`, which saves it to a private GitHub repo on
+their account. Never commit a basket to `kunggaochicken/deveggs` itself. To share,
+follow `shared-baskets/README.md`.

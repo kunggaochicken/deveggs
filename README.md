@@ -127,7 +127,7 @@ https://github.com/kunggaochicken/deveggs/blob/main/INSTALL.md
 Confirm with me before changing any files outside the deveggs repo.
 ```
 
-That agent forks the repo (so your basket is saved in your own GitHub repo) and wires up every coding agent it finds on your machine.
+That agent clones the repo and wires up every coding agent it finds on your machine.
 It links the deveggs skill into each one and adds a short deveggs prompt to each one's
 global instructions. It shows you the plan and waits for your yes. Requires
 Node >= 22.18 and git.
@@ -142,15 +142,18 @@ deveggs lay "Never push to main" --chicken            # 🐔 already sure
 deveggs feedback <id> --good                          # log a trial
 deveggs hatch <id>                                    # 🥚 -> 🐔
 deveggs crack <id>                                    # 💥
+deveggs push                                          # save your basket to GitHub
+deveggs where                                         # print your basket's path
 ```
 
 ## Your basket, and everyone else's
 
-- **`my-basket/`** is yours. Your fork commits it, so it's saved and syncs across
-  machines. It starts with a README (from
+- **`~/.deveggs/`** is yours: your basket, kept apart from the tool like `~/.claude`
+  or `~/.codex`. It's its own git repo, and every change is committed locally, so
+  nothing is lost. `deveggs push` saves it to a private GitHub repo, and on a new
+  machine you clone that repo into `~/.deveggs/`. It starts with a README (from
   [`templates/basket-README.md`](templates/basket-README.md)) that explains how to work
-  with it and how to contribute back. Upstream ignores it, and CI keeps it out of
-  upstream PRs.
+  with it and how to contribute back.
 - **`shared-baskets/`** holds baskets people chose to share. Borrow anything you like:
   it always enters your basket as an egg on trial. To share yours, open a PR that adds
   a reviewed copy under [`shared-baskets/<you>/`](shared-baskets/README.md).
