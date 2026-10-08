@@ -144,6 +144,10 @@ Rules:
   about, e.g. `pr-ui-screenshots`, not the first words of the fact.
 - **Lay only durable, cross-project facts.** Project-specific facts belong in that
   project's own AGENTS.md or CLAUDE.md.
+- **Tag private eggs `private`.** If the fact only makes sense on this machine or names
+  something not to publish (an account, a person, a client, an internal host or repo,
+  a local path or tool), add `--tag private`. `deveggs share` leaves those items and
+  their skills out whole. When in doubt, tag it private.
 - **Don't duplicate.** Run `deveggs list` first. If an egg already covers it, record
   feedback on that egg instead of laying a new one.
 - **`--chicken` needs an explicit "always/never".** Never use it for something you inferred.
