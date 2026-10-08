@@ -38,6 +38,9 @@ committed here automatically. Run `deveggs push` to save it to GitHub: the first
 it creates a private repo, after that it pushes. Run `deveggs autopush on` to push
 after every change instead, so it stays synced (`deveggs autopush off` to stop).
 
+To borrow from other people's shared baskets, `deveggs browse` lists them and
+`deveggs import <username>/<id>` adds an item here as an egg on trial.
+
 ## Contributing back
 
 - **Share this basket.** Run `deveggs share --dry-run` to see what would be shared and what

@@ -184,9 +184,13 @@ function sections(body: string): Sections {
   return out;
 }
 
-/** The repo names in an egg's Origin context rows (`date · harness · repo · session id`). */
+/**
+ * The repo names in an egg's Origin context rows (`date · harness · repo · session id`).
+ * Rows added by `deveggs import` (`date · borrowed from <user> · <baskets repo>`) name
+ * public places, not private repos, so they're skipped.
+ */
 export function originRepos(egg: Egg): string[] {
-  return sections(egg.body).context.flatMap((row) =>
+  return sections(egg.body).context.filter((row) => !/ · borrowed from /.test(row)).flatMap((row) =>
     row
       .split(" · ")
       .slice(1)

@@ -18,8 +18,9 @@ jobs:
 
   # Baskets live in ~/.deveggs now; my-basket/ is the legacy in-checkout location
   # (gitignored). Anything committed here would land in everyone's checkout on
-  # `git pull`, so upstream rejects it. Shared baskets go in
-  # shared-baskets/<github-username>/ instead.
+  # `git pull`, so upstream rejects it. Shared baskets go to the separate
+  # kunggaochicken/deveggs-baskets repo (deveggs share), so shared-baskets/ here holds
+  # only its pointer README.
   upstream-basket-empty:
     if: github.repository == 'kunggaochicken/deveggs'
     runs-on: ubuntu-latest
@@ -29,7 +30,15 @@ jobs:
         run: |
           stray=$(git ls-files my-basket)
           if [ -n "$stray" ]; then
-            echo "::error::my-basket/ must stay empty upstream. Your basket lives in ~/.deveggs (deveggs where). To share it, copy it to shared-baskets/<your-github-username>/ (see shared-baskets/README.md)."
+            echo "::error::my-basket/ must stay empty upstream. Your basket lives in ~/.deveggs (deveggs where). To share it, run deveggs share --dry-run, then deveggs share: it opens a PR to kunggaochicken/deveggs-baskets."
+            echo "$stray"
+            exit 1
+          fi
+      - name: shared-baskets/ holds only its README
+        run: |
+          stray=$(git ls-files shared-baskets | grep -vx 'shared-baskets/README.md' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::Shared baskets live in kunggaochicken/deveggs-baskets, not this repo. Run deveggs share --dry-run, then deveggs share, to open a PR there (see shared-baskets/README.md)."
             echo "$stray"
             exit 1
           fi

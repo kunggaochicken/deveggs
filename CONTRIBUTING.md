@@ -1,18 +1,22 @@
 # Contributing to deveggs
 
 Thanks for helping. deveggs is small on purpose, so most contributions are a short
-PR: a fix to the tool, a clearer instruction for agents, or a basket you chose to share.
+PR: a fix to the tool or a clearer instruction for agents. Baskets you choose to share
+go to [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets),
+not here (see [Sharing your basket](#sharing-your-basket)).
 
 ## What lives here, and what doesn't
 
 This repo is the deveggs **code**:
 
 - `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `hatch`, `crack`, `render`,
-  `push`, `autopush`, `share`, `migrate`, …).
+  `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
 - `templates/`: files new baskets start with.
-- `shared-baskets/`: baskets people chose to publish.
+- `shared-baskets/README.md`: only a pointer to
+  [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets),
+  where shared baskets live. CI rejects anything else under `shared-baskets/`.
 - `tests/`: the test suite.
 
 Your **personal basket** is data, not code. It lives in `~/.deveggs/` (or
@@ -53,6 +57,7 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | Terminal output (`list`, `show`, tables) | `src/view.ts`, `src/table.ts` |
 | Moving a legacy `my-basket/` | `src/migrate.ts` |
 | `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
+| `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
 | Harness wiring (Claude Code, Codex, Cursor, …) | `INSTALL.md`, as instructions, not code. Add a harness by adding a row to its table. |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |
@@ -91,6 +96,25 @@ matching can't spot people, clients or internal hosts written in prose, so **rea
 preview** and add those as private terms or `--skip` the item. `--repo owner/name` and
 `--dir path` send it somewhere else.
 
+Don't open a PR here that adds a basket: anything under `shared-baskets/` other than its
+README fails CI.
+
+## Borrowing from shared baskets
+
+```bash
+deveggs browse                                  # list shared baskets
+deveggs browse <username> [--tag t] [--kind k]  # one basket's eggs and chickens
+deveggs import <username>/<id>                  # borrow one into your basket
+```
+
+Both read [kunggaochicken/deveggs-baskets](https://github.com/kunggaochicken/deveggs-baskets)
+with a shallow `git clone` into a temp folder (`--repo owner/name` for another). `import`
+adds the item as an egg (never a chicken) with trials reset to ✓0 ✗0 and the trial log
+cleared, adds an Origin row saying where it was borrowed from, copies its skill to
+`skills/eggs/<id>/` marked `[egg: on trial]`, and refuses an id already in your basket or
+cracked there. Tests point `DEVEGGS_GIT_BASE` at local bare repos, so they never touch the
+network.
+
 ## Changing the meta-skill or the egg model
 
 Changes to `skills/deveggs/SKILL.md` or the egg model (tiers, trial rules, the hatch
@@ -104,7 +128,8 @@ and how it fixes that. A transcript excerpt (with anything private removed) help
 - **One change per PR.** Branch off an up-to-date `main`; don't push to `main`.
 - **CI must pass.** `.github/workflows/ci.yml` runs on every PR:
   - `check`: `npm ci` and `npm run check` on Node 22.
-  - `upstream-basket-empty`: fails if anything is committed under `my-basket/`.
+  - `upstream-basket-empty`: fails if anything is committed under `my-basket/`, or
+    anything but `README.md` under `shared-baskets/`.
 - **Review.** Every change needs review from the maintainer (`.github/CODEOWNERS`).
   PRs are squash-merged.
 - **Commit messages** follow `git log`: a short, plain summary of what changed for

@@ -239,7 +239,7 @@ function fakeGitHub(box: ReturnType<typeof sandbox>, canPush: boolean): { base: 
     ].join("\n"),
   });
   box.env["PATH"] = bin;
-  box.env["DEVEGGS_SHARE_GIT_BASE"] = base;
+  box.env["DEVEGGS_GIT_BASE"] = base;
   return { base, upstream, fork, ghLog };
 }
 
