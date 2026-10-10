@@ -144,7 +144,7 @@ You mostly just talk to your agent. It runs these for you:
 deveggs lay "End each turn with a one-line summary" --id turn-summary   # 🥚 try it out
 deveggs lay "Never push to main" --id no-push-main --chicken            # 🐔 already sure
 deveggs feedback <id> --good                                            # log a trial
-deveggs evolve <id> "<new fact>" --quote "<your words>" --note "narrow: …" # tune the rule
+deveggs evolve <id> "<new fact>" --quote "<your words>"                 # 🧬 tune it, keeping the old wording
 deveggs hatch <id>                                                      # 🥚 -> 🐔
 deveggs crack <id>                                                      # 💥
 deveggs push                                                            # save your basket to GitHub
