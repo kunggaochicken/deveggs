@@ -122,6 +122,33 @@ test("autoTerms picks up origin repos and the home folder, but not public names"
   assert.deepEqual(autoTerms(b.all(), "/Users/jdoe", ["jane"]), ["cuskeel", "jdoe"]);
 });
 
+test("sanitizeEgg keeps an evolution's was/now but drops its quote, context and why unless keepQuotes", () => {
+  const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-share-")));
+  b.lay({ id: "terse", summary: "One-line summaries for acme", harness: "claude", origin: { quote: "one line", repo: "moonjelly" } });
+  b.evolve("terse", {
+    summary: "One-line summaries, except decisions",
+    quote: `options please, see /Users/jane/notes with ${GHP}`,
+    note: "narrow: the acme review",
+    harness: "codex",
+    repo: "moonjelly",
+    session: SESSION,
+    today: "2026-10-08",
+  });
+  const egg = b.get("terse");
+  assert.deepEqual(autoTerms([egg]), ["moonjelly"], "the evolve repo is a private term; harnesses aren't");
+  const plain = sanitizeEgg(egg, "", { home: "/Users/jane" }, ["acme", "moonjelly"]);
+  assert.equal(
+    plain.egg.body,
+    "## Evolution\n\n### v2 · 2026-10-08\n\n- was: One-line summaries for <private>\n- now: One-line summaries, except decisions",
+  );
+  assert.equal(plain.egg.version, 2);
+  for (const label of ["quote", "evolution quote", "context", "notes"]) assert.ok(plain.redactions.includes(label), label);
+  const kept = sanitizeEgg(egg, "", { keepQuotes: true, home: "/Users/jane" }, ["acme", "moonjelly"]);
+  assert.match(kept.egg.body, /^## Origin\n\n> one line\n\n## Evolution\n\n### v2 · 2026-10-08\n\n> options please, see ~\/notes with <token>\n\n- was:/);
+  assert.ok(!kept.redactions.includes("evolution quote"));
+  for (const gone of ["moonjelly", SESSION, "codex", "acme review", GHP]) assert.ok(!kept.egg.body.includes(gone), `${gone} leaked`);
+});
+
 /** A basket with one of everything `share` has to decide about. */
 function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), "deveggs-share-"));

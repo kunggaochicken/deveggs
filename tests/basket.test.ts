@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Basket, BasketError, formatOrigin, isReady, parseEgg, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
+import { Basket, BasketError, formatOrigin, isReady, parseEgg, parseEvolution, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
 
 const fresh = (): Basket => new Basket(mkdtempSync(join(tmpdir(), "deveggs-")));
 
@@ -133,4 +133,104 @@ test("the basket README template ships outside my-basket/", () => {
   const template = readFileSync(new URL("../templates/basket-README.md", import.meta.url), "utf8");
   assert.match(template, /<owner>/);
   assert.match(template, /https:\/\/github\.com\/kunggaochicken\/deveggs/);
+});
+
+// --- evolve --------------------------------------------------------------------
+
+test("evolve changes the fact, keeps id, tier, tags and origin, and records was/now/why", () => {
+  const b = fresh();
+  b.lay({ id: "terse", summary: "End each turn with a one-line summary", tags: ["comms"], harness: "claude", origin: { quote: "one line please", repo: "grover" }, today: "2026-10-06" });
+  b.feedback("terse", { good: true, harness: "claude", today: "2026-10-07" });
+  const egg = b.evolve("terse", {
+    summary: "End each turn with a one-line summary, except for decisions",
+    quote: "for decisions give me the options",
+    note: "narrow: decisions need the trade-offs",
+    harness: "codex",
+    repo: "grover",
+    session: "abc",
+    today: "2026-10-08",
+  });
+  assert.equal(egg.id, "terse");
+  assert.equal(egg.tier, "egg");
+  assert.deepEqual(egg.tags, ["comms"]);
+  assert.equal(egg.version, 2);
+  assert.equal(egg.summary, "End each turn with a one-line summary, except for decisions");
+  assert.equal(egg.updated, "2026-10-08");
+  assert.deepEqual(egg.harnesses, ["claude", "codex"]);
+  assert.equal(
+    egg.body,
+    "## Origin\n\n> one line please\n\n- 2026-10-06 · claude · grover\n\n" +
+      "## Evolution\n\n### v2 · 2026-10-08 · codex · grover · session abc\n\n> for decisions give me the options\n\n" +
+      "- was: End each turn with a one-line summary\n- now: End each turn with a one-line summary, except for decisions\n" +
+      "- why: narrow: decisions need the trade-offs\n\n## Trials\n\n- 2026-10-07 ✓ (claude)",
+  );
+  assert.deepEqual(b.get("terse"), egg, "round-trips through the file");
+  assert.match(readFileSync(join(b.root, "eggs", "terse.md"), "utf8"), /^version: 2$/m);
+});
+
+test("evolve keeps lineage across versions, oldest first", () => {
+  const b = fresh();
+  b.lay({ id: "x", summary: "One" });
+  b.evolve("x", { summary: "Two", quote: "make it two", today: "2026-10-07" });
+  const egg = b.evolve("x", { summary: "Three", today: "2026-10-08" });
+  assert.equal(egg.version, 3);
+  assert.deepEqual(
+    parseEvolution(egg.body).map((e) => [e.version, e.date, e.was, e.now, e.quote]),
+    [[2, "2026-10-07", "One", "Two", "make it two"], [3, "2026-10-08", "Two", "Three", ""]],
+  );
+  assert.equal(egg.body.match(/^## Evolution$/gm)?.length, 1);
+});
+
+test("after evolve, hatch readiness counts only trials under the new version", () => {
+  const b = fresh();
+  b.lay({ id: "x", summary: "One" });
+  for (let i = 0; i < READY_AFTER; i++) b.feedback("x", { good: true });
+  assert.ok(isReady(b.get("x")));
+  let egg = b.evolve("x", { summary: "Two" });
+  assert.equal(egg.good, 0);
+  assert.equal(egg.bad, 0);
+  assert.ok(!isReady(egg), "the old rule's ✓s don't hatch the new one");
+  for (let i = 0; i < READY_AFTER; i++) egg = b.feedback("x", { good: true, today: "2026-10-09" });
+  assert.ok(isReady(egg));
+  // Earlier trials stay in the log; new ones go under a v2 marker, added once.
+  assert.match(egg.body, /## Trials\n\n(- \S+ ✓\n){3}\n### v2\n\n- 2026-10-09 ✓\n- 2026-10-09 ✓\n- 2026-10-09 ✓$/);
+});
+
+test("trials after an evolve with no log yet start under the version marker", () => {
+  const b = fresh();
+  b.lay({ id: "x", summary: "One" });
+  b.evolve("x", { summary: "Two" });
+  const egg = b.feedback("x", { good: false, today: "2026-10-09" });
+  assert.match(egg.body, /## Evolution[\s\S]*## Trials\n\n### v2\n\n- 2026-10-09 ✗$/);
+});
+
+test("a chicken that evolves stays a chicken; cracked items don't evolve", () => {
+  const b = fresh();
+  b.lay({ id: "no-push", summary: "Never push to main", chicken: true });
+  const chicken = b.evolve("no-push", { summary: "Never push to main or release branches" });
+  assert.equal(chicken.tier, "chicken");
+  assert.equal(chicken.version, 2);
+  assert.ok(existsSync(join(b.root, "chickens", "no-push.md")));
+  assert.ok(!existsSync(join(b.root, "eggs", "no-push.md")));
+  b.lay({ id: "tabs", summary: "Use tabs" });
+  b.crack("tabs");
+  assert.throws(() => b.evolve("tabs", { summary: "Use spaces" }), /cracked/);
+  assert.throws(() => b.evolve("nope", { summary: "x" }), /nothing in the basket/);
+  assert.throws(() => b.evolve("no-push", { summary: "Never push to main or release branches" }), /already says that/);
+  assert.throws(() => b.evolve("no-push", { summary: "  " }), /empty/);
+});
+
+test("evolving a skill updates its SKILL.md description, keeping the trial marker", () => {
+  const b = fresh();
+  b.lay({ id: "ship", kind: "skill", summary: "Ship it checklist" });
+  b.evolve("ship", { summary: "Ship it checklist with screenshots" });
+  const skill = readFileSync(join(b.skillDir("egg", "ship"), "SKILL.md"), "utf8");
+  assert.match(skill, new RegExp(`^description: \\${TRIAL_PREFIX.trim()} Ship it checklist with screenshots$`, "m"));
+});
+
+test("render marks evolved eggs with their version", () => {
+  const b = fresh();
+  b.lay({ id: "x", summary: "One" });
+  b.evolve("x", { summary: "Two" });
+  assert.match(b.render(), /\| 🥚 \| `x` \| Two \| general \| ✓0 ✗0 \(v2\) \|/);
 });

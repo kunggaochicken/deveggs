@@ -69,6 +69,21 @@ Show it right after `lay` or `hatch`. It answers "what will agents do differentl
 
 On hatch, use 🐔 and add its trial record (✓/✗ by harness) to the card.
 
+On evolve, use the item's own mark (🥚 or 🐔, it keeps its tier) and lead with a
+was/now/why block, so the developer sees exactly what the agents will do differently:
+
+```
+🥚 terse-summaries  v1 → v2                              preference · comms
+"for decisions just give me the options"
+
+  was:  End each turn with a one-line summary
+  now:  End each turn with a one-line summary, except when the developer must
+        choose: then a table of the options
+  why:  narrow: a design review lost its trade-offs (✗ in grover, claude)
+
+  trials:  ✓2 ✗1 (v1) stay in the log · ✓0 ✗0 (v2): 3 ✓ and no ✗ to hatch
+```
+
 On import, use 🥚 and add a **Borrowed from** row (`<username>`'s basket, and whether it
 was their 🐔 chicken or 🥚 egg). The trials always start at ✓0 ✗0: it hasn't been tried
 in this developer's loop yet.
@@ -109,11 +124,18 @@ When several eggs bear on the scenario, draw how they relate: which complement e
 other, which conflict, and which one should give way. Batch several recordings into
 one card table rather than one card each.
 
-Tunings are proposals: **apply them only with the developer's yes.** Reword or narrow
-→ edit the egg's first body line in `<basket>/eggs/<id>.md`, keep its trials, and run
-`deveggs render`. Complement → `deveggs lay` the new egg. Then record the tuning:
-`deveggs feedback <id> --note "tuned: <what changed and why>"` with the trial's
-`--good`/`--bad`.
+Tunings are proposals: **apply them only with the developer's yes.** Record the trial
+first (`deveggs feedback <id> --good|--bad`), then apply the tuning:
+
+- **Narrow, widen or reword** → `deveggs evolve <id> "<new fact>" --quote "<their words>"
+  --note "<tuning>: <why>" --harness <you>`, e.g. `--note "narrow: decisions need the
+  trade-offs"`. Never hand-edit the item file. `evolve` keeps the id, tier, tags, origin
+  and trial log, records the old and new wording under `## Evolution`, and restarts the
+  trial counts: trials of the old wording stay in the log under their version, but only
+  trials since the latest evolve count toward hatching. It works on chickens too (they
+  stay chickens), never on cracked items. Then show an egg card with a was/now/why block.
+- **Complement** → `deveggs lay` the new egg.
+- **Crack** → `deveggs crack <id>`, with the developer's yes.
 
 ## At session start
 
@@ -231,10 +253,11 @@ card for any egg whose trials are mixed, so the developer sees why before decidi
 - Yes → `deveggs hatch <id>`. The egg becomes a chicken, and a skill moves to `skills/chickens/`.
 - No, drop it → `deveggs crack <id>`. It's kept so it's never laid again.
 - Not yet → leave it on trial.
-- They reword it → edit the egg file, then hatch it.
+- They reword it → `deveggs evolve` it with their words. It stays on trial for the new
+  version unless they also say to hatch it.
 
-**Never hatch or crack without the developer's say-so.** If an egg is collecting
-`--bad` feedback, suggest cracking it or rewording it.
+**Never hatch, crack or evolve without the developer's say-so.** If an egg is
+collecting `--bad` feedback, suggest cracking it or evolving it (with a verdict card).
 
 After hatching or cracking a skill, update its symlink in every harness skills
 folder that links into the basket (for example `~/.claude/skills/`,
@@ -244,8 +267,8 @@ new skill, so every harness can use it.
 
 ## Committing
 
-The basket is its own git repo. `lay`, `feedback`, `hatch`, `crack` and `render`
-commit there automatically, so you don't commit basket changes yourself, and nothing
+The basket is its own git repo. `lay`, `feedback`, `evolve`, `hatch`, `crack` and
+`render` commit there automatically, so you don't commit basket changes yourself, and nothing
 is lost even offline. Nothing pushes unless the developer chose it: **never push
 without the developer's yes.** `deveggs autopush status` shows where things stand.
 If the basket has no remote yet, you may offer `deveggs push`, which saves it to a

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Basket, READY_AFTER } from "../src/basket.ts";
 import { displayWidth, markdownTable, table, palette, truncate } from "../src/table.ts";
-import { DEFAULT_WIDTH, formatList, formatShow, splitTrials, terminalOptions } from "../src/view.ts";
+import { DEFAULT_WIDTH, formatList, formatShow, splitTrials, terminalOptions, trialCounts } from "../src/view.ts";
 
 const ESC = "\x1b[";
 const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
@@ -118,9 +118,32 @@ test("splitTrials separates the log from notes and origin", () => {
   const { prose, trials } = splitTrials("note\n\n## Trials\n\n- 2026-10-06 ✓ (claude) good one\n- 2026-10-07 ✗");
   assert.equal(prose, "note");
   assert.deepEqual(trials, [
-    { date: "2026-10-06", good: true, harness: "claude", note: "good one" },
-    { date: "2026-10-07", good: false, harness: "", note: "" },
+    { version: 1, date: "2026-10-06", good: true, harness: "claude", note: "good one" },
+    { version: 1, date: "2026-10-07", good: false, harness: "", note: "" },
   ]);
+  const evolved = splitTrials("## Trials\n\n- 2026-10-06 ✓\n\n### v3\n\n- 2026-10-08 ✗");
+  assert.deepEqual(evolved.trials.map((t) => t.version), [1, 3]);
+});
+
+test("after an evolve, list and show split trials by version", () => {
+  const home = mkdtempSync(join(tmpdir(), "deveggs-view-"));
+  const b = new Basket(join(home, "basket"));
+  b.lay({ id: "terse", summary: "One-line summaries" });
+  b.feedback("terse", { good: true, harness: "claude", today: "2026-10-06" });
+  b.feedback("terse", { good: false, harness: "codex", today: "2026-10-07" });
+  b.evolve("terse", { summary: "One-line summaries, except for decisions", quote: "give me options", note: "narrow", today: "2026-10-08" });
+  const egg = b.feedback("terse", { good: true, harness: "claude", note: "table helped", today: "2026-10-09" });
+  assert.equal(trialCounts(egg), "✓1 ✗1 (v1) · ✓1 ✗0 (v2)");
+  assert.match(formatList(b.all(), { width: 160, color: false }), /🥚 {2}terse .* ✓1 ✗1 \(v1\) · ✓1 ✗0 \(v2\) {2}One-line summaries, except/);
+  const out = formatShow(egg, { width: 100, color: false });
+  assert.match(out, /\n {2}version {4}v2 \(evolved 2026-10-08\)\n/);
+  assert.match(out, /\n {2}trials {5}✓1 ✗1 \(v1\) · ✓1 ✗0 \(v2\) {2}\(3 ✓ and no ✗ since v2 to hatch\)\n/);
+  assert.match(out, /## Evolution\n\n### v2 · 2026-10-08\n\n> give me options\n\n- was: One-line summaries\n/);
+  assert.match(out, /v {3}date {8}harness {2}✓\/✗ {2}note\nv1 {2}2026-10-06 {2}claude {3}✓\nv1 {2}2026-10-07 {2}codex {4}✗\nv2 {2}2026-10-09 {2}claude {3}✓ {4}table helped$/);
+  // A chicken that evolved shows its version in the list, not trial counts.
+  b.lay({ id: "no-push", summary: "Never push to main", chicken: true });
+  b.evolve("no-push", { summary: "Never push to main or release branches" });
+  assert.match(formatList(b.all(), { width: 160, color: false }), /🐔 {2}no-push .* v2 {2,}Never push to main or release/);
 });
 
 test("markdownTable escapes pipes and newlines", () => {

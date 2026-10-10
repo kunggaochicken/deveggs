@@ -177,3 +177,25 @@ test("webUrl turns git remotes into browsable URLs", () => {
   assert.equal(webUrl("ssh://git@github.com/me/my-basket.git"), "https://github.com/me/my-basket");
   assert.equal(webUrl("/srv/basket.git"), "/srv/basket");
 });
+
+test("evolve rewrites the fact, re-renders, commits, and needs the developer's words", () => {
+  const box = sandbox();
+  cli(box, "lay", "End each turn with a one-line summary", "--id", "terse");
+  cli(box, "feedback", "terse", "--good");
+  const noQuote = cli(box, "evolve", "terse", "Summaries, except for decisions");
+  assert.equal(noQuote.status, 1);
+  assert.match(noQuote.stderr, /evolve needs --quote/);
+  assert.match(cli(box, "evolve", "terse", "--quote", "x").stderr, /usage: deveggs evolve/);
+  const r = cli(box, "evolve", "terse", "Summaries,", "except for decisions", "--quote", "give me the options", "--note", "narrow", "--harness", "claude", "--repo", "grover");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /🥚 terse {2}\(preference, ✓1 ✗0 \(v1\) · ✓0 ✗0 \(v2\)\)\n {5}Summaries, except for decisions\n {5}was \(v1\): End each turn with a one-line summary\n/);
+  assert.match(r.stdout, /trials restart at ✓0 ✗0 for v2/);
+  assert.equal(subjects(box)[0], "egg: evolve terse to v2");
+  assert.equal(git(box, box.basket, "status", "--porcelain"), "", "everything committed");
+  assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /`terse` \| Summaries, except for decisions \|.*✓0 ✗0 \(v2\)/);
+  assert.match(cli(box, "show", "terse").stdout, /- was: End each turn with a one-line summary/);
+  cli(box, "crack", "terse");
+  const cracked = cli(box, "evolve", "terse", "Anything", "--quote", "x");
+  assert.equal(cracked.status, 1);
+  assert.match(cracked.stderr, /cracked/);
+});

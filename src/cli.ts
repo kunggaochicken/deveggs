@@ -9,7 +9,7 @@ import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems
 import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
-import { formatList, formatShow, mark, terminalOptions } from "./view.ts";
+import { formatList, formatShow, mark, terminalOptions, trialCounts } from "./view.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
@@ -23,6 +23,11 @@ usage:
                                      (tag "private" keeps it out of deveggs share)
                                      [--quote "<developer's words>"] [--repo name] [--session id]
   deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
+  deveggs evolve <id> "<new fact>" --quote "<developer's words>" [--note "<why: the tuning>"]
+                [--harness name] [--repo name] [--session id]
+                                     change an egg's or chicken's rule: keeps its id, tier,
+                                     tags, origin and trials, records was/now/why under
+                                     ## Evolution, and restarts trials for the new version
   deveggs hatch <id>                   egg -> chicken (permanent)
   deveggs crack <id>                   reject an egg, or retire a chicken
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
@@ -47,7 +52,8 @@ usage:
   deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
                                      --relink repoints harness skill links to it
 
-An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones.
+An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones,
+counting only trials since its last evolve.
 Every change re-renders PREFERENCES.md and is committed in the basket's own git repo
 (pushed too only when deveggs autopush is on).
 
@@ -79,7 +85,7 @@ const emptyNote = (): string => `basket is empty; it will live at ${basketRoot} 
 
 function line(egg: Egg): string {
   const tags = egg.tags.length ? ` [${egg.tags.join(", ")}]` : "";
-  const trials = egg.tier === "egg" ? `, ✓${egg.good} ✗${egg.bad}` : "";
+  const trials = egg.tier === "egg" ? `, ${trialCounts(egg)}` : egg.version > 1 ? `, v${egg.version}` : "";
   return `${mark(egg)} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
 }
 
@@ -306,6 +312,32 @@ function main(argv: string[]): void {
       save(`trial: ${values.good ? "good" : "bad"} ${egg.id}`);
       console.log(line(egg));
       if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
+      return;
+    }
+    case "evolve": {
+      const [id, ...words] = positionals;
+      const summary = words.join(" ").trim();
+      if (!id || !summary) throw new BasketError('usage: deveggs evolve <id> "<new fact>" --quote "<developer\'s words>" [--note "<why>"]');
+      if (!values.quote?.trim()) throw new BasketError("evolve needs --quote: the developer's own words asking for the change");
+      if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
+      const repo = values.repo ?? currentRepo();
+      prepare();
+      const was = basket.get(id);
+      const egg = basket.evolve(id, {
+        summary,
+        quote: values.quote,
+        ...(repo !== undefined && { repo }),
+        ...(values.session !== undefined && { session: values.session }),
+        ...harness,
+        ...note,
+      });
+      basket.render();
+      save(`${egg.tier}: evolve ${egg.id} to v${egg.version}`);
+      console.log(line(egg));
+      console.log(`     was (v${was.version}): ${was.summary}`);
+      if (egg.tier === "egg") {
+        console.log(`     trials restart at ✓0 ✗0 for v${egg.version} (v${was.version}'s ✓${was.good} ✗${was.bad} stay in the log); hatching needs ${READY_AFTER} ✓ and no ✗ from here`);
+      }
       return;
     }
     case "hatch":

@@ -29,8 +29,11 @@ export interface Egg {
   tier: Tier;
   tags: string[];
   harnesses: string[];
+  /** Trials under the current version of the fact; hatch readiness counts only these. */
   good: number;
   bad: number;
+  /** 1 as laid; each `deveggs evolve` of the fact adds one. */
+  version: number;
   laid: string; // ISO date
   updated: string; // ISO date
   /** First line of the body: the one-sentence fact. */
@@ -76,6 +79,33 @@ export interface Feedback {
   harness?: string;
   note?: string;
   today?: string;
+}
+
+/** A change to an item's fact, made with `deveggs evolve`. */
+export interface EvolveInput {
+  /** The new one-sentence fact. */
+  summary: string;
+  /** The developer's own words asking for the change, verbatim. */
+  quote?: string;
+  /** Why: the tuning, e.g. "narrow: skip design reviews". */
+  note?: string;
+  harness?: string;
+  repo?: string;
+  session?: string;
+  today?: string;
+}
+
+/** One entry of an item's `## Evolution` section. */
+export interface Evolution {
+  /** The version this entry made, 2 and up. */
+  version: number;
+  date: string;
+  /** harness · repo · session id, as in an Origin row. */
+  context: string[];
+  quote: string;
+  was: string;
+  now: string;
+  why: string;
 }
 
 export class BasketError extends Error {}
@@ -132,6 +162,7 @@ export function parseEgg(text: string, tier: Tier): Egg {
     harnesses: list(meta.get("harnesses")),
     good: Number(meta.get("good") ?? "0") || 0,
     bad: Number(meta.get("bad") ?? "0") || 0,
+    version: Math.max(1, Number(meta.get("version") ?? "1") || 1),
     laid: meta.get("laid") ?? today(),
     updated: meta.get("updated") ?? meta.get("laid") ?? today(),
     summary: summary.trim(),
@@ -147,6 +178,8 @@ export function serializeEgg(egg: Egg): string {
     `harnesses: ${egg.harnesses.join(", ")}`,
     `good: ${egg.good}`,
     `bad: ${egg.bad}`,
+    // Absent means v1, so files that never evolved stay as they were.
+    ...(egg.version > 1 ? [`version: ${egg.version}`] : []),
     `laid: ${egg.laid}`,
     `updated: ${egg.updated}`,
   ].join("\n");
@@ -161,6 +194,68 @@ export function formatOrigin(date: string, harness: string | undefined, origin: 
   if (quote) lines.push(...quote.split("\n").map((l) => `> ${l}`), "");
   lines.push(`- ${where.join(" · ")}`);
   return lines.join("\n");
+}
+
+const quoteLines = (quote: string): string[] => quote.split("\n").map((l) => `> ${l}`);
+
+/** One `## Evolution` entry: a `### vN · date · context` heading, the quote, then was/now/why. */
+export function formatEvolution(e: Evolution): string {
+  const lines = [`### ${[`v${e.version}`, e.date, ...e.context].join(" · ")}`, ""];
+  if (e.quote) lines.push(...quoteLines(e.quote), "");
+  lines.push(`- was: ${e.was}`, `- now: ${e.now}`);
+  if (e.why) lines.push(`- why: ${e.why}`);
+  return lines.join("\n");
+}
+
+/** The entries of an item's `## Evolution` section, oldest first. */
+export function parseEvolution(body: string): Evolution[] {
+  const section = sectionOf(body, "Evolution");
+  if (!section) return [];
+  return section
+    .split(/^(?=### )/m)
+    .filter((entry) => entry.startsWith("### "))
+    .map((entry) => {
+      const [heading = "", ...lines] = entry.trim().split("\n");
+      const [v = "", date = "", ...context] = heading.slice(4).split(" · ").map((s) => s.trim());
+      const field = (name: string): string => lines.find((l) => l.startsWith(`- ${name}: `))?.slice(name.length + 4).trim() ?? "";
+      return {
+        version: Number(v.replace(/^v/, "")) || 0,
+        date,
+        context,
+        quote: lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim(),
+        was: field("was"),
+        now: field("now"),
+        why: field("why"),
+      };
+    });
+}
+
+/** The text of a `## <name>` section of a body (heading included), or undefined. */
+function sectionOf(body: string, name: string): string | undefined {
+  return body.split(/^(?=## )/m).find((part) => new RegExp(`^## ${name}\\s*$`).test(part.split("\n")[0] ?? ""));
+}
+
+/**
+ * Add an entry to the body's `## Evolution` section, creating it if needed. The section
+ * goes before `## Trials`: feedback appends to the end of the body, so the log stays last.
+ */
+function addEvolution(body: string, entry: string): string {
+  const parts = body.split(/^(?=## )/m).map((part) => part.trim()).filter(Boolean);
+  const heading = (part: string): string => part.split("\n")[0] ?? "";
+  const at = parts.findIndex((part) => /^## Evolution\s*$/.test(heading(part)));
+  if (at >= 0) parts[at] = `${parts[at]}\n\n${entry}`;
+  else {
+    const trials = parts.findIndex((part) => /^## Trials\s*$/.test(heading(part)));
+    parts.splice(trials >= 0 ? trials : parts.length, 0, `## Evolution\n\n${entry}`);
+  }
+  return parts.join("\n\n");
+}
+
+/** The version the last trials in a log were recorded under: its last `### vN` marker, or 1. */
+function loggedVersion(body: string): number {
+  const log = sectionOf(body, "Trials") ?? "";
+  const markers = [...log.matchAll(/^### v(\d+)\s*$/gm)].map((m) => Number(m[1]));
+  return markers.at(-1) ?? 1;
 }
 
 function skillStub(egg: Egg): string {
@@ -277,6 +372,7 @@ export class Basket {
       harnesses: input.harness ? [input.harness] : [],
       good: 0,
       bad: 0,
+      version: 1,
       laid: date,
       updated: date,
       summary: input.summary.trim(),
@@ -338,9 +434,12 @@ export class Basket {
     if (egg.tier !== "egg") throw new BasketError(`${id} is a ${egg.tier}, not an egg on trial`);
     const date = fb.today ?? today();
     const via = fb.harness ? ` (${fb.harness})` : "";
-    const entry = `- ${date} ${fb.good ? "✓" : "✗"}${via}${fb.note ? ` ${fb.note.trim()}` : ""}`;
+    const trial = `- ${date} ${fb.good ? "✓" : "✗"}${via}${fb.note ? ` ${fb.note.trim()}` : ""}`;
+    // Trials after an evolution go under a `### vN` marker, so earlier ones stay with their version.
     const hasLog = /^## Trials$/m.test(egg.body);
-    const body = hasLog ? `${egg.body}\n${entry}` : `${egg.body}${egg.body ? "\n\n" : ""}## Trials\n\n${entry}`;
+    const marker = egg.version > (hasLog ? loggedVersion(egg.body) : 1) ? `### v${egg.version}\n\n` : "";
+    const entry = marker ? `\n${marker}${trial}` : trial;
+    const body = hasLog ? `${egg.body}\n${entry}` : `${egg.body}${egg.body ? "\n\n" : ""}## Trials\n\n${marker}${trial}`;
     const harnesses = fb.harness && !egg.harnesses.includes(fb.harness) ? [...egg.harnesses, fb.harness] : egg.harnesses;
     return this.save({
       ...egg,
@@ -350,6 +449,48 @@ export class Basket {
       body,
       updated: date,
     });
+  }
+
+  /**
+   * Change an egg's or chicken's fact, keeping its id, tier, tags, origin and trial log.
+   * The old wording goes into an `## Evolution` entry with the developer's words and why.
+   * The version goes up and the trial counts restart: trials so far were judged under the
+   * old rule, so they stay in the log (under their version) but no longer count toward
+   * hatching. A chicken stays a chicken.
+   */
+  evolve(id: string, input: EvolveInput): Egg {
+    const egg = this.get(id);
+    if (egg.tier === "cracked") throw new BasketError(`${id} was cracked (rejected); it doesn't evolve. Lay a new egg instead`);
+    const summary = input.summary.trim();
+    if (!summary) throw new BasketError("the new fact is empty");
+    if (summary.includes("\n")) throw new BasketError("the new fact must be one line");
+    if (summary === egg.summary) throw new BasketError(`${id} already says that`);
+    const date = input.today ?? today();
+    const version = egg.version + 1;
+    const context = [input.harness, input.repo, input.session && `session ${input.session}`].filter((s): s is string => Boolean(s));
+    const entry = formatEvolution({
+      version,
+      date,
+      context,
+      quote: input.quote?.trim() ?? "",
+      was: egg.summary,
+      now: summary,
+      why: input.note?.trim().replace(/\s*\n\s*/g, " ") ?? "",
+    });
+    const harnesses = input.harness && !egg.harnesses.includes(input.harness) ? [...egg.harnesses, input.harness] : egg.harnesses;
+    if (egg.kind === "skill") this.redescribeSkill(egg, summary);
+    return this.save({ ...egg, summary, version, good: 0, bad: 0, harnesses, updated: date, body: addEvolution(egg.body, entry) });
+  }
+
+  /** A skill whose description is still the item's old fact gets the new one. */
+  private redescribeSkill(egg: Egg, summary: string): void {
+    const file = join(this.skillDir(egg.tier, egg.id), "SKILL.md");
+    if (!existsSync(file)) return;
+    const text = readFileSync(file, "utf8").replace(/^description: (.*)$/m, (line, desc: string) => {
+      const prefix = desc.startsWith(TRIAL_PREFIX) ? TRIAL_PREFIX : "";
+      return desc.slice(prefix.length) === egg.summary ? `description: ${prefix}${summary}` : line;
+    });
+    writeFileSync(file, text);
   }
 
   /** The developer liked it: hatch the egg into a permanent chicken. */
@@ -395,7 +536,7 @@ export class Basket {
       section(eggs, () =>
         markdownTable(
           ["", "id", "fact", "tags", "trials"],
-          eggs.map((e) => [isReady(e) ? "🐣" : "🥚", `\`${e.id}\``, fact(e), tags(e), `✓${e.good} ✗${e.bad}`]),
+          eggs.map((e) => [isReady(e) ? "🐣" : "🥚", `\`${e.id}\``, fact(e), tags(e), `✓${e.good} ✗${e.bad}${e.version > 1 ? ` (v${e.version})` : ""}`]),
         )),
       "",
     ].join("\n");

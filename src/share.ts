@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { Basket, BasketError, type Egg, serializeEgg, type Tier } from "./basket.ts";
+import { Basket, BasketError, type Egg, formatEvolution, parseEvolution, serializeEgg, type Tier } from "./basket.ts";
 import { run } from "./store.ts";
 import { type Cell, type Column, palette, table } from "./table.ts";
 import { mark, type ViewOptions } from "./view.ts";
@@ -182,6 +182,7 @@ function sections(body: string): Sections {
       out.quote = lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim();
       out.context = lines.filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
     } else if (heading === "Trials") out.trials += part.trim();
+    else if (heading === "Evolution") continue; // parseEvolution reads it
     else out.other += part.trim();
   }
   return out;
@@ -193,12 +194,11 @@ function sections(body: string): Sections {
  * public places, not private repos, so they're skipped.
  */
 export function originRepos(egg: Egg): string[] {
-  return sections(egg.body).context.filter((row) => !/ · borrowed from /.test(row)).flatMap((row) =>
-    row
-      .split(" · ")
-      .slice(1)
-      .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith("session ") && !egg.harnesses.includes(s)));
+  const rows = sections(egg.body).context.filter((row) => !/ · borrowed from /.test(row)).map((row) => row.split(" · ").slice(1));
+  // `deveggs evolve` entries carry the same harness · repo · session context.
+  const evolved = parseEvolution(egg.body).map((e) => e.context);
+  return [...rows, ...evolved].flatMap((parts) =>
+    parts.map((s) => s.trim()).filter((s) => s && !s.startsWith("session ") && !egg.harnesses.includes(s)));
 }
 
 /**
@@ -219,8 +219,9 @@ export interface SanitizedEgg {
 
 /**
  * Strip an egg down to what is safe to publish: id, kind, tags, trial counts, dates and
- * the fact. Origin quotes (unless keepQuotes), context rows, harnesses, notes and the
- * trial log are removed; everything kept is redacted.
+ * the fact, plus its evolution (each version's date and was/now wording). Origin and
+ * evolution quotes (unless keepQuotes), context rows, harnesses, notes (including each
+ * evolution's why) and the trial log are removed; everything kept is redacted.
  */
 export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, terms: string[] = []): SanitizedEgg {
   const hits: Hits = new Map();
@@ -230,11 +231,20 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   if (s.context.length || /^context:/m.test(raw.split(/\n---\n/)[0] ?? "")) removed.push("context");
   if (egg.harnesses.length) removed.push("harness");
   if (s.trials) removed.push("trial notes");
-  if (s.notes || s.other) removed.push("notes");
-  const summary = redact(egg.summary, terms, options.home, hits);
+  const evolution = parseEvolution(egg.body);
+  if (evolution.some((e) => e.quote) && !options.keepQuotes) removed.push("evolution quote");
+  if (evolution.some((e) => e.context.length) && !removed.includes("context")) removed.push("context");
+  if (s.notes || s.other || evolution.some((e) => e.why)) removed.push("notes");
+  const clean = (text: string): string => redact(text, terms, options.home, hits);
+  const summary = clean(egg.summary);
   const tags = egg.tags.map((t) => redact(t, terms, options.home, hits)).filter((t) => !t.includes("<"));
-  const quote = options.keepQuotes && s.quote ? redact(s.quote, terms, options.home, hits) : "";
-  const body = quote ? ["## Origin", "", ...quote.split("\n").map((l) => `> ${l}`)].join("\n") : "";
+  const quote = options.keepQuotes && s.quote ? clean(s.quote) : "";
+  const evolved = evolution.map((e) =>
+    formatEvolution({ ...e, context: [], quote: options.keepQuotes && e.quote ? clean(e.quote) : "", was: clean(e.was), now: clean(e.now), why: "" }));
+  const body = [
+    quote ? ["## Origin", "", ...quote.split("\n").map((l) => `> ${l}`)].join("\n") : "",
+    evolved.length ? ["## Evolution", "", evolved.join("\n\n")].join("\n") : "",
+  ].filter(Boolean).join("\n\n");
   return {
     egg: { ...egg, summary, tags, harnesses: [], body },
     redactions: [...removed, ...labels(hits)],
@@ -458,7 +468,7 @@ export function publishShare(plan: SharePlan, options: PublishOptions): Publishe
     const body = [
       `Adds ${options.user}'s basket to \`${options.dir}/\`, made with \`deveggs share\`.`,
       "",
-      "Sanitized before pushing: origin quotes, context rows, harnesses, notes and trial logs removed;",
+      "Sanitized before pushing: origin and evolution quotes, context rows, harnesses, notes and trial logs removed;",
       "emails, tokens, URLs, session ids, home paths and private terms redacted; cracked items, items tagged private and scripts left out.",
       "",
       ...plan.items.filter((i) => i.shared).map((i) => `- \`${i.path}\``),
