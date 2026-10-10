@@ -44,6 +44,23 @@ function writeBaskets(dir: string): string {
     body: "## Origin\n\n> keep them small\n\n## Trials\n\n- 2026-09-10 ✓ (codex) easy review",
   }));
   put("baskets/alice/eggs/diagrams.md", item("diagrams", { tags: "explaining", good: 1, fact: "Explain with a diagram" }));
+  put("baskets/alice/eggs/diagrams.history.md", [
+    "# diagrams: history",
+    "",
+    "## 2026-09-01 · laid · v1",
+    "",
+    "- fact: Explain with a picture",
+    "",
+    "## 2026-09-02 · trial ✓ · v1",
+    "",
+    "- note: someone else's trial",
+    "",
+    "## 2026-09-03 · evolved · v2",
+    "",
+    "- was: Explain with a picture",
+    "- now: Explain with a diagram",
+    "",
+  ].join("\n"));
   put("baskets/alice/chickens/review.md", item("review", { kind: "skill", tags: "git", fact: "Review a PR before merging" }));
   put("baskets/alice/skills/chickens/review/SKILL.md", "---\nname: review\ndescription: Review a PR before merging\n---\n\n# review\n");
   put("baskets/alice/cracked/tabs.md", item("tabs", { fact: "Use tabs" }));
@@ -115,18 +132,30 @@ test("Basket.borrow adds a chicken as an egg with trials reset and a borrowed-fr
   assert.deepEqual([egg.good, egg.bad, egg.harnesses, egg.tags, egg.laid], [0, 0, [], ["git"], "2026-10-08"]);
   const text = readFileSync(join(b.root, "eggs", "small-prs.md"), "utf8");
   assert.equal(existsSync(join(b.root, "chickens", "small-prs.md")), false);
-  assert.doesNotMatch(text, /## Trials|easy review/);
-  assert.match(text, /## Origin\n\n> keep them small\n- 2026-10-08 · borrowed from alice · kunggaochicken\/deveggs-baskets\n/);
+  assert.doesNotMatch(text, /## Trials|## Origin|easy review/);
   assert.deepEqual(parseEgg(text, "egg").summary, "Keep PRs under 300 lines");
-  assert.deepEqual(originRepos(egg), [], "a borrowed-from row is not a private repo to redact");
+  const history = b.history("small-prs");
+  assert.deepEqual(history.map((e) => [e.date, e.event, e.quote]), [["2026-09-01", "laid", "keep them small"], ["2026-10-08", "imported", undefined]]);
+  assert.deepEqual(history[1]?.fields, { fact: "Keep PRs under 300 lines", from: "alice", basket: "kunggaochicken/deveggs-baskets", note: "was their chicken" });
+  assert.doesNotMatch(readFileSync(join(b.root, "eggs", "small-prs.history.md"), "utf8"), /easy review/, "their trials stay theirs");
+  assert.deepEqual(originRepos(egg, history), [], "an import is not a private repo to redact");
 });
 
-test("Basket.borrow adds an Origin when the shared item has none, and copies its skill as an egg skill", () => {
+test("Basket.borrow brings a shared history file along, without its trials", () => {
+  const dir = checkout();
+  const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-basket-")));
+  const shared = findShared(dir, "alice", "diagrams");
+  assert.equal(shared.history?.length, 3);
+  b.borrow(shared.egg, from, undefined, "2026-10-08", shared.history);
+  assert.deepEqual(b.history("diagrams").map((e) => `${e.date} ${e.event} v${e.version}`), ["2026-09-01 laid v1", "2026-09-03 evolved v2", "2026-10-08 imported v1"]);
+});
+
+test("Basket.borrow starts a history when the shared item has none, and copies its skill as an egg skill", () => {
   const dir = checkout();
   const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-basket-")));
   const review = findShared(dir, "alice", "review");
   b.borrow(review.egg, from, review.skill, "2026-10-08");
-  assert.match(readFileSync(join(b.root, "eggs", "review.md"), "utf8"), /\n## Origin\n\n- 2026-10-08 · borrowed from alice · kunggaochicken\/deveggs-baskets\n$/);
+  assert.deepEqual(b.history("review").map((e) => e.event), ["imported"]);
   const skill = readFileSync(join(b.skillDir("egg", "review"), "SKILL.md"), "utf8");
   assert.match(skill, /^description: \[egg: on trial\] Review a PR before merging$/m);
   b.hatch("review");

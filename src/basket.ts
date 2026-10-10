@@ -1,5 +1,20 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  cleanFields,
+  formatEntry,
+  formatHistory,
+  hasLegacySections,
+  historyFileName,
+  type HistoryEntry,
+  historyHeader,
+  isHistoryFile,
+  legacyHistory,
+  type LoggedMove,
+  parseHistory,
+  sortHistory,
+  stripLegacySections,
+} from "./history.ts";
 import { markdownTable } from "./table.ts";
 
 export const KINDS = ["preference", "workflow", "script", "skill"] as const;
@@ -38,7 +53,7 @@ export interface Egg {
   updated: string; // ISO date
   /** First line of the body: the one-sentence fact. */
   summary: string;
-  /** Free-form Markdown: notes, then the trial log. */
+  /** Free-form Markdown notes on the current rule. How it got here is in `<id>.history.md`. */
   body: string;
 }
 
@@ -74,9 +89,32 @@ export interface BorrowedFrom {
   repo: string;
 }
 
+/** One trial of an egg: the verdict, and why it went that way in this scenario. */
 export interface Feedback {
   good: boolean;
   harness?: string;
+  repo?: string;
+  session?: string;
+  /** What was going on when the egg applied. */
+  scenario?: string;
+  /** What following the egg led to. */
+  result?: string;
+  /** The diagnosed cause, e.g. "too broad", "too narrow", "ambiguous wording", "missing companion". */
+  cause?: string;
+  /** The tuning proposed or applied, e.g. "narrow: skip design reviews". */
+  tuning?: string;
+  /** The developer's reaction, verbatim. */
+  quote?: string;
+  note?: string;
+  today?: string;
+}
+
+/** Context for a hatch, crack or rename: the developer's say-so and why. */
+export interface EventInput {
+  harness?: string;
+  repo?: string;
+  session?: string;
+  quote?: string;
   note?: string;
   today?: string;
 }
@@ -93,21 +131,6 @@ export interface EvolveInput {
   repo?: string;
   session?: string;
   today?: string;
-}
-
-/** One entry of an item's `## Evolution` section. */
-export interface Evolution {
-  /** The version this entry made, 2 and up. */
-  version: number;
-  date: string;
-  /** harness · repo · session id, as in an Origin row. */
-  context: string[];
-  quote: string;
-  was: string;
-  now: string;
-  why: string;
-  /** Set on a rename entry: the id the item had before. Its version is 0 and was/now are empty. */
-  renamedFrom?: string;
 }
 
 export class BasketError extends Error {}
@@ -189,83 +212,6 @@ export function serializeEgg(egg: Egg): string {
   return `---\n${front}\n---\n${egg.summary}${body}\n`;
 }
 
-export function formatOrigin(date: string, harness: string | undefined, origin: Origin): string {
-  const quote = origin.quote?.trim();
-  const where = [date, harness, origin.repo, origin.session && `session ${origin.session}`].filter(Boolean);
-  const lines = ["## Origin", ""];
-  if (quote) lines.push(...quote.split("\n").map((l) => `> ${l}`), "");
-  lines.push(`- ${where.join(" · ")}`);
-  return lines.join("\n");
-}
-
-const quoteLines = (quote: string): string[] => quote.split("\n").map((l) => `> ${l}`);
-
-/**
- * One `## Evolution` entry: a `### vN · date · context` heading, the quote, then was/now/why.
- * A rename (`deveggs rename`) is a `### renamed · date` heading and a `- renamed from:` line.
- */
-export function formatEvolution(e: Evolution): string {
-  const lines = [`### ${[e.renamedFrom ? "renamed" : `v${e.version}`, e.date, ...e.context].join(" · ")}`, ""];
-  if (e.quote) lines.push(...quoteLines(e.quote), "");
-  if (e.renamedFrom) lines.push(`- renamed from: \`${e.renamedFrom}\``);
-  else lines.push(`- was: ${e.was}`, `- now: ${e.now}`);
-  if (e.why) lines.push(`- why: ${e.why}`);
-  return lines.join("\n");
-}
-
-/** The entries of an item's `## Evolution` section, oldest first. */
-export function parseEvolution(body: string): Evolution[] {
-  const section = sectionOf(body, "Evolution");
-  if (!section) return [];
-  return section
-    .split(/^(?=### )/m)
-    .filter((entry) => entry.startsWith("### "))
-    .map((entry) => {
-      const [heading = "", ...lines] = entry.trim().split("\n");
-      const [v = "", date = "", ...context] = heading.slice(4).split(" · ").map((s) => s.trim());
-      const field = (name: string): string => lines.find((l) => l.startsWith(`- ${name}: `))?.slice(name.length + 4).trim() ?? "";
-      const renamed = v === "renamed" ? { renamedFrom: field("renamed from").replace(/^`|`$/g, "") } : {};
-      return {
-        ...renamed,
-        version: Number(v.replace(/^v/, "")) || 0,
-        date,
-        context,
-        quote: lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim(),
-        was: field("was"),
-        now: field("now"),
-        why: field("why"),
-      };
-    });
-}
-
-/** The text of a `## <name>` section of a body (heading included), or undefined. */
-function sectionOf(body: string, name: string): string | undefined {
-  return body.split(/^(?=## )/m).find((part) => new RegExp(`^## ${name}\\s*$`).test(part.split("\n")[0] ?? ""));
-}
-
-/**
- * Add an entry to the body's `## Evolution` section, creating it if needed. The section
- * goes before `## Trials`: feedback appends to the end of the body, so the log stays last.
- */
-function addEvolution(body: string, entry: string): string {
-  const parts = body.split(/^(?=## )/m).map((part) => part.trim()).filter(Boolean);
-  const heading = (part: string): string => part.split("\n")[0] ?? "";
-  const at = parts.findIndex((part) => /^## Evolution\s*$/.test(heading(part)));
-  if (at >= 0) parts[at] = `${parts[at]}\n\n${entry}`;
-  else {
-    const trials = parts.findIndex((part) => /^## Trials\s*$/.test(heading(part)));
-    parts.splice(trials >= 0 ? trials : parts.length, 0, `## Evolution\n\n${entry}`);
-  }
-  return parts.join("\n\n");
-}
-
-/** The version the last trials in a log were recorded under: its last `### vN` marker, or 1. */
-function loggedVersion(body: string): number {
-  const log = sectionOf(body, "Trials") ?? "";
-  const markers = [...log.matchAll(/^### v(\d+)\s*$/gm)].map((m) => Number(m[1]));
-  return markers.at(-1) ?? 1;
-}
-
 function skillStub(egg: Egg): string {
   const prefix = egg.tier === "egg" ? TRIAL_PREFIX : "";
   return [
@@ -285,7 +231,8 @@ const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\
 
 /**
  * Point `` `old` `` and `[[old]]` (also `[[old|alias]]`, `[[old#part]]`) at the new id.
- * `## Evolution` sections are history and stay as written. True if the file changed.
+ * History files, and legacy `## Evolution` sections, are history and stay as written.
+ * True if the file changed.
  */
 function rewriteRefs(file: string, oldId: string, newId: string): boolean {
   const text = readFileSync(file, "utf8");
@@ -327,6 +274,11 @@ export class Basket {
     return join(this.dir(tier), `${id}.md`);
   }
 
+  /** An item's history log, beside its file: <basket>/<tier>/<id>.history.md */
+  historyPath(tier: Tier, id: string): string {
+    return join(this.dir(tier), historyFileName(id));
+  }
+
   private find(id: string): Tier | undefined {
     return TIERS.find((t) => existsSync(this.path(t, id)));
   }
@@ -341,7 +293,7 @@ export class Basket {
       const dir = this.dir(tier);
       if (!existsSync(dir)) return [];
       return readdirSync(dir)
-        .filter((f) => f.endsWith(".md"))
+        .filter((f) => f.endsWith(".md") && !isHistoryFile(f))
         .sort()
         .map((f) => parseEgg(readFileSync(join(dir, f), "utf8"), tier));
     });
@@ -359,17 +311,78 @@ export class Basket {
     return egg;
   }
 
-  /** Move an egg (and its skill folder, if any) to another tier. */
+  /**
+   * An item's history, oldest first. An item from before history files has its history
+   * in legacy `## Origin`, `## Evolution` and `## Trials` sections; it's read from there.
+   */
+  history(id: string): HistoryEntry[] {
+    const egg = this.get(id);
+    const file = this.historyPath(egg.tier, id);
+    const logged = existsSync(file) ? parseHistory(readFileSync(file, "utf8")) : [];
+    return hasLegacySections(egg.body) || !existsSync(file) ? sortHistory([...legacyHistory(egg), ...logged]) : logged;
+  }
+
+  /** Items still keeping their history in legacy sections of the item file (or with no history file). */
+  needsHistoryMigration(): Egg[] {
+    return this.all().filter((egg) => hasLegacySections(egg.body) || !existsSync(this.historyPath(egg.tier, egg.id)));
+  }
+
+  /**
+   * Move every item's legacy `## Origin`, `## Evolution` and `## Trials` sections into its
+   * history file, losing nothing, and leave only notes and other sections in the item.
+   * `moves` are hatches and cracks from the basket's git log (the item files never recorded
+   * them). Items already migrated are left alone. Returns the ids migrated.
+   */
+  migrateHistory(moves: LoggedMove[] = []): string[] {
+    return this.needsHistoryMigration().map((egg) => {
+      this.adoptLegacy(egg, moves, true);
+      return egg.id;
+    });
+  }
+
+  /**
+   * Write an item's legacy sections (if any) into its history file and drop them from the
+   * item. With `start`, an item with neither gets a history begun from its frontmatter.
+   */
+  private adoptLegacy(egg: Egg, moves: LoggedMove[] = [], start = false): Egg {
+    const file = this.historyPath(egg.tier, egg.id);
+    const hasFile = existsSync(file);
+    if (!hasLegacySections(egg.body) && (hasFile || !start)) return egg;
+    const logged = hasFile ? parseHistory(readFileSync(file, "utf8")) : [];
+    const loggedMoves = new Set(logged.filter((e) => e.event === "hatched" || e.event === "cracked").map((e) => e.event));
+    const entries = sortHistory([...legacyHistory(egg, moves.filter((m) => !loggedMoves.has(m.event))), ...logged]);
+    mkdirSync(this.dir(egg.tier), { recursive: true });
+    writeFileSync(file, formatHistory(egg.id, entries));
+    return this.save({ ...egg, body: stripLegacySections(egg.body) });
+  }
+
+  /** Append one entry to an item's history, migrating its legacy sections first. */
+  private log(egg: Egg, entry: HistoryEntry): void {
+    this.adoptLegacy(this.get(egg.id), [], true);
+    const file = this.historyPath(egg.tier, egg.id);
+    const text = existsSync(file) ? readFileSync(file, "utf8").trimEnd() : historyHeader(egg.id);
+    writeFileSync(file, `${text}
+
+${formatEntry(entry)}
+`);
+  }
+
+  /** Move an egg (and its history and skill folder, if any) to another tier. */
   private move(egg: Egg, to: Tier, date: string): Egg {
     const from = egg.tier;
     if (from === to) return egg;
+    this.adoptLegacy(egg);
     rmSync(this.path(from, egg.id));
+    if (existsSync(this.historyPath(from, egg.id))) {
+      mkdirSync(this.dir(to), { recursive: true });
+      renameSync(this.historyPath(from, egg.id), this.historyPath(to, egg.id));
+    }
     if (egg.kind === "skill" && existsSync(this.skillDir(from, egg.id))) {
       mkdirSync(this.skillDir(to), { recursive: true });
       renameSync(this.skillDir(from, egg.id), this.skillDir(to, egg.id));
       this.retitleSkill(egg.id, to);
     }
-    return this.save({ ...egg, tier: to, updated: date });
+    return this.save({ ...egg, body: stripLegacySections(egg.body), tier: to, updated: date });
   }
 
   /** Keep the trial marker on a skill's description in sync with its tier. */
@@ -403,8 +416,16 @@ export class Basket {
       laid: date,
       updated: date,
       summary: input.summary.trim(),
-      body: [input.note?.trim(), formatOrigin(date, input.harness, input.origin ?? {})].filter(Boolean).join("\n\n"),
+      body: input.note?.trim() ?? "",
     });
+    const origin = input.origin ?? {};
+    writeFileSync(this.historyPath(egg.tier, id), formatHistory(id, [{
+      date,
+      event: "laid",
+      version: 1,
+      ...(origin.quote?.trim() && { quote: origin.quote.trim() }),
+      fields: cleanFields({ fact: egg.summary, harness: input.harness, repo: origin.repo, session: origin.session, ...(egg.tier === "chicken" && { tier: "chicken" }) }),
+    }]));
     if (egg.kind === "skill") {
       mkdirSync(this.skillDir(egg.tier, id), { recursive: true });
       writeFileSync(join(this.skillDir(egg.tier, id), "SKILL.md"), skillStub(egg));
@@ -422,21 +443,25 @@ export class Basket {
   /**
    * Borrow an egg or chicken from someone's shared basket. It always arrives as an egg:
    * someone else's chicken hasn't been tried in this developer's loop. Trials reset to
-   * ✓0 ✗0, the trial log and harnesses are dropped, and its Origin gets a row saying
-   * where it was borrowed from. `skill` is the item's skill folder in the shared basket,
-   * copied to skills/eggs/<id>/ with the trial marker on its description.
+   * ✓0 ✗0 and harnesses are dropped. Its history comes along without trials (they were
+   * someone else's), plus an `imported` entry saying where it was borrowed from.
+   * `history` is the shared history file's entries, if it has one; an older shared item
+   * keeps its history in legacy body sections. `skill` is the item's skill folder in the
+   * shared basket, copied to skills/eggs/<id>/ with the trial marker on its description.
    */
-  borrow(source: Egg, from: BorrowedFrom, skill?: string, date: string = today()): Egg {
+  borrow(source: Egg, from: BorrowedFrom, skill?: string, date: string = today(), history?: HistoryEntry[]): Egg {
     if (slugify(source.id) !== source.id) throw new BasketError(`invalid id ${JSON.stringify(source.id)} in ${from.user}'s basket`);
     this.refuseExisting(source.id);
     if (skill && existsSync(this.skillDir("egg", source.id))) {
       throw new BasketError(`your basket already has a skill folder ${this.skillDir("egg", source.id)}; move it away to borrow ${source.id}`);
     }
-    const row = `- ${date} · borrowed from ${from.user} · ${from.repo}`;
-    const parts = source.body.split(/^(?=## )/m).filter((part) => !/^## Trials\s*$/m.test(part.split("\n")[0] ?? ""));
-    const origin = parts.findIndex((part) => /^## Origin\s*$/.test(part.split("\n")[0] ?? ""));
-    if (origin >= 0) parts[origin] = `${(parts[origin] ?? "").trimEnd()}\n${row}`;
-    else parts.push(`## Origin\n\n${row}`);
+    const past = sortHistory([...(hasLegacySections(source.body) ? legacyHistory(source) : []), ...(history ?? [])]).filter((e) => e.event !== "trial");
+    const imported: HistoryEntry = {
+      date,
+      event: "imported",
+      version: source.version,
+      fields: cleanFields({ fact: source.summary, from: from.user, basket: from.repo, note: `was their ${source.tier}` }),
+    };
     const egg = this.save({
       ...source,
       tier: "egg",
@@ -445,8 +470,9 @@ export class Basket {
       bad: 0,
       laid: date,
       updated: date,
-      body: parts.map((part) => part.trim()).filter(Boolean).join("\n\n"),
+      body: stripLegacySections(source.body),
     });
+    writeFileSync(this.historyPath("egg", egg.id), formatHistory(egg.id, [...past, imported]));
     if (skill) {
       mkdirSync(this.skillDir("egg"), { recursive: true });
       cpSync(skill, this.skillDir("egg", egg.id), { recursive: true });
@@ -455,32 +481,44 @@ export class Basket {
     return egg;
   }
 
-  /** Record how a trial of an egg went. */
+  /**
+   * Record how a trial of an egg went: the ✓/✗ counts in the item, and the verdict
+   * (scenario, result, cause, tuning) in its history.
+   */
   feedback(id: string, fb: Feedback): Egg {
     const egg = this.get(id);
     if (egg.tier !== "egg") throw new BasketError(`${id} is a ${egg.tier}, not an egg on trial`);
     const date = fb.today ?? today();
-    const via = fb.harness ? ` (${fb.harness})` : "";
-    const trial = `- ${date} ${fb.good ? "✓" : "✗"}${via}${fb.note ? ` ${fb.note.trim()}` : ""}`;
-    // Trials after an evolution go under a `### vN` marker, so earlier ones stay with their version.
-    const hasLog = /^## Trials$/m.test(egg.body);
-    const marker = egg.version > (hasLog ? loggedVersion(egg.body) : 1) ? `### v${egg.version}\n\n` : "";
-    const entry = marker ? `\n${marker}${trial}` : trial;
-    const body = hasLog ? `${egg.body}\n${entry}` : `${egg.body}${egg.body ? "\n\n" : ""}## Trials\n\n${marker}${trial}`;
+    this.log(egg, {
+      date,
+      event: "trial",
+      version: egg.version,
+      good: fb.good,
+      ...(fb.quote?.trim() && { quote: fb.quote.trim() }),
+      fields: cleanFields({
+        harness: fb.harness,
+        repo: fb.repo,
+        session: fb.session,
+        scenario: fb.scenario,
+        result: fb.result,
+        cause: fb.cause,
+        tuning: fb.tuning,
+        note: fb.note,
+      }),
+    });
     const harnesses = fb.harness && !egg.harnesses.includes(fb.harness) ? [...egg.harnesses, fb.harness] : egg.harnesses;
     return this.save({
-      ...egg,
+      ...this.get(id),
       good: egg.good + (fb.good ? 1 : 0),
       bad: egg.bad + (fb.good ? 0 : 1),
       harnesses,
-      body,
       updated: date,
     });
   }
 
   /**
-   * Change an egg's or chicken's fact, keeping its id, tier, tags, origin and trial log.
-   * The old wording goes into an `## Evolution` entry with the developer's words and why.
+   * Change an egg's or chicken's fact, keeping its id, tier, tags and history.
+   * An `evolved` history entry records was/now/why with the developer's words.
    * The version goes up and the trial counts restart: trials so far were judged under the
    * old rule, so they stay in the log (under their version) but no longer count toward
    * hatching. A chicken stays a chicken.
@@ -494,19 +532,16 @@ export class Basket {
     if (summary === egg.summary) throw new BasketError(`${id} already says that`);
     const date = input.today ?? today();
     const version = egg.version + 1;
-    const context = [input.harness, input.repo, input.session && `session ${input.session}`].filter((s): s is string => Boolean(s));
-    const entry = formatEvolution({
-      version,
+    this.log(egg, {
       date,
-      context,
-      quote: input.quote?.trim() ?? "",
-      was: egg.summary,
-      now: summary,
-      why: input.note?.trim().replace(/\s*\n\s*/g, " ") ?? "",
+      event: "evolved",
+      version,
+      ...(input.quote?.trim() && { quote: input.quote.trim() }),
+      fields: cleanFields({ harness: input.harness, repo: input.repo, session: input.session, was: egg.summary, now: summary, why: input.note }),
     });
     const harnesses = input.harness && !egg.harnesses.includes(input.harness) ? [...egg.harnesses, input.harness] : egg.harnesses;
     if (egg.kind === "skill") this.redescribeSkill(egg, summary);
-    return this.save({ ...egg, summary, version, good: 0, bad: 0, harnesses, updated: date, body: addEvolution(egg.body, entry) });
+    return this.save({ ...this.get(id), summary, version, good: 0, bad: 0, harnesses, updated: date });
   }
 
   /** A skill whose description is still the item's old fact gets the new one. */
@@ -521,15 +556,16 @@ export class Basket {
   }
 
   /**
-   * Rename an item: move its file (and skill folder, if any) to the new id, record the old
-   * id under `## Evolution`, and rewrite `` `old-id` `` and `[[old-id]]` references in the
+   * Rename an item: move its file, history and skill folder (if any) to the new id, log a
+   * `renamed` entry in its history, and rewrite `` `old-id` `` and `[[old-id]]` references in the
    * other items and in skills. Its tier, version, trials and history stay as they were.
    * Returns the renamed item and the files whose references were rewritten.
    */
-  rename(oldId: string, newId: string, date: string = today()): { egg: Egg; rewrote: string[] } {
+  rename(oldId: string, newId: string, input: EventInput = {}): { egg: Egg; rewrote: string[] } {
     if (slugify(newId) !== newId) {
       throw new BasketError(`invalid id ${JSON.stringify(newId)}; use lowercase words joined by dashes, e.g. pr-screenshots`);
     }
+    const date = input.today ?? today();
     const egg = this.get(oldId);
     if (oldId === newId) throw new BasketError(`${oldId} is already called that`);
     const taken = this.find(newId);
@@ -538,9 +574,20 @@ export class Basket {
     if (clash) throw new BasketError(`a skill folder ${clash} already exists; move it away to rename ${oldId}`);
 
     // Write the new file before removing anything, so a failure never loses the item.
-    const entry = formatEvolution({ version: 0, date, context: [], quote: "", was: "", now: "", why: "", renamedFrom: oldId });
-    const renamed = this.save({ ...egg, id: newId, updated: date, body: addEvolution(egg.body, entry) });
+    const current = this.adoptLegacy(egg);
+    const oldHistory = this.historyPath(egg.tier, oldId);
+    const entries = existsSync(oldHistory) ? parseHistory(readFileSync(oldHistory, "utf8")) : [];
+    entries.push({
+      date,
+      event: "renamed",
+      version: egg.version,
+      ...(input.quote?.trim() && { quote: input.quote.trim() }),
+      fields: cleanFields({ from: oldId, to: newId, harness: input.harness, repo: input.repo, session: input.session, why: input.note }),
+    });
+    writeFileSync(this.historyPath(egg.tier, newId), formatHistory(newId, entries));
+    const renamed = this.save({ ...current, id: newId, updated: date });
     rmSync(this.path(egg.tier, oldId));
+    rmSync(oldHistory, { force: true });
     const skill = this.skillDir(egg.tier, oldId);
     if (existsSync(skill)) {
       renameSync(skill, this.skillDir(egg.tier, newId));
@@ -559,26 +606,46 @@ export class Basket {
     return { egg: renamed, rewrote };
   }
 
-  /** Every item file, and every Markdown file under skills/. */
+  /** Every item file (not its history), and every Markdown file under skills/. */
   private markdownFiles(): string[] {
     const walk = (dir: string): string[] =>
       existsSync(dir)
         ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-            e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : [])
+            e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") && !isHistoryFile(e.name) ? [join(dir, e.name)] : [])
         : [];
     return [...TIERS.flatMap((t) => walk(this.dir(t))), ...walk(join(this.root, "skills"))];
   }
 
   /** The developer liked it: hatch the egg into a permanent chicken. */
-  hatch(id: string, date: string = today()): Egg {
+  hatch(id: string, input: EventInput = {}): Egg {
     const egg = this.get(id);
     if (egg.tier !== "egg") throw new BasketError(`${id} is a ${egg.tier}; only eggs hatch`);
-    return this.move(egg, "chicken", date);
+    return this.moveLogged(egg, "chicken", "hatched", input);
   }
 
   /** Reject an egg (or retire a chicken). Kept so it is never laid again. */
-  crack(id: string, date: string = today()): Egg {
-    return this.move(this.get(id), "cracked", date);
+  crack(id: string, input: EventInput = {}): Egg {
+    const egg = this.get(id);
+    if (egg.tier === "cracked") throw new BasketError(`${id} is already cracked`);
+    return this.moveLogged(egg, "cracked", "cracked", input);
+  }
+
+  private moveLogged(egg: Egg, to: Tier, event: "hatched" | "cracked", input: EventInput): Egg {
+    const date = input.today ?? today();
+    this.log(egg, {
+      date,
+      event,
+      version: egg.version,
+      ...(input.quote?.trim() && { quote: input.quote.trim() }),
+      fields: cleanFields({
+        harness: input.harness,
+        repo: input.repo,
+        session: input.session,
+        trials: `✓${egg.good} ✗${egg.bad} (v${egg.version})`,
+        why: input.note,
+      }),
+    });
+    return this.move(this.get(egg.id), to, date);
   }
 
   /** Render chickens (permanent) and eggs (on trial) into PREFERENCES.md, as Markdown tables. */

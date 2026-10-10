@@ -4,12 +4,13 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
+import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
+import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, movesFromLog } from "./history.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
-import { formatList, formatShow, mark, terminalOptions, trialCounts } from "./view.ts";
+import { formatList, formatShow, formatTimeline, mark, terminalOptions, trialCounts } from "./view.ts";
 
 const USAGE = `deveggs: a basket of eggs for the agentic developer
 
@@ -22,20 +23,28 @@ usage:
                                      [--tag t1,t2] [--harness name] [--note text] [--chicken]
                                      (tag "private" keeps it out of deveggs share)
                                      [--quote "<developer's words>"] [--repo name] [--session id]
-  deveggs feedback <id> --good|--bad [--note text] [--harness name]   record a trial
+  deveggs feedback <id> --good|--bad [--harness name] [--note text]
+                [--scenario text] [--result text] [--cause text] [--tuning text]
+                [--quote "<developer's reaction>"] [--repo name] [--session id]
+                                     record a trial and its verdict in the item's history
   deveggs evolve <id> "<new fact>" --quote "<developer's words>" [--note "<why: the tuning>"]
                 [--harness name] [--repo name] [--session id]
                                      change an egg's or chicken's rule: keeps its id, tier,
-                                     tags, origin and trials, records was/now/why under
-                                     ## Evolution, and restarts trials for the new version
-  deveggs rename <old-id> <new-id>     rename an egg, chicken or cracked item: moves its file
-                                     and skill (and harness skill links), notes the old id
-                                     under ## Evolution, and rewrites \`old-id\` and [[old-id]]
+                                     tags and history, logs was/now/why, and restarts
+                                     trials for the new version
+  deveggs rename <old-id> <new-id> [--note why] [--quote text]
+                                     rename an egg, chicken or cracked item: moves its file,
+                                     history and skill (and harness skill links), logs the
+                                     old id, and rewrites \`old-id\` and [[old-id]]
                                      references in other items
-  deveggs hatch <id>                   egg -> chicken (permanent)
-  deveggs crack <id>                   reject an egg, or retire a chicken
+  deveggs hatch <id> [--quote text] [--note why] [--harness name]   egg -> chicken (permanent)
+  deveggs crack <id> [--quote text] [--note why] [--harness name]   reject an egg, or retire a chicken
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
+  deveggs history <id> [--trials] [--event e1,e2] [--since YYYY-MM-DD] [--version N] [--json]
+                                     how an item evolved, oldest first: its origin, every
+                                     trial and verdict, evolve, hatch, crack, rename and
+                                     import (events: ${EVENTS.join(", ")})
   deveggs render                       rebuild PREFERENCES.md in the basket
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
@@ -54,7 +63,10 @@ usage:
                                      borrow a shared egg or chicken (and its skill) into
                                      your basket as an egg on trial, trials ✓0 ✗0
   deveggs migrate [--relink]           move an old <deveggs>/my-basket/ to the basket;
-                                     --relink repoints harness skill links to it
+                                     --relink repoints harness skill links to it. Also
+                                     moves items' old ## Origin/Evolution/Trials sections
+                                     into <tier>/<id>.history.md (write commands do this
+                                     on their own the first time)
 
 An egg is "ready" to propose hatching after ${READY_AFTER} good trials and no bad ones,
 counting only trials since its last evolve.
@@ -71,12 +83,30 @@ const basket = new Basket(basketRoot);
 
 const warn = (message: string): void => console.error(`deveggs: warning: ${message}`);
 
-/** Create the basket on first write and say where it went. */
+/** Create the basket on first write and say where it went; move any legacy history into history files. */
 function prepare(): void {
   const { created, warnings } = ensureBasket(basketRoot, join(repoRoot, "templates"));
   if (created) console.log(`🧺 started your basket at ${basketRoot} (its own git repo; save it to GitHub with: deveggs push)`);
   warnings.forEach(warn);
+  migrateHistory();
 }
+
+/**
+ * Move items' legacy Origin/Evolution/Trials sections into `<tier>/<id>.history.md`, with
+ * the hatches and cracks the basket's git log recorded, and commit that on its own.
+ */
+function migrateHistory(): string[] {
+  if (!basket.needsHistoryMigration().length) return [];
+  const log = run("git", ["log", "--format=%ad%x09%s", "--date=short"], basketRoot);
+  const ids = basket.migrateHistory(log.status === 0 ? movesFromLog(log.stdout) : []);
+  if (ids.length) {
+    console.log(`📜 moved the history of ${ids.length} item${ids.length === 1 ? "" : "s"} into <tier>/<id>.history.md (see: deveggs history <id>)`);
+    save(`history: move origin, evolution and trials of ${ids.length} item${ids.length === 1 ? "" : "s"} into history files`);
+  }
+  return ids;
+}
+
+const histories = (eggs: Egg[]): Map<string, HistoryEntry[]> => new Map(eggs.map((e) => [e.id, basket.history(e.id)]));
 
 /** Commit a write in the basket repo, and push it when autopush is on. Warns, never fails. */
 function save(message: string): void {
@@ -89,7 +119,7 @@ const emptyNote = (): string => `basket is empty; it will live at ${basketRoot} 
 
 function line(egg: Egg): string {
   const tags = egg.tags.length ? ` [${egg.tags.join(", ")}]` : "";
-  const trials = egg.tier === "egg" ? `, ${trialCounts(egg)}` : egg.version > 1 ? `, v${egg.version}` : "";
+  const trials = egg.tier === "egg" ? `, ${trialCounts(egg, basket.history(egg.id))}` : egg.version > 1 ? `, v${egg.version}` : "";
   return `${mark(egg)} ${egg.id}  (${egg.kind}${trials})${tags}\n     ${egg.summary}`;
 }
 
@@ -189,7 +219,7 @@ function borrow(ref: string | undefined, repoFlag: string | undefined): void {
   const egg = withBaskets(fetchBaskets, repo, (dir) => {
     const item = findShared(dir, user, id);
     prepare();
-    return basket.borrow(item.egg, { user, repo }, item.skill);
+    return basket.borrow(item.egg, { user, repo }, item.skill, undefined, item.history);
   });
   basket.render();
   save(`egg: import ${egg.id} from ${user}`);
@@ -260,6 +290,15 @@ function main(argv: string[]): void {
       good: { type: "boolean", default: false },
       bad: { type: "boolean", default: false },
       tier: { type: "string" },
+      scenario: { type: "string" },
+      result: { type: "string" },
+      cause: { type: "string" },
+      tuning: { type: "string" },
+      trials: { type: "boolean", default: false },
+      event: { type: "string" },
+      since: { type: "string" },
+      version: { type: "string" },
+      json: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       as: { type: "string" },
       yes: { type: "boolean", default: false },
@@ -275,6 +314,17 @@ function main(argv: string[]): void {
     console.error(`deveggs: your basket is still in ${legacy}; move it to ${basketRoot} with: deveggs migrate`);
   }
   const harness = values.harness !== undefined ? { harness: values.harness } : {};
+  /** The developer's say-so and context for a hatch, crack or rename. */
+  const eventInput = (): EventInput => {
+    const repo = values.repo ?? currentRepo();
+    return {
+      ...harness,
+      ...note,
+      ...(repo !== undefined && { repo }),
+      ...(values.session !== undefined && { session: values.session }),
+      ...(values.quote !== undefined && { quote: values.quote }),
+    };
+  };
   const note = values.note !== undefined ? { note: values.note } : {};
 
   switch (command) {
@@ -311,7 +361,19 @@ function main(argv: string[]): void {
       const id = requireId(positionals);
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
       prepare();
-      const egg = basket.feedback(id, { good: values.good, ...harness, ...note });
+      const repo = values.repo ?? currentRepo();
+      const egg = basket.feedback(id, {
+        good: values.good,
+        ...harness,
+        ...note,
+        ...(repo !== undefined && { repo }),
+        ...(values.session !== undefined && { session: values.session }),
+        ...(values.scenario !== undefined && { scenario: values.scenario }),
+        ...(values.result !== undefined && { result: values.result }),
+        ...(values.cause !== undefined && { cause: values.cause }),
+        ...(values.tuning !== undefined && { tuning: values.tuning }),
+        ...(values.quote !== undefined && { quote: values.quote }),
+      });
       basket.render();
       save(`trial: ${values.good ? "good" : "bad"} ${egg.id}`);
       console.log(line(egg));
@@ -349,7 +411,7 @@ function main(argv: string[]): void {
       if (!from || !to || positionals.length > 2) throw new BasketError("usage: deveggs rename <old-id> <new-id>");
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(from)}; ${emptyNote()}`);
       prepare();
-      const { egg, rewrote } = basket.rename(from, to);
+      const { egg, rewrote } = basket.rename(from, to, eventInput());
       let links: ReturnType<typeof renameLinks> = { moved: [], skipped: [] };
       try {
         links = renameLinks(basket.skillDir(egg.tier, from), basket.skillDir(egg.tier, to), from, to);
@@ -370,7 +432,7 @@ function main(argv: string[]): void {
       const id = requireId(positionals);
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
       prepare();
-      const egg = command === "hatch" ? basket.hatch(id) : basket.crack(id);
+      const egg = command === "hatch" ? basket.hatch(id, eventInput()) : basket.crack(id, eventInput());
       basket.render();
       save(command === "hatch" ? `chicken: hatch ${egg.id}` : `crack: ${egg.id}`);
       console.log(line(egg));
@@ -379,7 +441,28 @@ function main(argv: string[]): void {
     case "show": {
       const id = requireId(positionals);
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
-      console.log(formatShow(basket.get(id), terminalOptions()));
+      console.log(formatShow(basket.get(id), terminalOptions(), basket.history(id)));
+      return;
+    }
+    case "history": {
+      const id = requireId(positionals);
+      if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
+      const events = csv(values.event);
+      const bad = events.find((e) => !(EVENTS as readonly string[]).includes(e));
+      if (bad) throw new BasketError(`invalid event ${JSON.stringify(bad)}; expected one of ${EVENTS.join(", ")}`);
+      if (values.trials) events.push("trial");
+      if (values.since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(values.since)) throw new BasketError(`invalid --since ${JSON.stringify(values.since)}; expected YYYY-MM-DD`);
+      const version = values.version === undefined ? undefined : Number(values.version.replace(/^v/, ""));
+      if (version !== undefined && !(Number.isInteger(version) && version > 0)) throw new BasketError(`invalid --version ${JSON.stringify(values.version)}; expected a number like 2`);
+      const egg = basket.get(id);
+      const all = basket.history(id);
+      const entries = filterHistory(all, {
+        events: events as HistoryEvent[],
+        ...(values.since !== undefined && { since: values.since }),
+        ...(version !== undefined && { version }),
+      });
+      if (values.json) console.log(JSON.stringify({ id: egg.id, tier: egg.tier, version: egg.version, fact: egg.summary, entries }, null, 2));
+      else console.log(formatTimeline(egg, entries, terminalOptions(), entries.length !== all.length));
       return;
     }
     case "list": {
@@ -395,7 +478,7 @@ function main(argv: string[]): void {
       if (tier === "ready") eggs = eggs.filter(isReady);
       else if (tier) eggs = eggs.filter((e) => e.tier === tier);
       if (values.kind) eggs = eggs.filter((e) => e.kind === values.kind);
-      console.log(formatList(eggs, terminalOptions()));
+      console.log(formatList(eggs, terminalOptions(), histories(eggs)));
       return;
     }
     case "render":
@@ -407,6 +490,7 @@ function main(argv: string[]): void {
     case "migrate": {
       const result = migrate(legacy, basketRoot, join(repoRoot, "templates"));
       result.messages.forEach((m) => console.log(m));
+      if (existsSync(basketRoot) && !migrateHistory().length) console.log("history: every item already keeps its history in <tier>/<id>.history.md");
       if (result.relinks.length && values.relink) {
         relink(result.relinks);
         for (const r of result.relinks) console.log(`relinked ${r.link} -> ${r.to}`);

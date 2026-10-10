@@ -1,7 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
-import { Basket, BasketError, type Egg, formatEvolution, parseEvolution, serializeEgg, type Tier } from "./basket.ts";
+import { Basket, BasketError, type Egg, serializeEgg, type Tier } from "./basket.ts";
+import { cleanFields, formatHistory, hasLegacySections, type HistoryEntry, historyFileName, legacyHistory, stripLegacySections } from "./history.ts";
 import { run } from "./store.ts";
 import { type Cell, type Column, palette, table } from "./table.ts";
 import { mark, type ViewOptions } from "./view.ts";
@@ -160,93 +161,93 @@ const labels = (hits: Hits): string[] => [...hits].map(([label, n]) => (n > 1 ? 
 
 // --- eggs ----------------------------------------------------------------------
 
-interface Sections {
-  /** Prose before any heading (notes from lay --note, hand-written notes). */
-  notes: string;
-  quote: string;
-  /** The Origin bullet(s): date · harness · repo · session. */
-  context: string[];
-  trials: string;
-  /** Any other `## ` sections. */
-  other: string;
-}
-
-function sections(body: string): Sections {
-  const out: Sections = { notes: "", quote: "", context: [], trials: "", other: "" };
-  const parts = body.split(/^(?=## )/m);
-  for (const part of parts) {
-    const heading = /^## (.*)$/m.exec(part)?.[1]?.trim();
-    if (!part.startsWith("## ")) out.notes += part.trim();
-    else if (heading === "Origin") {
-      const lines = part.split("\n").slice(1);
-      out.quote = lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim();
-      out.context = lines.filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
-    } else if (heading === "Trials") out.trials += part.trim();
-    else if (heading === "Evolution") continue; // parseEvolution reads it
-    else out.other += part.trim();
-  }
-  return out;
-}
+/** An item's history from its legacy body sections, when it has no history of its own. */
+const historyOf = (egg: Egg, history?: HistoryEntry[]): HistoryEntry[] => history ?? (hasLegacySections(egg.body) ? legacyHistory(egg) : []);
 
 /**
- * The repo names in an egg's Origin context rows (`date · harness · repo · session id`).
- * Rows added by `deveggs import` (`date · borrowed from <user> · <baskets repo>`) name
- * public places, not private repos, so they're skipped.
+ * The repo names in an item's history (`repo:` on its lay, trials, evolves…). An
+ * `imported` entry names a public baskets repo, not a private one, so it's skipped.
  */
-export function originRepos(egg: Egg): string[] {
-  const rows = sections(egg.body).context.filter((row) => !/ · borrowed from /.test(row)).map((row) => row.split(" · ").slice(1));
-  // `deveggs evolve` entries carry the same harness · repo · session context.
-  const evolved = parseEvolution(egg.body).map((e) => e.context);
-  return [...rows, ...evolved].flatMap((parts) =>
-    parts.map((s) => s.trim()).filter((s) => s && !s.startsWith("session ") && !egg.harnesses.includes(s)));
+export function originRepos(egg: Egg, history?: HistoryEntry[]): string[] {
+  return historyOf(egg, history)
+    .filter((e) => e.event !== "imported")
+    .map((e) => e.fields["repo"]?.trim() ?? "")
+    .filter((repo) => repo && !egg.harnesses.includes(repo));
 }
 
 /**
  * Private terms worth redacting without being told: the repo names eggs were laid in
  * (minus public ones like deveggs) and the developer's home folder name.
  */
-export function autoTerms(eggs: Egg[], home?: string, publicNames: string[] = []): string[] {
+export function autoTerms(eggs: Egg[], home?: string, publicNames: string[] = [], histories: Map<string, HistoryEntry[]> = new Map()): string[] {
   const keep = new Set([...PUBLIC_TERMS, ...publicNames.map((n) => n.toLowerCase())]);
-  const terms = eggs.flatMap(originRepos);
+  const terms = eggs.flatMap((egg) => originRepos(egg, histories.get(egg.id)));
   if (home) terms.push(basename(home));
   return cleanTerms(terms.filter((t) => t.length >= 3 && !keep.has(t.toLowerCase())));
 }
 
 export interface SanitizedEgg {
   egg: Egg;
+  /** What may be published of its history: lay, evolves, hatch, renames and imports, stripped down. */
+  history: HistoryEntry[];
   redactions: string[];
 }
 
+/** Fields that say where and how something happened in the developer's own loop: never shared. */
+const CONTEXT_FIELDS = ["harness", "repo", "session"];
+
 /**
- * Strip an egg down to what is safe to publish: id, kind, tags, trial counts, dates and
- * the fact, plus its evolution (each version's date and was/now wording). Origin and
- * evolution quotes (unless keepQuotes), context rows, harnesses, notes (including each
- * evolution's why) and the trial log are removed; everything kept is redacted.
+ * Strip an item down to what is safe to publish: id, kind, tags, trial counts, dates and
+ * the fact, plus a history of its lay, evolves (each version's was/now wording), hatch,
+ * renames and imports. Quotes (unless keepQuotes), context (harness, repo, session),
+ * harnesses, notes (and every why, scenario, cause and tuning), trials and cracks are
+ * removed; everything kept is redacted. `history` is the item's history; without it,
+ * it's read from legacy body sections.
  */
-export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, terms: string[] = []): SanitizedEgg {
+export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, terms: string[] = [], history?: HistoryEntry[]): SanitizedEgg {
   const hits: Hits = new Map();
   const removed: string[] = [];
-  const s = sections(egg.body);
-  if (s.quote && !options.keepQuotes) removed.push("quote");
-  if (s.context.length || /^context:/m.test(raw.split(/\n---\n/)[0] ?? "")) removed.push("context");
-  if (egg.harnesses.length) removed.push("harness");
-  if (s.trials) removed.push("trial notes");
-  const evolution = parseEvolution(egg.body);
-  if (evolution.some((e) => e.quote) && !options.keepQuotes) removed.push("evolution quote");
-  if (evolution.some((e) => e.context.length) && !removed.includes("context")) removed.push("context");
-  if (s.notes || s.other || evolution.some((e) => e.why)) removed.push("notes");
+  const entries = historyOf(egg, history);
+  const add = (label: string): void => {
+    if (!removed.includes(label)) removed.push(label);
+  };
+  const quoted = (e: HistoryEntry): boolean => Boolean(e.quote) && e.event !== "trial";
+  if (entries.some((e) => e.event !== "evolved" && quoted(e)) && !options.keepQuotes) add("quote");
+  if (entries.some((e) => CONTEXT_FIELDS.some((k) => e.fields[k])) || /^context:/m.test(raw.split(/\n---\n/)[0] ?? "")) add("context");
+  if (egg.harnesses.length) add("harness");
+  if (entries.some((e) => e.event === "trial")) add("trial notes");
+  if (entries.some((e) => e.event === "evolved" && e.quote) && !options.keepQuotes) add("evolution quote");
+  const noted = (e: HistoryEntry): boolean => e.event !== "trial" && Object.keys(e.fields).some((k) => ["why", "note", "scenario", "result", "cause", "tuning"].includes(k));
+  if (stripLegacySections(egg.body) || entries.some((e) => noted(e) || e.text)) add("notes");
   const clean = (text: string): string => redact(text, terms, options.home, hits);
   const summary = clean(egg.summary);
   const tags = egg.tags.map((t) => redact(t, terms, options.home, hits)).filter((t) => !t.includes("<"));
-  const quote = options.keepQuotes && s.quote ? clean(s.quote) : "";
-  const evolved = evolution.map((e) =>
-    formatEvolution({ ...e, context: [], quote: options.keepQuotes && e.quote ? clean(e.quote) : "", was: clean(e.was), now: clean(e.now), why: "", ...(e.renamedFrom && { renamedFrom: clean(e.renamedFrom) }) }));
-  const body = [
-    quote ? ["## Origin", "", ...quote.split("\n").map((l) => `> ${l}`)].join("\n") : "",
-    evolved.length ? ["## Evolution", "", evolved.join("\n\n")].join("\n") : "",
-  ].filter(Boolean).join("\n\n");
+  const keepQuote = (e: HistoryEntry): { quote?: string } => (options.keepQuotes && e.quote && e.event !== "trial" ? { quote: clean(e.quote) } : {});
+  const shared = entries.flatMap((e): HistoryEntry[] => {
+    const base = { date: e.date, event: e.event, version: e.version };
+    switch (e.event) {
+      case "laid":
+        return [{
+          ...base,
+          ...keepQuote(e),
+          // The fact as laid is often the fact today: reuse its redaction rather than count it twice.
+          fields: cleanFields({ fact: e.fields["fact"] && (e.fields["fact"] === egg.summary ? summary : clean(e.fields["fact"])), tier: e.fields["tier"] }),
+        }];
+      case "evolved":
+        return [{ ...base, ...keepQuote(e), fields: cleanFields({ was: clean(e.fields["was"] ?? ""), now: clean(e.fields["now"] ?? "") }) }];
+      case "hatched":
+        return [{ ...base, ...keepQuote(e), fields: cleanFields({ trials: e.fields["trials"] }) }];
+      case "renamed":
+        return [{ ...base, fields: cleanFields({ from: clean(e.fields["from"] ?? ""), to: clean(e.fields["to"] ?? "") }) }];
+      case "imported":
+        return [{ ...base, ...keepQuote(e), fields: cleanFields({ from: clean(e.fields["from"] ?? ""), basket: clean(e.fields["basket"] ?? "") }) }];
+      default:
+        return []; // trials (the developer's own loop) and cracks
+    }
+  });
   return {
-    egg: { ...egg, summary, tags, harnesses: [], body },
+    egg: { ...egg, summary, tags, harnesses: [], body: "" },
+    history: shared,
     redactions: [...removed, ...labels(hits)],
   };
 }
@@ -280,7 +281,8 @@ export function readPrivateTerms(root: string): string[] {
  * Work out exactly what `deveggs share` would publish from the basket at `root`, and
  * what it redacted or left out. Reads the basket; writes nothing.
  *
- * Shared: chickens and eggs (sanitized) and their skills (redacted).
+ * Shared: chickens and eggs (sanitized), their histories (sanitized: see sanitizeEgg) and
+ * their skills (redacted).
  * Left out: cracked items and their skills, items tagged `private` and their skills,
  * skipped ids, ids that contain a private term, scripts/ (unless includeScripts), binary files, and everything else in the
  * basket (README.md, PREFERENCES.md, logs/, private-terms.txt, dotfiles).
@@ -292,7 +294,8 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
   for (const [tier, dir] of TIER_DIRS) {
     for (const egg of eggs.filter((e) => e.tier === tier)) raws.set(egg.id, readFileSync(join(root, dir, `${egg.id}.md`), "utf8"));
   }
-  const terms = cleanTerms([...(options.privateTerms ?? []), ...readPrivateTerms(root), ...autoTerms(eggs, options.home, publicNames)]);
+  const histories = new Map(eggs.map((e) => [e.id, basket.history(e.id)]));
+  const terms = cleanTerms([...(options.privateTerms ?? []), ...readPrivateTerms(root), ...autoTerms(eggs, options.home, publicNames, histories)]);
   const skip = new Set(options.skip ?? []);
   const files: ShareFile[] = [];
   const items: ShareItem[] = [];
@@ -317,8 +320,9 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
         items.push({ path, mark: mark(egg), shared: false, why, redactions: [] });
         continue;
       }
-      const clean = sanitizeEgg(egg, raws.get(egg.id) ?? "", options, terms);
+      const clean = sanitizeEgg(egg, raws.get(egg.id) ?? "", options, terms, histories.get(egg.id));
       files.push({ path, content: serializeEgg(clean.egg) });
+      if (clean.history.length) files.push({ path: `${dir}/${historyFileName(egg.id)}`, content: formatHistory(egg.id, clean.history) });
       items.push({ path, mark: mark(egg), shared: true, redactions: clean.redactions, fact: clean.egg.summary });
     }
   }
@@ -468,7 +472,7 @@ export function publishShare(plan: SharePlan, options: PublishOptions): Publishe
     const body = [
       `Adds ${options.user}'s basket to \`${options.dir}/\`, made with \`deveggs share\`.`,
       "",
-      "Sanitized before pushing: origin and evolution quotes, context rows, harnesses, notes and trial logs removed;",
+      "Sanitized before pushing: origin and evolution quotes, context (harness, repo, session), harnesses, notes and trials removed from items and their histories;",
       "emails, tokens, URLs, session ids, home paths and private terms redacted; cracked items, items tagged private and scripts left out.",
       "",
       ...plan.items.filter((i) => i.shared).map((i) => `- \`${i.path}\``),
