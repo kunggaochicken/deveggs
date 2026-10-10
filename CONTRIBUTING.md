@@ -9,7 +9,7 @@ not here (see [Sharing your basket](#sharing-your-basket)).
 
 This repo is the deveggs **code**:
 
-- `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`,
+- `src/` and `bin/deveggs`: the CLI (`lay`, `arch`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`,
   `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
@@ -56,6 +56,7 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | CLI commands and flags | `src/cli.ts` |
 | Item history: the `<id>.history.md` format, its legacy-section migration | `src/history.ts` |
 | Terminal output (`list`, `show`, `history`, tables) | `src/view.ts`, `src/table.ts` |
+| Item architecture diagrams: the `## Architecture` section, its scaffolds by kind, its terminal frame and the emoji vocabulary | `src/architecture.ts` |
 | Moving a legacy `my-basket/` | `src/migrate.ts` |
 | `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
 | `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
@@ -86,7 +87,7 @@ What it does by default:
 
 | | |
 |---|---|
-| **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), and a stripped `<id>.history.md`: the lay (date and first fact), each evolve (date and was/now wording), the hatch (date and trial counts) and renames and imports; and their skills |
+| **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), their `## Architecture` diagram (unless it's still an unfilled scaffold; references to left-out items become `<private>`), and a stripped `<id>.history.md`: the lay (date and first fact), each evolve (date and was/now wording), the hatch (date and trial counts) and renames and imports; and their skills |
 | **Removed** | Quotes (`--keep-quotes` keeps them, redacted), context (harness · repo · session on every history entry), harnesses, notes (the item's notes, and every why, scenario, result, cause and tuning), every trial entry and cracks |
 | **Redacted** in everything shared | Emails, tokens and secrets (`ghp_`, `github_pat_`, `sk-`, `AKIA`, Slack, JWTs, private keys, `key=value` secrets, long hex/base64), URLs and git remotes, session ids, home paths (to `~`), and private terms |
 | **Left out** | `cracked/` and cracked skills, items tagged `private` and their skills, `scripts/` (`--include-scripts` adds them, redacted), binary files, `--skip id1,id2`, ids containing a private term, and the rest of the basket (`logs/`, `README.md`, `PREFERENCES.md`) |

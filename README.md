@@ -50,6 +50,28 @@ prove themselves hatch into chickens, permanent rules every agent follows.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
+Every egg and chicken comes with a **🗺 architecture**: a diagram, right under its rule,
+of the preference or workflow it automates. A simple preference is one line
+(⚡ trigger ──▶ 🤖 what the agent does ──▶ ✅ outcome); a workflow, script or skill gets a
+component map of its triggers, steps, files and the systems it touches, so you can find
+your way around it. Agents show it every time they show you the item, and
+`deveggs arch <id>` prints it:
+
+```text
+╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────────
+│ ⚡ launchd, every 15 s
+│    │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+│    ▼
+│ 🛡 scripts/memory-guardian: one pass
+│    ├──▶ 🔪 runaway dev process (> 25% of RAM)
+│    ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+│    ├──▶ 📤 logs/memory-guardian.log
+│    └──▶ 🔔 macOS notification
+│
+│ ✅ the machine stays up while 🤖 subagents fan out
+╰────────────────────────────────────────────────────────────────────────
+```
+
 deveggs is a meta skill: you never have to tell it to look for preferences. Just
 work. When you correct your agent, say "always…" or "let's try…", or walk it through
 the same steps again, it spots the preference on its own and asks in one line:
@@ -150,6 +172,7 @@ You mostly just talk to your agent. It runs these for you:
 ```bash
 deveggs lay "End each turn with a one-line summary" --id turn-summary   # 🥚 try it out
 deveggs lay "Never push to main" --id no-push-main --chicken            # 🐔 already sure
+deveggs arch <id> [--set <file>]                                        # 🗺 print or draw its diagram
 deveggs feedback <id> --good --scenario "…" --cause "…"                 # log a trial and its verdict
 deveggs evolve <id> "<new fact>" --quote "<your words>"                 # 🧬 tune it, keeping the old wording
 deveggs hatch <id>                                                      # 🥚 -> 🐔

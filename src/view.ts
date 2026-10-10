@@ -1,3 +1,4 @@
+import { formatArchitecture, KIND_ICON, withoutArchitecture } from "./architecture.ts";
 import { type Egg, isReady, READY_AFTER, type Tier } from "./basket.ts";
 import { type HistoryEntry, trialsByVersion } from "./history.ts";
 import { type Cell, type Column, displayWidth, keyValues, palette, paintTrials, type Palette, table, truncate } from "./table.ts";
@@ -95,10 +96,13 @@ function summaryLine(eggs: Egg[], p: Palette): string {
 
 const TIER_LABEL: Record<Tier, string> = { egg: "egg (on trial)", chicken: "chicken (permanent)", cracked: "cracked (rejected)" };
 
-/** One item in full: metadata as key/value rows, its origin and notes, then the trial log as a table. */
+/**
+ * One item in full: its architecture diagram first (what it automates, at a glance), then
+ * metadata as key/value rows, its origin and notes, then the trial log as a table.
+ */
 export function formatShow(egg: Egg, options: ViewOptions, history: HistoryEntry[] = []): string {
   const p = palette(options.color);
-  const prose = egg.body;
+  const prose = withoutArchitecture(egg.body);
   const log = history.filter((e) => e.event === "trial");
   const since = egg.version > 1 ? ` since v${egg.version}` : "";
   const hint = isReady(egg) ? `🐣 ready to hatch: deveggs hatch ${egg.id}` : `(${READY_AFTER} ✓ and no ✗${since} to hatch)`;
@@ -131,11 +135,13 @@ export function formatShow(egg: Egg, options: ViewOptions, history: HistoryEntry
   const out = [
     `${mark(egg)} ${p.bold(egg.id)}`,
     "",
+    formatArchitecture(egg, options),
+    "",
     ...keyValues(
       [
         ["fact", egg.summary],
         ["tier", TIER_LABEL[egg.tier]],
-        ["kind", egg.kind],
+        ["kind", `${KIND_ICON[egg.kind]} ${egg.kind}`],
         ["tags", egg.tags.join(", ") || "-"],
         ...versionRow,
         ["trials", trialCell],

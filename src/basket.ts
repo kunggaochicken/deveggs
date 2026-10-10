@@ -16,6 +16,7 @@ import {
   sortHistory,
   stripLegacySections,
 } from "./history.ts";
+import { architectureOf, archFiles, isScaffold, KIND_ICON, scaffold, withArchitecture } from "./architecture.ts";
 import { markdownTable } from "./table.ts";
 
 export const KINDS = ["preference", "workflow", "script", "skill"] as const;
@@ -66,6 +67,8 @@ export interface LayInput {
   tags?: string[];
   harness?: string;
   note?: string;
+  /** The item's architecture diagram (Markdown). Defaults to a scaffold for its kind. */
+  architecture?: string;
   /** Skip the trial: the developer is already sure. */
   chicken?: boolean;
   origin?: Origin;
@@ -248,7 +251,38 @@ function rewriteRefs(file: string, oldId: string, newId: string): boolean {
   return true;
 }
 
+/**
+ * Rewrite a path (e.g. skills/eggs/<id>) in an item's Architecture section only; its history
+ * keeps the old one. A longer id that merely starts with the same words is left alone.
+ */
+function repointArchitecture(body: string, from: string, to: string): string {
+  const arch = architectureOf(body);
+  if (arch === undefined || from === to) return body;
+  const next = arch.replace(new RegExp(`${escapeRegExp(from)}(?![\\w-])`, "g"), () => to);
+  return next === arch ? body : withArchitecture(body, next);
+}
+
 // --- basket ------------------------------------------------------------------
+
+/**
+ * The PREFERENCES.md index of architectures: one line on where to find them, a row per
+ * workflow, script or skill (the items with moving parts) linking its diagram and files,
+ * and the items whose diagram is still to draw. Simple preferences only get a row there.
+ */
+function architectureIndex(items: Egg[]): string[] {
+  const mapped = items.filter((e) => e.kind !== "preference" && architectureOf(e.body) && !isScaffold(architectureOf(e.body)));
+  const undrawn = items.filter((e) => !architectureOf(e.body) || isScaffold(architectureOf(e.body)));
+  const link = (e: Egg): string => `[${e.id}](${TIER_DIR[e.tier]}/${e.id}.md#architecture)`;
+  const files = (e: Egg): string => archFiles(architectureOf(e.body)).map((f) => `\`${f}\``).join(", ") || "-";
+  return [
+    "## 🗺 Architecture",
+    "",
+    "Every item opens with a diagram of what it automates: `deveggs arch <id>`.",
+    ...(mapped.length ? ["", markdownTable(["", "id", "files"], mapped.map((e) => [KIND_ICON[e.kind], link(e), files(e)]))] : []),
+    ...(undrawn.length ? ["", `✏️ To draw: ${undrawn.map((e) => `\`${e.id}\``).join(", ")}`] : []),
+    "",
+  ];
+}
 
 export class Basket {
   readonly root: string;
@@ -379,6 +413,7 @@ ${formatEntry(entry)}
       mkdirSync(this.dir(to), { recursive: true });
       renameSync(this.historyPath(from, egg.id), this.historyPath(to, egg.id));
     }
+    egg = { ...egg, body: repointArchitecture(egg.body, `skills/${TIER_DIR[from]}/${egg.id}`, `skills/${TIER_DIR[to]}/${egg.id}`) };
     if (egg.kind === "skill" && existsSync(this.skillDir(from, egg.id))) {
       mkdirSync(this.skillDir(to), { recursive: true });
       renameSync(this.skillDir(from, egg.id), this.skillDir(to, egg.id));
@@ -406,10 +441,15 @@ ${formatEntry(entry)}
     const id = input.id ?? slugify(input.summary);
     this.refuseExisting(id);
     const date = input.today ?? today();
+    const kind = input.kind ?? "preference";
+    const tier: Tier = input.chicken ? "chicken" : "egg";
+    const note = input.note?.trim();
+    if (note && /^## Architecture\s*$/m.test(note)) throw new BasketError("--note can't hold an ## Architecture section; pass the diagram with --arch");
+    const rest = [note && (note.startsWith("## ") ? note : `## Notes\n\n${note}`)];
     const egg = this.save({
       id,
-      kind: input.kind ?? "preference",
-      tier: input.chicken ? "chicken" : "egg",
+      kind,
+      tier,
       tags: input.tags ?? [],
       harnesses: input.harness ? [input.harness] : [],
       good: 0,
@@ -418,7 +458,7 @@ ${formatEntry(entry)}
       laid: date,
       updated: date,
       summary: input.summary.trim(),
-      body: input.note?.trim() ?? "",
+      body: withArchitecture(rest.filter(Boolean).join("\n\n"), input.architecture?.trim() || scaffold(kind, id, TIER_DIR[tier])),
     });
     const origin = input.origin ?? {};
     // A history left by an item deleted to revive its id stays: the new lay is appended to it.
@@ -476,7 +516,8 @@ ${formatEntry(entry)}
       bad: 0,
       laid: date,
       updated: date,
-      body: stripLegacySections(source.body),
+      // It arrives as an egg, so its diagram's skill path follows it to skills/eggs/.
+      body: repointArchitecture(stripLegacySections(source.body), `skills/${TIER_DIR[source.tier]}/${source.id}`, `skills/eggs/${source.id}`),
     });
     writeFileSync(this.historyPath("egg", egg.id), formatHistory(egg.id, [...past, imported]));
     if (skill) {
@@ -591,7 +632,9 @@ ${formatEntry(entry)}
       fields: cleanFields({ from: oldId, to: newId, harness: input.harness, repo: input.repo, session: input.session, why: input.note }),
     });
     writeFileSync(this.historyPath(egg.tier, newId), formatHistory(newId, entries));
-    const renamed = this.save({ ...current, id: newId, updated: date });
+    const dir = `skills/${TIER_DIR[egg.tier]}/`;
+    const body = repointArchitecture(current.body, `${dir}${oldId}`, `${dir}${newId}`);
+    const renamed = this.save({ ...current, id: newId, updated: date, body });
     rmSync(this.path(egg.tier, oldId));
     rmSync(oldHistory, { force: true });
     const skill = this.skillDir(egg.tier, oldId);
@@ -620,6 +663,15 @@ ${formatEntry(entry)}
             e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") && !isHistoryFile(e.name) ? [join(dir, e.name)] : [])
         : [];
     return [...TIERS.flatMap((t) => walk(this.dir(t))), ...walk(join(this.root, "skills"))];
+  }
+
+  /**
+   * Draw (or redraw) an item's architecture: the `## Architecture` section right after
+   * its fact. Its fact, tier, trials and history stay as they were.
+   */
+  draw(id: string, architecture: string, date: string = today()): Egg {
+    const egg = this.get(id);
+    return this.save({ ...egg, updated: date, body: withArchitecture(egg.body, architecture) });
   }
 
   /** The developer liked it: hatch the egg into a permanent chicken. */
@@ -688,6 +740,7 @@ ${formatEntry(entry)}
           eggs.map((e) => [isReady(e) ? "🐣" : "🥚", `\`${e.id}\``, fact(e), tags(e), `✓${e.good} ✗${e.bad}${e.version > 1 ? ` (v${e.version})` : ""}`]),
         )),
       "",
+      ...architectureIndex([...chickens, ...eggs]),
     ].join("\n");
     writeFileSync(this.preferencesPath, out);
     return out;

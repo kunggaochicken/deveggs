@@ -35,6 +35,81 @@ not a list, marked with 🥚 egg, 🐔 chicken, 🐣 ready, 💥 cracked, and �
 | 1 | 🥚 | Draw a diagram when explaining something complex | "we should draw a visual diagram for it" | explaining |
 | 2 | 🐔 | Never push to main | "never push to main" | git |
 
+## 🗺 Architecture: every item is drawn
+
+Every egg and chicken carries an `## Architecture` section right after its fact: a
+diagram of the preference or workflow it automates, so the developer sees at a glance
+what agents will do and can find every file that belongs to it. `deveggs lay` starts it
+as a scaffold for the item's kind (placeholders in `‹…›`); **you draw the real one.**
+
+**Hard rule: whenever you present an item to the developer, render its diagram** in a
+fenced `text` block: when you propose an egg (before they say yes), after you lay it,
+and on every hatch, crack, evolve, rename, import, feedback and verdict card. Never
+describe an item without drawing it. `deveggs show <id>` and `deveggs arch <id>` print
+it, and `lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack` and `import` print it
+after the change.
+
+Scale it to the item:
+
+- **🧠 Preference:** one line, plus when it fires and how it's judged.
+
+  ````markdown
+  ```text
+  ⚡ PR changes UI ──▶ 🤖 screenshot before & after ──▶ ✅ reviewers see the change
+  ```
+
+  - ⚡ **Fires when:** a PR touches anything on screen
+  - 🎯 **Judged by:** ✓ reviewers approve without running it · ✗ screenshots of nothing
+  ````
+
+- **🔁 Workflow, 📜 script, 🧩 skill:** a component map: what triggers it, the steps,
+  each script or skill file by its basket path, inputs and outputs, external systems
+  (gh, launchd, harness hooks), and how it relates to other items. End with a
+  `### 📁 Files` index (one `` - `path`: what it is `` bullet per file) so it's easy to
+  navigate; `deveggs render` indexes them in `PREFERENCES.md`, linked to the item's diagram. A ```` ```mermaid ````
+  block may follow the text one for GitHub; terminals show only the text one.
+
+  ````markdown
+  ```text
+  ⚡ launchd, every 15 s
+     │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+     ▼
+  🛡 scripts/memory-guardian: one pass
+     ├──▶ 🔪 runaway dev process (> 25% of RAM)
+     ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+     ├──▶ 📤 logs/memory-guardian.log
+     └──▶ 🔔 macOS notification
+
+  ✅ the machine stays up while 🤖 subagents fan out
+  ```
+
+  - ⚡ **Fires when:** every 15 s, via `scripts/memory-guardian.plist`
+  - 🎯 **Judged by:** ✓ no crash, nothing of yours killed · ✗ it kills work you needed
+  - 🔗 **Works with:** `delegate-subagents` (more agents, more load)
+
+  ### 📁 Files
+
+  - `scripts/memory-guardian`: one guard pass
+  - `scripts/memory-guardian.plist`: the launchd job
+  ````
+
+Draw it with `deveggs lay … --arch <file>`, or after laying with
+`deveggs arch <id> --set <file>` (`-` reads stdin). Read the scripts and skills you
+draw, so paths and steps are accurate. Keep it the first section: no `## ` headings
+inside it (use `### `). Every arrow and box must mean something: no filler.
+
+**Emoji vocabulary.** Use the same marks everywhere, so cards read at a glance:
+
+| | Means | | Means |
+|---|---|---|---|
+| 🥚 🐔 🐣 💥 | egg, chicken, ready, cracked | ⚡ | trigger: what starts it |
+| ✓ ✗ | a good or bad trial | 🤖 | the agent acts |
+| 🧠 🔁 📜 🧩 | preference, workflow, script, skill | 👤 | the developer acts or decides |
+| 🗺 | architecture | ✅ | the outcome it's for |
+| 🎯 | how it's judged | 🛡 | a guard or check |
+| 🔗 | works with another item | 🌐 | an external system (gh, launchd, a hook) |
+| 📁 | files that belong to it | 📥 📤 | inputs, outputs |
+
 ## Show, don't tell: visual cards
 
 Every time the basket changes, show the developer **what** changed and **why it
@@ -44,19 +119,31 @@ meaning most strongly: a table for comparisons and fields, a diagram (in a fence
 block, so it renders in a terminal) for flows, cause and effect, and how eggs relate.
 Make it striking, but make every cell and arrow carry meaning. No filler.
 
-### Egg card: on lay and on hatch
+### Egg card: on proposal, on lay and on hatch
 
-Show it right after `lay` or `hatch`. It answers "what will agents do differently now?"
+Show it when you propose an egg (before the developer says yes), right after `lay`, and
+on `hatch`. It answers "what will agents do differently now?" It always includes the
+item's 🗺 architecture.
 
 ```
-🥚 memory-guardian                                   script · workflow · ✓0 ✗0
+🥚 memory-guardian                                  📜 script · workflow · ✓0 ✗0
 "basically we should have a memory guardian that protects our computer from subagents"
 
-  subagents spawn ──▶ test browsers ──▶ memory pressure ──▶ 💥 machine crashes
-  Chrome, node, vite      pile up           rises                (before)
+  before:  🤖 subagents spawn ──▶ test browsers pile up ──▶ 💥 machine crashes
+  after:   🤖 subagents spawn ──▶ 🛡 guardian culls extras ──▶ ✅ machine stays up
 
-  subagents spawn ──▶ 🛡 guardian checks ──▶ kills extras ──▶ ✅ machine stays up
-                         every 15 s          and runaways         (after)
+╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────────
+│ ⚡ launchd, every 15 s
+│    │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+│    ▼
+│ 🛡 scripts/memory-guardian: one pass
+│    ├──▶ 🔪 runaway dev process (> 25% of RAM)
+│    ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+│    ├──▶ 📤 logs/memory-guardian.log
+│    └──▶ 🔔 macOS notification
+│
+│ ✅ the machine stays up while 🤖 subagents fan out
+╰────────────────────────────────────────────────────────────────────────
 ```
 
 | | |
@@ -70,7 +157,9 @@ Show it right after `lay` or `hatch`. It answers "what will agents do differentl
 On hatch, use 🐔 and add its trial record (✓/✗ by harness) to the card.
 
 On evolve, use the item's own mark (🥚 or 🐔, it keeps its tier) and lead with a
-was/now/why block, so the developer sees exactly what the agents will do differently:
+was/now/why block, so the developer sees exactly what the agents will do differently.
+If the behavior changed, **redraw the architecture** (`deveggs arch <id> --set <file>`)
+in the same change and show the new diagram under the block:
 
 ```
 🥚 terse-summaries  v1 → v2                              preference · comms
@@ -82,6 +171,12 @@ was/now/why block, so the developer sees exactly what the agents will do differe
   why:  narrow: a design review lost its trade-offs (✗ in grover, claude)
 
   trials:  ✓2 ✗1 (v1) stay in the log · ✓0 ✗0 (v2): 3 ✓ and no ✗ to hatch
+
+╭─ 🗺  terse-summaries · 🧠 preference ────────────────────────────────────────
+│ ⚡ end of a turn ──▶ 👤 a choice to make?
+│                      ├─ no ──▶ 🤖 one-line summary ──▶ ✅ scannable
+│                      └─ yes ─▶ 🤖 table of the options ──▶ ✅ trade-offs kept
+╰──────────────────────────────────────────────────────────────────────────────
 ```
 
 On import, use 🥚 and add a **Borrowed from** row (`<username>`'s basket, and whether it
@@ -94,6 +189,11 @@ Show it whenever you record a trial (`--good` or `--bad`), propose a crack or pr
 hatch. It answers "why did the egg work or fail **in this scenario**, and how should
 the spec change?" Diagnose first, then recommend.
 
+**Before diagnosing, consult the item's architecture and history:** `deveggs arch <id>`
+for what it's built to do and which step or file was involved, and `deveggs history <id>`
+for its earlier trials and evolutions (did this cause come up before?). Then draw the
+architecture with the step where it went right or wrong marked ✓ or ✗:
+
 ```
 ✗ terse-summaries  in a design review (grover, claude)
 
@@ -101,6 +201,11 @@ the spec change?" Diagnose first, then recommend.
   scenario:  design review with 4 trade-offs to weigh
   result:    summary dropped the trade-offs ──▶ developer asked "what were the options?"
   cause:     the rule has no exception for decisions the developer must make
+
+╭─ 🗺  terse-summaries · 🧠 preference ─────────────────────────────────────
+│ ⚡ end of a turn ──▶ 🤖 one-line summary ──▶ ✗ trade-offs lost
+│                      ✗ no branch for a 👤 decision the developer must make
+╰───────────────────────────────────────────────────────────────────────────
 ```
 
 | # | Tuning | Change to the egg spec | Captures |
@@ -129,7 +234,7 @@ first, with the card's fields (see "Trying eggs"), then apply the tuning:
 
 - **Narrow, widen or reword** → `deveggs evolve <id> "<new fact>" --quote "<their words>"
   --note "<tuning>: <why>" --harness <you>`, e.g. `--note "narrow: decisions need the
-  trade-offs"`. Never hand-edit the item file. `evolve` keeps the id, tier, tags and
+  trade-offs"`. If what it does changed, redraw it with `deveggs arch <id> --set <file>`. Never hand-edit the item file. `evolve` keeps the id, tier, tags and
   history, logs the old and new wording (was/now/why) in it, and restarts the
   trial counts: trials of the old wording stay in the history under their version, but only
   trials since the latest evolve count toward hatching. It works on chickens too (they
@@ -146,7 +251,8 @@ first, with the card's fields (see "Trying eggs"), then apply the tuning:
 Every item has an append-only history, `<tier>/<id>.history.md` beside it, that
 deveggs writes: the lay (the developer's words, harness, repo, session), every trial
 with its verdict, every evolve (was/now/why and their words), and every hatch, crack,
-rename and import. The item file is only the current rule. Never edit either by hand.
+rename and import. The item file is only the current rule and its 🗺 architecture. Never
+edit either by hand (draw the architecture with `deveggs arch <id> --set <file>`).
 
 ```
 deveggs history <id>                       # the whole story, oldest first
@@ -191,6 +297,7 @@ table, for several) and lay only what they confirm.
 
 | Signal | Command |
 |---|---|
+| (every lay) Draw what it automates | Show the diagram in your proposal, then `--arch <file>` on `lay` (or `deveggs arch <id> --set <file>` after) |
 | "Let's try…", "maybe we should…", a new idea to play with | `deveggs lay "<fact>" --id <short-name> --tag <area> --harness <you> --quote "<their words>"` |
 | "Always…", "never…": the developer is already sure | `deveggs lay "<fact>" --id <short-name> --chicken --tag <area> --harness <you> --quote "<their words>"` |
 | A procedure they keep walking you through | `--kind workflow`, with the steps in `--note` |
@@ -201,6 +308,9 @@ table, for several) and lay only what they confirm.
 Rules:
 
 - **Use one fact per egg.** Write it as an imperative the next agent can follow.
+- **Draw its architecture.** Never leave the `‹…›` scaffold: a one-line flow for a
+  preference, a component map with a `### 📁 Files` index for a workflow, script or
+  skill (see "🗺 Architecture"). Show it in the proposal, before the developer's yes.
 - **Name it with `--id`.** Use 2-4 lowercase words joined by dashes that say what it's
   about, e.g. `pr-ui-screenshots`, not the first words of the fact.
 - **Lay only durable, cross-project facts.** Project-specific facts belong in that
@@ -229,7 +339,8 @@ above still applies the rest of the time.
   in how they work: corrections, instructions they repeated or re-specified,
   always/never statements, workflows they walked you through, and standards they
   held you to. Propose candidates as one table
-  (`# | tier | proposed rule | from your words | tag`) and lay only what they confirm.
+  (`# | tier | proposed rule | from your words | tag`), each followed by its one-line
+  🗺 diagram, and lay only what they confirm.
   Also show any hatch-ready eggs (`deveggs list --tier ready`).
 
 ## Borrowing from shared baskets
@@ -255,7 +366,7 @@ only read that repo.
   where it came from (their shared history, minus trials, comes along). It copies a skill to `skills/eggs/<id>/` with `[egg: on trial]` on its description.
   It refuses an id already in the basket, and one the developer cracked: cracked items
   are never laid again. If an id clashes but the idea is new, lay it with another `--id` instead.
-- After importing, **show an egg card** for each item (see "Show, don't tell"). Then
+- After importing, **show an egg card** (with its 🗺 diagram; draw one if it came without) for each item (see "Show, don't tell"). Then
   trial it like any other egg. For a skill, link it into every harness skills folder,
   as when you lay a skill.
 
@@ -302,7 +413,8 @@ natural pause, propose them in one batch:
 > |---|---|---|---|---|
 > | 1 | `terse-summaries` | End each turn with a one-line summary | ✓4 ✗0 (claude, codex) | "can you just give me one line at the end" (grover, 2026-10-06) |
 
-Get the origin and trials from `deveggs history <id>`, and cite them. Follow the table
+Get the origin and trials from `deveggs history <id>`, and cite them. Show each egg's 🗺
+diagram (`deveggs arch <id>`) under the table so the developer sees what they'd make permanent. Follow the table
 with a verdict card for any egg whose trials are mixed, so the developer sees why
 before deciding.
 

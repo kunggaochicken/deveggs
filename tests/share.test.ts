@@ -243,8 +243,8 @@ test("the preview lists every item with what was removed or redacted", () => {
   const plan = planShare(fixture(), { home: "/Users/jdoe" });
   const out = formatPreview(plan, "acme/baskets: baskets/tester/", plain);
   assert.match(out, /nothing has left your machine/);
-  assert.match(out, /chickens\/small-prs\.md\s+quote, context, harness\s+Prefer small PRs/);
-  assert.match(out, /eggs\/diagrams\.md\s+quote, trial notes\s+Explain with diagrams/);
+  assert.match(out, /chickens\/small-prs\.md\s+quote, context, harness, unfinished diagram\s+Prefer small PRs/);
+  assert.match(out, /eggs\/diagrams\.md\s+quote, trial notes, unfinished diagram\s+Explain with diagrams/);
   assert.match(out, /skills\/chickens\/review\/SKILL\.md\s+token, path/);
   assert.match(out, /cracked\/rejected\.md\s+left out: cracked/);
   assert.match(out, /scripts\/guard\s+left out: scripts/);

@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readSync } from "node:fs";
+import { existsSync, readFileSync, readSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { formatArchitecture } from "./architecture.ts";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
@@ -23,6 +24,8 @@ usage:
                                      [--tag t1,t2] [--harness name] [--note text] [--chicken]
                                      (tag "private" keeps it out of deveggs share)
                                      [--quote "<developer's words>"] [--repo name] [--session id]
+                                     [--arch <file|->]  its architecture diagram (default: a
+                                     scaffold for its kind to fill in with deveggs arch)
   deveggs feedback <id> --good|--bad [--harness name] [--note text]
                 [--scenario text] [--result text] [--cause text] [--tuning text]
                 [--quote "<developer's reaction>"] [--repo name] [--session id]
@@ -39,6 +42,8 @@ usage:
                                      references in other items
   deveggs hatch <id> [--quote text] [--note why] [--harness name]   egg -> chicken (permanent)
   deveggs crack <id> [--quote text] [--note why] [--harness name]   reject an egg, or retire a chicken
+  deveggs arch <id> [--set <file|->]  print an item's architecture diagram, or (with --set)
+                                     draw it: the ## Architecture section after its fact
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
   deveggs history <id> [--trials] [--event e1,e2] [--since YYYY-MM-DD] [--version N] [--json]
@@ -82,6 +87,21 @@ const basketRoot = basketPath();
 const basket = new Basket(basketRoot);
 
 const warn = (message: string): void => console.error(`deveggs: warning: ${message}`);
+
+/** Read a file, or stdin for "-". */
+function readText(file: string, flag: string): string {
+  try {
+    return readFileSync(file === "-" ? 0 : file, "utf8");
+  } catch (err) {
+    throw new BasketError(`can't read the ${flag} file ${file}: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`);
+  }
+}
+
+/** Every time an item is shown, its diagram comes with it: what it automates, at a glance. */
+function diagram(egg: Egg): void {
+  console.log("");
+  console.log(formatArchitecture(egg, terminalOptions()));
+}
 
 /** Create the basket on first write and say where it went; move any legacy history into history files. */
 function prepare(): void {
@@ -236,6 +256,7 @@ function borrow(ref: string | undefined, repoFlag: string | undefined): void {
   console.log(`     borrowed from ${user}'s basket in ${repo}; on trial in your basket`);
   const skill = join(basket.skillDir("egg", egg.id), "SKILL.md");
   if (existsSync(skill)) console.log(`     skill: ${skill}`);
+  diagram(egg);
 }
 
 function share(values: ShareFlags): void {
@@ -317,6 +338,8 @@ function main(argv: string[]): void {
       private: { type: "string" },
       skip: { type: "string" },
       dir: { type: "string" },
+      arch: { type: "string" },
+      set: { type: "string" },
     },
   });
   const legacy = legacyBasket(repoRoot);
@@ -345,6 +368,7 @@ function main(argv: string[]): void {
         throw new BasketError(`invalid kind ${JSON.stringify(values.kind)}; expected one of ${KINDS.join(", ")}`);
       }
       const repo = values.repo ?? currentRepo();
+      const architecture = values.arch !== undefined ? readText(values.arch, "--arch") : undefined;
       prepare();
       const egg = basket.lay({
         summary,
@@ -357,6 +381,7 @@ function main(argv: string[]): void {
         },
         tags: values.tag?.split(",").map((t) => t.trim()).filter(Boolean) ?? [],
         ...(values.kind !== undefined && { kind: values.kind }),
+        ...(architecture !== undefined && { architecture }),
         ...harness,
         ...note,
       });
@@ -364,6 +389,7 @@ function main(argv: string[]): void {
       save(`${egg.tier}: lay ${egg.id}`);
       console.log(line(egg));
       if (egg.kind === "skill") console.log(`     write it: ${join(basket.skillDir(egg.tier, egg.id), "SKILL.md")}`);
+      diagram(egg);
       return;
     }
     case "feedback": {
@@ -388,6 +414,7 @@ function main(argv: string[]): void {
       save(`trial: ${values.good ? "good" : "bad"} ${egg.id}`);
       console.log(line(egg));
       if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
+      diagram(egg);
       return;
     }
     case "evolve": {
@@ -414,6 +441,8 @@ function main(argv: string[]): void {
       if (egg.tier === "egg") {
         console.log(`     trials restart at ✓0 ✗0 for v${egg.version} (v${was.version}'s ✓${was.good} ✗${was.bad} stay in the log); hatching needs ${READY_AFTER} ✓ and no ✗ from here`);
       }
+      diagram(egg);
+      console.log(`🗺  did what it does change? redraw it: deveggs arch ${egg.id} --set <file>`);
       return;
     }
     case "rename": {
@@ -435,6 +464,7 @@ function main(argv: string[]): void {
       for (const file of rewrote) console.log(`     updated references in ${file}`);
       for (const r of links.moved) console.log(`     relinked ${r.from} -> ${r.link}`);
       for (const l of links.skipped) console.log(`     left ${l} alone: ${to} is already taken there; relink it by hand`);
+      diagram(egg);
       return;
     }
     case "hatch":
@@ -446,6 +476,7 @@ function main(argv: string[]): void {
       basket.render();
       save(command === "hatch" ? `chicken: hatch ${egg.id}` : `crack: ${egg.id}`);
       console.log(line(egg));
+      diagram(egg);
       return;
     }
     case "show": {
@@ -475,6 +506,22 @@ function main(argv: string[]): void {
       else console.log(formatTimeline(egg, entries, terminalOptions(), entries.length !== all.length));
       return;
     }
+    case "arch": {
+      const id = requireId(positionals);
+      if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
+      if (values.set === undefined) {
+        console.log(formatArchitecture(basket.get(id), terminalOptions()));
+        return;
+      }
+      const architecture = readText(values.set, "--set");
+      prepare();
+      const egg = basket.draw(id, architecture);
+      basket.render();
+      save(`${egg.tier}: draw ${egg.id}`);
+      console.log(`${line(egg)}\n     🗺  architecture drawn`);
+      diagram(egg);
+      return;
+    }
     case "list": {
       const tier = values.tier;
       if (tier !== undefined && tier !== "ready" && !(TIERS as readonly string[]).includes(tier)) {
@@ -489,6 +536,8 @@ function main(argv: string[]): void {
       else if (tier) eggs = eggs.filter((e) => e.tier === tier);
       if (values.kind) eggs = eggs.filter((e) => e.kind === values.kind);
       console.log(formatList(eggs, terminalOptions(), histories(eggs)));
+      const [only] = eggs;
+      if (only && eggs.length === 1) diagram(only);
       return;
     }
     case "render":
