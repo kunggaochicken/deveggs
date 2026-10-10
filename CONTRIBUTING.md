@@ -9,7 +9,7 @@ not here (see [Sharing your basket](#sharing-your-basket)).
 
 This repo is the deveggs **code**:
 
-- `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `hatch`, `crack`, `render`,
+- `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `evolve`, `hatch`, `crack`, `render`,
   `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
@@ -85,8 +85,8 @@ What it does by default:
 
 | | |
 |---|---|
-| **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), and their skills |
-| **Removed** | Origin quotes (`--keep-quotes` keeps them, redacted), `context` rows (date · harness · repo · session), harnesses, notes and the `## Trials` log |
+| **Shared** | Chickens and eggs (id, kind, tags, trial counts, dates and the fact), their `## Evolution` lineage (each version's date and was/now wording), and their skills |
+| **Removed** | Origin and evolution quotes (`--keep-quotes` keeps them, redacted), `context` rows (date · harness · repo · session, in Origin and Evolution), harnesses, notes (including each evolution's why) and the `## Trials` log |
 | **Redacted** in everything shared | Emails, tokens and secrets (`ghp_`, `github_pat_`, `sk-`, `AKIA`, Slack, JWTs, private keys, `key=value` secrets, long hex/base64), URLs and git remotes, session ids, home paths (to `~`), and private terms |
 | **Left out** | `cracked/` and cracked skills, items tagged `private` and their skills, `scripts/` (`--include-scripts` adds them, redacted), binary files, `--skip id1,id2`, ids containing a private term, and the rest of the basket (`logs/`, `README.md`, `PREFERENCES.md`) |
 

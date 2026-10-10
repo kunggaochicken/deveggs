@@ -1,4 +1,4 @@
-import { type Egg, isReady, READY_AFTER, type Tier } from "./basket.ts";
+import { type Egg, isReady, parseEvolution, READY_AFTER, type Tier } from "./basket.ts";
 import { type Cell, type Column, displayWidth, keyValues, palette, paintTrials, type Palette, table, truncate } from "./table.ts";
 
 export interface ViewOptions {
@@ -28,7 +28,26 @@ export function mark(egg: Egg): string {
   return ({ chicken: "🐔", ready: "🐣", egg: "🥚", cracked: "💥" } as const)[group(egg)];
 }
 
-const trials = (egg: Egg): string => (egg.tier === "egg" ? `✓${egg.good} ✗${egg.bad}` : "");
+/**
+ * Trial counts per version, oldest first: earlier versions that had trials (counted from
+ * the log), then the current one (from the frontmatter, which is what hatching counts).
+ * "✓2 ✗1 (v1) · ✓0 ✗0 (v2)"; just "✓1 ✗0" for an item that never evolved.
+ */
+export function trialCounts(egg: Egg): string {
+  if (egg.version <= 1) return `✓${egg.good} ✗${egg.bad}`;
+  const earlier = new Map<number, { good: number; bad: number }>();
+  for (const t of splitTrials(egg.body).trials) {
+    if (t.version >= egg.version) continue;
+    const n = earlier.get(t.version) ?? { good: 0, bad: 0 };
+    if (t.good) n.good++;
+    else n.bad++;
+    earlier.set(t.version, n);
+  }
+  const counts = [...earlier].sort(([a], [b]) => a - b).map(([v, n]) => `✓${n.good} ✗${n.bad} (v${v})`);
+  return [...counts, `✓${egg.good} ✗${egg.bad} (v${egg.version})`].join(" · ");
+}
+
+const trials = (egg: Egg): string => (egg.tier === "egg" ? trialCounts(egg) : egg.version > 1 ? `v${egg.version}` : "");
 
 /** Basket overview: one aligned row per item, chickens, then eggs, then ready eggs, then cracked. */
 export function formatList(eggs: Egg[], options: ViewOptions): string {
@@ -81,6 +100,8 @@ function summaryLine(eggs: Egg[], p: Palette): string {
 }
 
 export interface Trial {
+  /** The version of the fact it was judged under: 1 until a `### vN` marker in the log. */
+  version: number;
   date: string;
   good: boolean;
   harness: string;
@@ -94,9 +115,12 @@ export function splitTrials(body: string): { prose: string; trials: Trial[] } {
   const at = body.search(/^## Trials$/m);
   if (at < 0) return { prose: body, trials: [] };
   const trials: Trial[] = [];
+  let version = 1;
   for (const line of body.slice(at).split("\n")) {
+    const marker = /^### v(\d+)\s*$/.exec(line.trim());
+    if (marker) version = Number(marker[1]);
     const m = TRIAL.exec(line.trim());
-    if (m) trials.push({ date: m[1] ?? "", good: m[2] === "✓", harness: m[3] ?? "", note: m[4] ?? "" });
+    if (m) trials.push({ version, date: m[1] ?? "", good: m[2] === "✓", harness: m[3] ?? "", note: m[4] ?? "" });
   }
   return { prose: body.slice(0, at).trim(), trials };
 }
@@ -107,13 +131,22 @@ const TIER_LABEL: Record<Tier, string> = { egg: "egg (on trial)", chicken: "chic
 export function formatShow(egg: Egg, options: ViewOptions): string {
   const p = palette(options.color);
   const { prose, trials: log } = splitTrials(egg.body);
+  const since = egg.version > 1 ? ` since v${egg.version}` : "";
+  const hint = isReady(egg) ? `🐣 ready to hatch: deveggs hatch ${egg.id}` : `(${READY_AFTER} ✓ and no ✗${since} to hatch)`;
+  const counts = trialCounts(egg);
   const trialCell: Cell =
     egg.tier === "egg"
       ? {
-          text: `${trials(egg)}${isReady(egg) ? `  🐣 ready to hatch: deveggs hatch ${egg.id}` : `  (${READY_AFTER} ✓ and no ✗ to hatch)`}`,
-          paint: (s) => paintTrials(p)(isReady(egg) ? s.replace(/🐣.*/, (m) => p.yellow(m)) : s.replace(/\(.*\)/, (m) => p.dim(m))),
+          text: `${counts}  ${hint}`,
+          paint: (s) => {
+            const at = s.lastIndexOf(hint);
+            if (at < 0) return paintTrials(p)(s);
+            return paintTrials(p)(s.slice(0, at)) + (isReady(egg) ? p.yellow : p.dim)(s.slice(at));
+          },
         }
-      : { text: `✓${egg.good} ✗${egg.bad}`, paint: paintTrials(p) };
+      : { text: counts, paint: paintTrials(p) };
+  const latest = parseEvolution(egg.body).at(-1);
+  const versionRow: Array<[string, string]> = egg.version > 1 ? [["version", `v${egg.version}${latest ? ` (evolved ${latest.date})` : ""}`]] : [];
   const out = [
     `${mark(egg)} ${p.bold(egg.id)}`,
     "",
@@ -123,6 +156,7 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
         ["tier", TIER_LABEL[egg.tier]],
         ["kind", egg.kind],
         ["tags", egg.tags.join(", ") || "-"],
+        ...versionRow,
         ["trials", trialCell],
         ["harnesses", egg.harnesses.join(", ") || "-"],
         ["laid", egg.laid],
@@ -134,10 +168,13 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
   if (prose) out.push("", prose);
   if (log.length) {
     out.push("", p.bold("## Trials"), "");
+    // Once the fact has evolved, a v column says which version each trial judged.
+    const versioned = egg.version > 1;
     out.push(
       ...table(
-        [{ header: "date" }, { header: "harness", max: 16 }, { header: "✓/✗" }, { header: "note", flex: true, min: 20 }],
+        [...(versioned ? [{ header: "v" }] : []), { header: "date" }, { header: "harness", max: 16 }, { header: "✓/✗" }, { header: "note", flex: true, min: 20 }],
         log.map((t): Cell[] => [
+          ...(versioned ? [{ text: `v${t.version}`, ...(t.version < egg.version && { paint: p.dim }) }] : []),
           { text: t.date },
           { text: t.harness || "-", paint: p.dim },
           { text: t.good ? "✓" : "✗", paint: t.good ? p.green : p.red },

@@ -32,8 +32,8 @@ This basket lives at `~/.deveggs/`, apart from the deveggs tool:
 ## How agents tend it
 
 Agents use the [deveggs skill](https://github.com/kunggaochicken/deveggs/blob/main/skills/deveggs/SKILL.md):
-they propose eggs when I state how I like to work (I confirm), record trials, and
-suggest hatching or cracking. Nothing changes without my yes. Every change is
+they propose eggs when I state how I like to work (I confirm), record trials, tune a
+rule with `deveggs evolve` when trials show it needs it, and suggest hatching or cracking. Nothing changes without my yes. Every change is
 committed here automatically. Run `deveggs push` to save it to GitHub: the first time
 it creates a private repo, after that it pushes. Run `deveggs autopush on` to push
 after every change instead, so it stays synced (`deveggs autopush off` to stop).

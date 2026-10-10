@@ -36,6 +36,10 @@ prove themselves hatch into chickens, permanent rules every agent follows.
 - **🐔 Chicken:** permanent. Agents follow it without question. If you're already
   sure ("always…", "never…"), lay it straight as a chicken.
 - **💥 Cracked:** rejected or retired. It stays on file so it's never laid again.
+- **🧬 Evolved:** when trials show a rule needs narrowing, widening or rewording,
+  `deveggs evolve` changes it in place. It keeps the old wording and why it changed,
+  and trials restart for the new version, so only trials of the new rule count toward
+  hatching.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
@@ -140,6 +144,7 @@ You mostly just talk to your agent. It runs these for you:
 deveggs lay "End each turn with a one-line summary" --id turn-summary   # 🥚 try it out
 deveggs lay "Never push to main" --id no-push-main --chicken            # 🐔 already sure
 deveggs feedback <id> --good                                            # log a trial
+deveggs evolve <id> "<new fact>" --quote "<your words>" --note "narrow: …" # tune the rule
 deveggs hatch <id>                                                      # 🥚 -> 🐔
 deveggs crack <id>                                                      # 💥
 deveggs push                                                            # save your basket to GitHub
