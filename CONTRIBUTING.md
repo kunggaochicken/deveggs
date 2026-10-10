@@ -9,7 +9,7 @@ not here (see [Sharing your basket](#sharing-your-basket)).
 
 This repo is the deveggs **code**:
 
-- `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `evolve`, `hatch`, `crack`, `render`,
+- `src/` and `bin/deveggs`: the CLI (`lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `render`,
   `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.

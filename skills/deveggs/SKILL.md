@@ -136,6 +136,10 @@ first (`deveggs feedback <id> --good|--bad`), then apply the tuning:
   stay chickens), never on cracked items. Then show an egg card with a was/now/why block.
 - **Complement** → `deveggs lay` the new egg.
 - **Crack** → `deveggs crack <id>`, with the developer's yes.
+- **Rename** (the id reads wrong, the rule is fine) → `deveggs rename <old-id> <new-id>`,
+  with the developer's yes. Never rename files by hand: `rename` moves the item and its
+  skill, repoints harness skill links, rewrites `` `old-id` `` and `[[old-id]]` references
+  in other items and notes "renamed from" under `## Evolution`. Trials and version stay.
 
 ## At session start
 
@@ -263,12 +267,12 @@ After hatching or cracking a skill, update its symlink in every harness skills
 folder that links into the basket (for example `~/.claude/skills/`,
 `~/.codex/skills/`). On hatch, repoint the link from `~/.deveggs/skills/eggs/<id>` to
 `~/.deveggs/skills/chickens/<id>`. On crack, remove it. Do the same when you lay a
-new skill, so every harness can use it.
+new skill, so every harness can use it. `deveggs rename` repoints these links itself.
 
 ## Committing
 
-The basket is its own git repo. `lay`, `feedback`, `evolve`, `hatch`, `crack` and
-`render` commit there automatically, so you don't commit basket changes yourself, and nothing
+The basket is its own git repo. `lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack`
+and `render` commit there automatically, so you don't commit basket changes yourself, and nothing
 is lost even offline. Nothing pushes unless the developer chose it: **never push
 without the developer's yes.** `deveggs autopush status` shows where things stand.
 If the basket has no remote yet, you may offer `deveggs push`, which saves it to a

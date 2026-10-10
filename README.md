@@ -39,7 +39,9 @@ prove themselves hatch into chickens, permanent rules every agent follows.
 - **🧬 Evolved:** when trials show a rule needs narrowing, widening or rewording,
   `deveggs evolve` changes it in place. It keeps the old wording and why it changed,
   and trials restart for the new version, so only trials of the new rule count toward
-  hatching.
+  hatching. If only the name is wrong, `deveggs rename <old-id> <new-id>` renames it
+  everywhere: its file and skill, links to that skill, references in other items, and
+  a "renamed from" note under its `## Evolution`.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
@@ -147,6 +149,7 @@ deveggs feedback <id> --good                                            # log a 
 deveggs evolve <id> "<new fact>" --quote "<your words>"                 # 🧬 tune it, keeping the old wording
 deveggs hatch <id>                                                      # 🥚 -> 🐔
 deveggs crack <id>                                                      # 💥
+deveggs rename <old-id> <new-id>                                        # new name; references follow
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { hasContent, lnCommand } from "../src/migrate.ts";
@@ -134,3 +134,30 @@ test("lnCommand quotes paths that need it", () => {
   assert.equal(lnCommand({ link: "/h/my skills/x", from: "/old", to: "/n'ew" }), "ln -sfn '/n'\\''ew' '/h/my skills/x'");
 });
 
+
+test("rename moves the item, its skill and harness skill links, re-renders PREFERENCES.md and commits", () => {
+  const box = sandbox();
+  assert.equal(cli(box, "lay", "Ship it checklist", "--id", "ship", "--kind", "skill", "--chicken").status, 0);
+  assert.equal(cli(box, "lay", "Watch memory", "--id", "guardian", "--note", "Works with `ship`").status, 0);
+  const old = join(box.basket, "skills", "chickens", "ship");
+  const claude = skillLink(box, ".claude", "ship", old);
+  const other = skillLink(box, ".codex", "ship", join(box.dir, "elsewhere"));
+
+  const out = cli(box, "rename", "ship", "ship-checklist");
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /ship-checklist[\s\S]*renamed from ship/);
+  assert.match(out.stdout, /updated references in .*guardian\.md/);
+  assert.match(out.stdout, /relinked .*\.claude\/skills\/ship -> .*\.claude\/skills\/ship-checklist/);
+  assert.ok(!existsSync(claude) && !existsSync(old));
+  assert.equal(readlinkSync(join(box.home, ".claude", "skills", "ship-checklist")), join(box.basket, "skills", "chickens", "ship-checklist"));
+  assert.equal(readlinkSync(other), join(box.dir, "elsewhere"), "links deveggs didn't make stay");
+  const prefs = readFileSync(join(box.basket, "PREFERENCES.md"), "utf8");
+  assert.match(prefs, /`ship-checklist`/);
+  assert.doesNotMatch(prefs, /`ship`/);
+  assert.equal(subjects(box)[0], "chicken: rename ship to ship-checklist");
+  assert.match(cli(box, "show", "ship-checklist").stdout, /renamed from: `ship`/);
+
+  assert.match(cli(box, "rename", "ship", "x").stderr, /nothing in the basket named "ship"/);
+  assert.match(cli(box, "rename", "guardian", "ship-checklist").stderr, /already in the basket/);
+  assert.match(cli(box, "rename", "guardian").stderr, /usage: deveggs rename <old-id> <new-id>/);
+});

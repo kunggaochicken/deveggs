@@ -145,7 +145,7 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
           },
         }
       : { text: counts, paint: paintTrials(p) };
-  const latest = parseEvolution(egg.body).at(-1);
+  const latest = parseEvolution(egg.body).filter((e) => !e.renamedFrom).at(-1);
   const versionRow: Array<[string, string]> = egg.version > 1 ? [["version", `v${egg.version}${latest ? ` (evolved ${latest.date})` : ""}`]] : [];
   const out = [
     `${mark(egg)} ${p.bold(egg.id)}`,

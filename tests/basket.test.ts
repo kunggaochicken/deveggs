@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -233,4 +233,84 @@ test("render marks evolved eggs with their version", () => {
   b.lay({ id: "x", summary: "One" });
   b.evolve("x", { summary: "Two" });
   assert.match(b.render(), /\| 🥚 \| `x` \| Two \| general \| ✓0 ✗0 \(v2\) \|/);
+});
+
+test("rename moves the item, keeps its tier, trials and history, and notes the old id under Evolution", () => {
+  const b = fresh();
+  b.lay({ id: "parallel", summary: "Use subagents", chicken: true, origin: { quote: "do these in parallel" }, today: "2026-10-06" });
+  b.evolve("parallel", { summary: "Always delegate to subagents", today: "2026-10-07" });
+  const { egg } = b.rename("parallel", "delegate", "2026-10-08");
+  assert.equal(egg.id, "delegate");
+  assert.equal(egg.tier, "chicken");
+  assert.equal(egg.version, 2);
+  assert.equal(egg.updated, "2026-10-08");
+  assert.ok(!existsSync(join(b.root, "chickens", "parallel.md")));
+  assert.match(readFileSync(join(b.root, "chickens", "delegate.md"), "utf8"), /^id: delegate$/m);
+  assert.match(egg.body, /## Evolution\n\n### v2 · 2026-10-07\n[\s\S]*\n\n### renamed · 2026-10-08\n\n- renamed from: `parallel`$/);
+  const lineage = parseEvolution(egg.body);
+  assert.deepEqual(lineage.map((e) => [e.version, e.renamedFrom]), [[2, undefined], [0, "parallel"]]);
+  assert.deepEqual(b.get("delegate"), egg, "round-trips through the file");
+  assert.throws(() => b.get("parallel"), /nothing in the basket/);
+});
+
+test("rename puts the Evolution note before the trial log, and renames cracked items too", () => {
+  const b = fresh();
+  b.lay({ id: "tabs", summary: "Use tabs" });
+  b.feedback("tabs", { good: false, today: "2026-10-07" });
+  b.crack("tabs");
+  const { egg } = b.rename("tabs", "tab-indent", "2026-10-08");
+  assert.equal(egg.tier, "cracked");
+  assert.match(egg.body, /## Evolution\n\n### renamed · 2026-10-08\n\n- renamed from: `tabs`\n\n## Trials\n\n- 2026-10-07 ✗$/);
+});
+
+test("rename rewrites `old-id` and [[old-id]] references in other items and skills, not in itself", () => {
+  const b = fresh();
+  b.lay({ id: "parallel", summary: "Use subagents", note: "Self: `parallel`" });
+  b.lay({ id: "guardian", summary: "Watch memory", note: "## Works with\n\n- `parallel`: fan out\n- [[parallel]] and [[parallel|alias]]\n- `parallel-ish` and parallel stay" });
+  b.lay({ id: "ship", kind: "skill", summary: "Ship it", chicken: true });
+  const skill = join(b.skillDir("chicken", "ship"), "SKILL.md");
+  writeFileSync(skill, `${readFileSync(skill, "utf8")}See \`parallel\`.\n`);
+  const { rewrote } = b.rename("parallel", "delegate");
+  assert.deepEqual(rewrote.sort(), [join(b.root, "eggs", "guardian.md"), skill].sort());
+  assert.match(b.get("guardian").body, /- `delegate`: fan out\n- \[\[delegate\]\] and \[\[delegate\|alias\]\]\n- `parallel-ish` and parallel stay/);
+  assert.match(readFileSync(skill, "utf8"), /See `delegate`\./);
+  assert.match(b.get("delegate").body, /^Self: `parallel`/, "its own history keeps the old id");
+});
+
+test("rename moves a skill folder and renames the skill inside", () => {
+  const b = fresh();
+  b.lay({ id: "ship", kind: "skill", summary: "Ship it checklist" });
+  b.rename("ship", "ship-checklist");
+  assert.ok(!existsSync(b.skillDir("egg", "ship")));
+  const skill = readFileSync(join(b.skillDir("egg", "ship-checklist"), "SKILL.md"), "utf8");
+  assert.match(skill, /^name: ship-checklist$/m);
+  assert.match(skill, /^# ship-checklist$/m);
+  assert.match(skill, new RegExp(`^description: \\${TRIAL_PREFIX.trim()} Ship it checklist$`, "m"));
+});
+
+test("rename refuses a missing item, a taken id, an invalid id and a clashing skill folder", () => {
+  const b = fresh();
+  b.lay({ id: "a", summary: "A" });
+  b.lay({ id: "b", summary: "B" });
+  b.lay({ id: "c", summary: "C" });
+  b.crack("c");
+  assert.throws(() => b.rename("nope", "x"), /nothing in the basket/);
+  assert.throws(() => b.rename("a", "b"), /already in the basket \(egg\)/);
+  assert.throws(() => b.rename("a", "c"), /already in the basket \(cracked\)/);
+  assert.throws(() => b.rename("a", "A B"), /invalid id/);
+  assert.throws(() => b.rename("a", "a"), /already called that/);
+  mkdirSync(b.skillDir("chicken", "d"), { recursive: true });
+  assert.throws(() => b.rename("a", "d"), /skill folder .* already exists/);
+  assert.ok(existsSync(join(b.root, "eggs", "a.md")), "nothing moved");
+});
+
+test("rename leaves other items' Evolution history alone", () => {
+  const b = fresh();
+  b.lay({ id: "foo", summary: "Foo" });
+  b.rename("foo", "older", "2026-10-07");
+  b.lay({ id: "foo", summary: "New foo" });
+  b.lay({ id: "x", summary: "X", note: "Works with `foo`" });
+  b.rename("foo", "bar", "2026-10-08");
+  assert.match(b.get("older").body, /- renamed from: `foo`$/);
+  assert.match(b.get("x").body, /^Works with `bar`/);
 });
