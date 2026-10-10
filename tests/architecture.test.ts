@@ -166,3 +166,14 @@ test("the CLI shows the diagram on lay, feedback, hatch, arch, list of one, and 
   assert.match(evolve.stdout, /╭─ 🗺  guard[\s\S]*did what it does change\? redraw it: deveggs arch guard --set <file>/);
   assert.match(cli(box, "arch", "nope").stderr, /nothing in the basket named "nope"/);
 });
+
+test("formatArchitecture wraps long prose to the width but never a diagram line", () => {
+  const long = "x".repeat(30) + " ──▶ " + "y".repeat(30);
+  const arch = `\`\`\`text\n${long}\n\`\`\`\n\n- ⚡ **Fires when:** ${"word ".repeat(30).trim()}`;
+  const out = formatArchitecture({ id: "w", kind: "preference", body: withArchitecture("", arch) }, { width: 50, color: false }).split("\n");
+  assert.ok(out.includes(`│ ${long}`), "the diagram line is kept whole");
+  const prose = out.filter((l) => l.includes("word"));
+  assert.ok(prose.length > 1, "the bullet wrapped");
+  for (const l of prose) assert.ok(displayWidth(l) <= 50, l);
+  assert.match(prose[1] ?? "", /^│ {6}word/, "continuation lines hang under the label");
+});

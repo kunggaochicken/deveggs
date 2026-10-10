@@ -58,15 +58,18 @@ your way around it. Agents show it every time they show you the item, and
 `deveggs arch <id>` prints it:
 
 ```text
-╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────
+╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────────
 │ ⚡ launchd, every 15 s
-│       │
-│       ▼
-│ 🛡 scripts/memory-guardian ──▶ 🔪 runaway dev process (> 25% RAM)
-│       │                    ──▶ 🔪 newest test browsers over budget
-│       ▼
-│ ✅ machine stays up · 📤 logs/memory-guardian.log · 🔔 macOS notification
-╰────────────────────────────────────────────────────────────────────
+│    │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+│    ▼
+│ 🛡 scripts/memory-guardian: one pass
+│    ├──▶ 🔪 runaway dev process (> 25% of RAM)
+│    ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+│    ├──▶ 📤 logs/memory-guardian.log
+│    └──▶ 🔔 macOS notification
+│
+│ ✅ the machine stays up while 🤖 subagents fan out
+╰────────────────────────────────────────────────────────────────────────
 ```
 
 deveggs is a meta skill: you never have to tell it to look for preferences. Just

@@ -72,12 +72,15 @@ Scale it to the item:
   ````markdown
   ```text
   ⚡ launchd, every 15 s
-        │
-        ▼
-  🛡 scripts/memory-guardian ──▶ 🔪 runaway dev process (> 25% RAM)
-        │                    ──▶ 🔪 newest test browsers over budget
-        ▼
-  ✅ machine stays up · 📤 logs/memory-guardian.log · 🔔 macOS notification
+     │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+     ▼
+  🛡 scripts/memory-guardian: one pass
+     ├──▶ 🔪 runaway dev process (> 25% of RAM)
+     ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+     ├──▶ 📤 logs/memory-guardian.log
+     └──▶ 🔔 macOS notification
+
+  ✅ the machine stays up while 🤖 subagents fan out
   ```
 
   - ⚡ **Fires when:** every 15 s, via `scripts/memory-guardian.plist`
@@ -129,15 +132,18 @@ item's 🗺 architecture.
   before:  🤖 subagents spawn ──▶ test browsers pile up ──▶ 💥 machine crashes
   after:   🤖 subagents spawn ──▶ 🛡 guardian culls extras ──▶ ✅ machine stays up
 
-╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────
+╭─ 🗺  memory-guardian · 📜 script ──────────────────────────────────────
 │ ⚡ launchd, every 15 s
-│       │
-│       ▼
-│ 🛡 scripts/memory-guardian ──▶ 🔪 runaway dev process (> 25% RAM)
-│       │                    ──▶ 🔪 newest test browsers over budget
-│       ▼
-│ ✅ machine stays up · 📤 logs/memory-guardian.log · 🔔 macOS notification
-╰────────────────────────────────────────────────────────────────────
+│    │   📥 sysctl: RAM, cores, memory pressure · ps: processes
+│    ▼
+│ 🛡 scripts/memory-guardian: one pass
+│    ├──▶ 🔪 runaway dev process (> 25% of RAM)
+│    ├──▶ 🔪 newest test browsers over budget (1 per 2 cores, 40% of RAM)
+│    ├──▶ 📤 logs/memory-guardian.log
+│    └──▶ 🔔 macOS notification
+│
+│ ✅ the machine stays up while 🤖 subagents fan out
+╰────────────────────────────────────────────────────────────────────────
 ```
 
 | | |
@@ -166,10 +172,11 @@ in the same change and show the new diagram under the block:
 
   trials:  ✓2 ✗1 (v1) stay in the log · ✓0 ✗0 (v2): 3 ✓ and no ✗ to hatch
 
-╭─ 🗺  terse-summaries · 🧠 preference ────────────────────────────────
-│ ⚡ end of a turn ──▶ 🤖 one-line summary ──────────────▶ ✅ scannable
-│                 └─▶ 👤 a choice to make? ──▶ 🤖 options table
-╰─────────────────────────────────────────────────────────────────────
+╭─ 🗺  terse-summaries · 🧠 preference ────────────────────────────────────────
+│ ⚡ end of a turn ──▶ 👤 a choice to make?
+│                      ├─ no ──▶ 🤖 one-line summary ──▶ ✅ scannable
+│                      └─ yes ─▶ 🤖 table of the options ──▶ ✅ trade-offs kept
+╰──────────────────────────────────────────────────────────────────────────────
 ```
 
 On import, use 🥚 and add a **Borrowed from** row (`<username>`'s basket, and whether it
@@ -195,10 +202,10 @@ architecture with the step where it went right or wrong marked ✓ or ✗:
   result:    summary dropped the trade-offs ──▶ developer asked "what were the options?"
   cause:     the rule has no exception for decisions the developer must make
 
-╭─ 🗺  terse-summaries · 🧠 preference ──────────────────────────
+╭─ 🗺  terse-summaries · 🧠 preference ─────────────────────────────────────
 │ ⚡ end of a turn ──▶ 🤖 one-line summary ──▶ ✗ trade-offs lost
-│                       (no branch for a 👤 decision)
-╰────────────────────────────────────────────────────────────────
+│                      ✗ no branch for a 👤 decision the developer must make
+╰───────────────────────────────────────────────────────────────────────────
 ```
 
 | # | Tuning | Change to the egg spec | Captures |

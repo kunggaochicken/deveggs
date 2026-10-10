@@ -144,7 +144,20 @@ export interface ArchView {
 }
 
 /** Turn the Markdown into terminal lines: text diagrams unfenced, mermaid dropped, bold markers gone. */
-function terminalLines(architecture: string, p: Palette): string[] {
+/** Word-wrap plain prose to `width` cells; continuation lines get `indent`. */
+function wrap(text: string, width: number, indent: string): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/(?<=\S) (?=\S)/)) {
+    if (line && displayWidth(`${line} ${word}`) > width) {
+      lines.push(line);
+      line = `${indent}${word.trimStart()}`;
+    } else line = line ? `${line} ${word}` : word;
+  }
+  return [...lines, line];
+}
+
+function terminalLines(architecture: string, p: Palette, width: number): string[] {
   const out: string[] = [];
   let fence: "text" | "mermaid" | undefined;
   for (const line of architecture.split("\n")) {
@@ -166,7 +179,13 @@ function terminalLines(architecture: string, p: Palette): string[] {
       out.push(p.bold(line.slice(4)));
       continue;
     }
-    out.push(line.replace(/\*\*([^*]+)\*\*/g, (_m, text: string) => p.bold(text)).replace(/^- /, "  "));
+    // Prose wraps to the frame; diagrams never do (that would break their lines).
+    const bold = [...line.matchAll(/\*\*([^*]+)\*\*/g)].map((m) => m[1] ?? "");
+    const plain = line.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/^- /, "  ");
+    const bullet = plain.startsWith("  ");
+    for (const wrapped of wrap(plain, width, bullet ? "     " : "  ")) {
+      out.push(bold.reduce((l, b) => l.replace(b, p.bold(b)), wrapped));
+    }
   }
   while (out.length && !out[0]?.trim()) out.shift();
   while (out.length && !out.at(-1)?.trim()) out.pop();
@@ -187,7 +206,7 @@ export function formatArchitecture(egg: Pick<Egg, "id" | "kind" | "body">, view:
   const arch = architectureOf(egg.body);
   const title = `🗺  ${egg.id} · ${KIND_ICON[egg.kind]} ${egg.kind}`;
   if (!arch) return `${title}\n   ${p.dim(`no architecture yet; draw it: deveggs arch ${egg.id} --set <file>`)}`;
-  const lines = terminalLines(arch, p);
+  const lines = terminalLines(arch, p, Math.max(40, view.width - 2));
   const inner = Math.max(displayWidth(title) + 2, ...lines.map(displayWidth));
   const rule = Math.max(4, Math.min(view.width, inner + 2) - displayWidth(title) - 4);
   const out = [
