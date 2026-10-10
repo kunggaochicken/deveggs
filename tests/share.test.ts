@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Basket, parseEgg } from "../src/basket.ts";
+import { formatHistory } from "../src/history.ts";
 import { autoTerms, cleanTerms, DEFAULT_SHARE_REPO, formatPreview, planShare, redact, sanitizeEgg, shareDir, writeShare } from "../src/share.ts";
 import { cli, fakePath, git, sandbox } from "./sandbox.ts";
 
@@ -106,11 +107,13 @@ test("sanitizeEgg keeps the fact and drops quote, context, harness, notes and tr
 
 test("sanitizeEgg keeps a redacted quote only with keepQuotes", () => {
   const egg = parseEgg(raw, "egg");
-  const { egg: clean, redactions } = sanitizeEgg(egg, raw, { keepQuotes: true, home: "/Users/jane" }, ["acme"]);
-  assert.equal(clean.body, "## Origin\n\n> ship it from ~/<private> with <token>");
+  const { egg: clean, history, redactions } = sanitizeEgg(egg, raw, { keepQuotes: true, home: "/Users/jane" }, ["acme"]);
+  assert.equal(clean.body, "");
+  assert.deepEqual(history, [{ date: "2026-10-07", event: "laid", version: 1, quote: "ship it from ~/<private> with <token>", fields: { fact: "Ship small PRs to <private> often; ping <email>" } }]);
   assert.ok(!redactions.includes("quote"));
   assert.ok(redactions.includes("token") && redactions.includes("path"));
-  assert.ok(!clean.body.includes(SESSION) && !clean.body.includes("acme-web"));
+  const text = formatHistory("ship-it", history);
+  assert.ok(!text.includes(SESSION) && !text.includes("acme-web") && !text.includes("codex") && !text.includes("shipped"));
 });
 
 test("autoTerms picks up origin repos and the home folder, but not public names", () => {
@@ -119,7 +122,8 @@ test("autoTerms picks up origin repos and the home folder, but not public names"
   b.lay({ summary: "Two", origin: { repo: "deveggs" } });
   b.lay({ summary: "Three", origin: { repo: "jane" } });
   b.lay({ summary: "Four", origin: { repo: "ab" } });
-  assert.deepEqual(autoTerms(b.all(), "/Users/jdoe", ["jane"]), ["cuskeel", "jdoe"]);
+  const histories = new Map(b.all().map((e) => [e.id, b.history(e.id)]));
+  assert.deepEqual(autoTerms(b.all(), "/Users/jdoe", ["jane"], histories), ["cuskeel", "jdoe"]);
 });
 
 test("sanitizeEgg keeps an evolution's was/now but drops its quote, context and why unless keepQuotes", () => {
@@ -134,19 +138,28 @@ test("sanitizeEgg keeps an evolution's was/now but drops its quote, context and 
     session: SESSION,
     today: "2026-10-08",
   });
+  b.feedback("terse", { good: false, harness: "codex", repo: "moonjelly", scenario: "acme review", cause: "too broad", today: "2026-10-09" });
+  b.hatch("terse", { today: "2026-10-10", note: "acme says yes", quote: "hatch it" });
   const egg = b.get("terse");
-  assert.deepEqual(autoTerms([egg]), ["moonjelly"], "the evolve repo is a private term; harnesses aren't");
-  const plain = sanitizeEgg(egg, "", { home: "/Users/jane" }, ["acme", "moonjelly"]);
+  const history = b.history("terse");
+  assert.deepEqual(autoTerms([egg], undefined, [], new Map([["terse", history]])), ["moonjelly"], "the evolve repo is a private term; harnesses aren't");
+  const plain = sanitizeEgg(egg, "", { home: "/Users/jane" }, ["acme", "moonjelly"], history);
+  assert.equal(plain.egg.body, "");
   assert.equal(
-    plain.egg.body,
-    "## Evolution\n\n### v2 · 2026-10-08\n\n- was: One-line summaries for <private>\n- now: One-line summaries, except decisions",
+    formatHistory("terse", plain.history).split("-->\n\n")[1],
+    "## 2026-10-10 · laid · v1\n\n- fact: One-line summaries for <private>\n\n" +
+      "## 2026-10-08 · evolved · v2\n\n- was: One-line summaries for <private>\n- now: One-line summaries, except decisions\n\n" +
+      "## 2026-10-10 · hatched · v2\n\n- trials: ✓0 ✗1 (v2)\n",
   );
   assert.equal(plain.egg.version, 2);
-  for (const label of ["quote", "evolution quote", "context", "notes"]) assert.ok(plain.redactions.includes(label), label);
-  const kept = sanitizeEgg(egg, "", { keepQuotes: true, home: "/Users/jane" }, ["acme", "moonjelly"]);
-  assert.match(kept.egg.body, /^## Origin\n\n> one line\n\n## Evolution\n\n### v2 · 2026-10-08\n\n> options please, see ~\/notes with <token>\n\n- was:/);
+  for (const label of ["quote", "evolution quote", "context", "notes", "trial notes"]) assert.ok(plain.redactions.includes(label), label);
+  const kept = sanitizeEgg(egg, "", { keepQuotes: true, home: "/Users/jane" }, ["acme", "moonjelly"], history);
+  const text = formatHistory("terse", kept.history);
+  assert.match(text, /## 2026-10-08 · evolved · v2\n\n> options please, see ~\/notes with <token>\n\n- was:/);
+  assert.match(text, /> one line\n/);
+  assert.match(text, /> hatch it\n/);
   assert.ok(!kept.redactions.includes("evolution quote"));
-  for (const gone of ["moonjelly", SESSION, "codex", "acme review", GHP]) assert.ok(!kept.egg.body.includes(gone), `${gone} leaked`);
+  for (const gone of ["moonjelly", SESSION, "codex", "acme", GHP, "too broad", "says yes"]) assert.ok(!text.includes(gone), `${gone} leaked`);
 });
 
 /** A basket with one of everything `share` has to decide about. */
@@ -187,7 +200,16 @@ test("planShare shares sanitized chickens, eggs and skills, and leaves out the r
   const root = fixture();
   const plan = planShare(root, { skip: ["skip-me"], home: "/Users/jdoe" });
   const paths = plan.files.map((f) => f.path).sort();
-  assert.deepEqual(paths, ["chickens/review.md", "chickens/small-prs.md", "eggs/diagrams.md", "skills/chickens/review/SKILL.md"]);
+  assert.deepEqual(paths, [
+    "chickens/review.history.md",
+    "chickens/review.md",
+    "chickens/small-prs.history.md",
+    "chickens/small-prs.md",
+    "eggs/diagrams.history.md",
+    "eggs/diagrams.md",
+    "skills/chickens/review/SKILL.md",
+  ]);
+  assert.ok(!paths.some((p) => /work-account|local-tool|rejected|skip-me|zeta/.test(p)), "no history for items left out");
   assert.equal(byPath(plan, "cracked/rejected.md").why, "cracked");
   assert.equal(byPath(plan, "cracked/old-skill.md").why, "cracked");
   assert.equal(byPath(plan, "skills/cracked/old-skill/SKILL.md").why, "cracked");
@@ -222,7 +244,7 @@ test("the preview lists every item with what was removed or redacted", () => {
   const out = formatPreview(plan, "acme/baskets: baskets/tester/", plain);
   assert.match(out, /nothing has left your machine/);
   assert.match(out, /chickens\/small-prs\.md\s+quote, context, harness\s+Prefer small PRs/);
-  assert.match(out, /eggs\/diagrams\.md\s+quote, context, trial notes\s+Explain with diagrams/);
+  assert.match(out, /eggs\/diagrams\.md\s+quote, trial notes\s+Explain with diagrams/);
   assert.match(out, /skills\/chickens\/review\/SKILL\.md\s+token, path/);
   assert.match(out, /cracked\/rejected\.md\s+left out: cracked/);
   assert.match(out, /scripts\/guard\s+left out: scripts/);
@@ -308,8 +330,10 @@ test("share --yes commits only baskets/<user>/ on a branch, pushes it and opens 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /opened https:\/\/github\.com\/kunggaochicken\/deveggs-baskets\/pull\/7/);
   const files = git(box, box.dir, "--git-dir", gh.upstream, "diff", "--name-only", "main", "share/tester").split("\n");
-  assert.deepEqual(files, ["baskets/tester/eggs/small-prs.md"]);
-  const shared = git(box, box.dir, "--git-dir", gh.upstream, "show", "share/tester:baskets/tester/eggs/small-prs.md");
+  assert.deepEqual(files, ["baskets/tester/eggs/small-prs.history.md", "baskets/tester/eggs/small-prs.md"]);
+  const shared = ["small-prs.md", "small-prs.history.md"]
+    .map((f) => git(box, box.dir, "--git-dir", gh.upstream, "show", `share/tester:baskets/tester/eggs/${f}`))
+    .join("\n");
   assert.ok(!shared.includes("moonjelly") && !shared.includes(SESSION) && !shared.includes("keep them small"));
   assert.equal(git(box, box.dir, "--git-dir", gh.upstream, "log", "-1", "--format=%s", "share/tester"), "baskets: tester's basket");
   const calls = readFileSync(gh.ghLog, "utf8");
@@ -323,7 +347,7 @@ test("share pushes to the developer's fork when they can't push to the repo", ()
   const gh = fakeGitHub(box, false);
   const r = cli(box, "share", "--as", "tester", "--yes");
   assert.equal(r.status, 0, r.stderr);
-  assert.equal(git(box, box.dir, "--git-dir", gh.fork, "ls-tree", "-r", "--name-only", "share/tester", "baskets"), "baskets/tester/eggs/small-prs.md");
+  assert.equal(git(box, box.dir, "--git-dir", gh.fork, "ls-tree", "-r", "--name-only", "share/tester", "baskets"), "baskets/tester/eggs/small-prs.history.md\nbaskets/tester/eggs/small-prs.md");
   const calls = readFileSync(gh.ghLog, "utf8");
   assert.match(calls, /repo fork kunggaochicken\/deveggs-baskets --clone=false/);
   assert.match(calls, /--head tester:share\/tester/);
@@ -341,10 +365,10 @@ test("share --repo and --dir pick another destination; bad values are rejected",
   assert.equal(shareDir("tester"), "baskets/tester");
 });
 
-test("sanitizeEgg keeps a rename in the evolution, redacting the old id", () => {
+test("sanitizeEgg keeps a rename in the history, redacting the old id", () => {
   const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-share-")));
   b.lay({ id: "acme-terse", summary: "One-line summaries" });
-  b.rename("acme-terse", "terse", "2026-10-08");
-  const { egg } = sanitizeEgg(b.get("terse"), "", {}, ["acme"]);
-  assert.match(egg.body, /^## Evolution\n\n### renamed · 2026-10-08\n\n- renamed from: `<private>-terse`$/);
+  b.rename("acme-terse", "terse", { today: "2026-10-08", note: "drop the acme" });
+  const { history } = sanitizeEgg(b.get("terse"), "", {}, ["acme"], b.history("terse"));
+  assert.deepEqual(history.at(-1), { date: "2026-10-08", event: "renamed", version: 1, fields: { from: "<private>-terse", to: "terse" } });
 });

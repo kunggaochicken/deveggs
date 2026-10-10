@@ -1,4 +1,5 @@
-import { type Egg, isReady, parseEvolution, READY_AFTER, type Tier } from "./basket.ts";
+import { type Egg, isReady, READY_AFTER, type Tier } from "./basket.ts";
+import { type HistoryEntry, trialsByVersion } from "./history.ts";
 import { type Cell, type Column, displayWidth, keyValues, palette, paintTrials, type Palette, table, truncate } from "./table.ts";
 
 export interface ViewOptions {
@@ -30,27 +31,20 @@ export function mark(egg: Egg): string {
 
 /**
  * Trial counts per version, oldest first: earlier versions that had trials (counted from
- * the log), then the current one (from the frontmatter, which is what hatching counts).
+ * the history), then the current one (from the frontmatter, which is what hatching counts).
  * "✓2 ✗1 (v1) · ✓0 ✗0 (v2)"; just "✓1 ✗0" for an item that never evolved.
  */
-export function trialCounts(egg: Egg): string {
+export function trialCounts(egg: Egg, history: HistoryEntry[] = []): string {
   if (egg.version <= 1) return `✓${egg.good} ✗${egg.bad}`;
-  const earlier = new Map<number, { good: number; bad: number }>();
-  for (const t of splitTrials(egg.body).trials) {
-    if (t.version >= egg.version) continue;
-    const n = earlier.get(t.version) ?? { good: 0, bad: 0 };
-    if (t.good) n.good++;
-    else n.bad++;
-    earlier.set(t.version, n);
-  }
-  const counts = [...earlier].sort(([a], [b]) => a - b).map(([v, n]) => `✓${n.good} ✗${n.bad} (v${v})`);
+  const counts = [...trialsByVersion(history)].filter(([v]) => v < egg.version).map(([v, n]) => `✓${n.good} ✗${n.bad} (v${v})`);
   return [...counts, `✓${egg.good} ✗${egg.bad} (v${egg.version})`].join(" · ");
 }
 
-const trials = (egg: Egg): string => (egg.tier === "egg" ? trialCounts(egg) : egg.version > 1 ? `v${egg.version}` : "");
+const trials = (egg: Egg, history: HistoryEntry[] = []): string =>
+  egg.tier === "egg" ? trialCounts(egg, history) : egg.version > 1 ? `v${egg.version}` : "";
 
 /** Basket overview: one aligned row per item, chickens, then eggs, then ready eggs, then cracked. */
-export function formatList(eggs: Egg[], options: ViewOptions): string {
+export function formatList(eggs: Egg[], options: ViewOptions, histories: Map<string, HistoryEntry[]> = new Map()): string {
   if (!eggs.length) return "basket is empty";
   const p = palette(options.color);
   const sorted = [...eggs].sort((a, b) => GROUP_ORDER.indexOf(group(a)) - GROUP_ORDER.indexOf(group(b)));
@@ -65,7 +59,7 @@ export function formatList(eggs: Egg[], options: ViewOptions): string {
       { text: egg.id, ...(id && { paint: id }) },
       { text: egg.kind, paint: p.dim },
       { text: egg.tags.join(", "), paint: p.dim },
-      { text: trials(egg), paint: paintTrials(p) },
+      { text: trials(egg, histories.get(egg.id)), paint: paintTrials(p) },
     ];
   });
   const meta: Column[] = [{ header: "" }, { header: "id" }, { header: "kind" }, { header: "tags", max: 20 }, { header: "trials" }];
@@ -99,41 +93,16 @@ function summaryLine(eggs: Egg[], p: Palette): string {
   return parts.join("  ·  ");
 }
 
-export interface Trial {
-  /** The version of the fact it was judged under: 1 until a `### vN` marker in the log. */
-  version: number;
-  date: string;
-  good: boolean;
-  harness: string;
-  note: string;
-}
-
-const TRIAL = /^- (\S+) ([✓✗])(?: \(([^)]*)\))?(?: (.*))?$/;
-
-/** Split an egg's body into its prose (notes, origin) and its parsed trial log. */
-export function splitTrials(body: string): { prose: string; trials: Trial[] } {
-  const at = body.search(/^## Trials$/m);
-  if (at < 0) return { prose: body, trials: [] };
-  const trials: Trial[] = [];
-  let version = 1;
-  for (const line of body.slice(at).split("\n")) {
-    const marker = /^### v(\d+)\s*$/.exec(line.trim());
-    if (marker) version = Number(marker[1]);
-    const m = TRIAL.exec(line.trim());
-    if (m) trials.push({ version, date: m[1] ?? "", good: m[2] === "✓", harness: m[3] ?? "", note: m[4] ?? "" });
-  }
-  return { prose: body.slice(0, at).trim(), trials };
-}
-
 const TIER_LABEL: Record<Tier, string> = { egg: "egg (on trial)", chicken: "chicken (permanent)", cracked: "cracked (rejected)" };
 
-/** One item in full: metadata as key/value rows, its notes and origin, then the trial log as a table. */
-export function formatShow(egg: Egg, options: ViewOptions): string {
+/** One item in full: metadata as key/value rows, its origin and notes, then the trial log as a table. */
+export function formatShow(egg: Egg, options: ViewOptions, history: HistoryEntry[] = []): string {
   const p = palette(options.color);
-  const { prose, trials: log } = splitTrials(egg.body);
+  const prose = egg.body;
+  const log = history.filter((e) => e.event === "trial");
   const since = egg.version > 1 ? ` since v${egg.version}` : "";
   const hint = isReady(egg) ? `🐣 ready to hatch: deveggs hatch ${egg.id}` : `(${READY_AFTER} ✓ and no ✗${since} to hatch)`;
-  const counts = trialCounts(egg);
+  const counts = trialCounts(egg, history);
   const trialCell: Cell =
     egg.tier === "egg"
       ? {
@@ -145,8 +114,20 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
           },
         }
       : { text: counts, paint: paintTrials(p) };
-  const latest = parseEvolution(egg.body).filter((e) => !e.renamedFrom).at(-1);
-  const versionRow: Array<[string, string]> = egg.version > 1 ? [["version", `v${egg.version}${latest ? ` (evolved ${latest.date})` : ""}`]] : [];
+  const latest = history.filter((e) => e.event === "evolved").at(-1);
+  // A borrowed item's origin here is its import; its owner's lay is in the history.
+  const laid = history.filter((e) => e.event === "imported").at(-1) ?? history.find((e) => e.event === "laid");
+  const where = laid ? [laid.date, laid.fields["harness"], laid.fields["repo"], laid.event === "imported" && `borrowed from ${laid.fields["from"]}`].filter(Boolean).join(" · ") : "";
+  const originRows: Array<[string, string]> = [
+    ...(laid?.quote ? [["origin", `"${laid.quote.replace(/\s*\n\s*/g, " ")}"`] as [string, string]] : []),
+    ...(where ? [[laid?.quote ? "" : "origin", where] as [string, string]] : []),
+  ];
+  const renamed = history.filter((e) => e.event === "renamed").at(-1);
+  const versionRow: Array<[string, string]> = [
+    ...(egg.version > 1 ? [["version", `v${egg.version}${latest ? ` (evolved ${latest.date})` : ""}`] as [string, string]] : []),
+    ...(latest?.fields["was"] ? [[`was (v${latest.version - 1})`, latest.fields["was"]] as [string, string]] : []),
+    ...(renamed?.fields["from"] ? [["renamed from", `${renamed.fields["from"]} (${renamed.date})`] as [string, string]] : []),
+  ];
   const out = [
     `${mark(egg)} ${p.bold(egg.id)}`,
     "",
@@ -161,6 +142,7 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
         ["harnesses", egg.harnesses.join(", ") || "-"],
         ["laid", egg.laid],
         ["updated", egg.updated],
+        ...originRows,
       ],
       p,
     ),
@@ -176,13 +158,103 @@ export function formatShow(egg: Egg, options: ViewOptions): string {
         log.map((t): Cell[] => [
           ...(versioned ? [{ text: `v${t.version}`, ...(t.version < egg.version && { paint: p.dim }) }] : []),
           { text: t.date },
-          { text: t.harness || "-", paint: p.dim },
+          { text: t.fields["harness"] || "-", paint: p.dim },
           { text: t.good ? "✓" : "✗", paint: t.good ? p.green : p.red },
-          { text: t.note },
+          { text: verdict(t) },
         ]),
         { width: options.width, palette: p },
       ),
     );
   }
+  if (history.length) out.push("", p.dim(`how it got here: deveggs history ${egg.id}`));
+  return out.join("\n");
+}
+
+/** A trial's note, then the verdict fields that explain it, on one line. */
+function verdict(t: HistoryEntry): string {
+  const f = t.fields;
+  return [f["note"] ?? f["result"], f["cause"] && `cause: ${f["cause"]}`, f["tuning"] && `tuning: ${f["tuning"]}`].filter(Boolean).join(" · ");
+}
+
+// --- history ---------------------------------------------------------------------
+
+const ICON: Record<HistoryEntry["event"], string> = {
+  laid: "🥚",
+  trial: "",
+  evolved: "🧬",
+  hatched: "🐣",
+  cracked: "💥",
+  renamed: "🏷️",
+  imported: "📥",
+};
+
+/** Word-wrap `text` to `width` cells; every line after the first gets `indent`. */
+function wrap(text: string, width: number, indent: string): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && displayWidth(next) > width) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines.map((l, i) => (i ? indent + l : l));
+}
+
+/** What an entry's heading says: "🥚 laid v1", "✗ trial v2", "🧬 evolved v1 → v2". */
+function headline(e: HistoryEntry): string {
+  if (e.event === "trial") return `${e.good ? "✓" : "✗"} trial v${e.version}`;
+  if (e.event === "evolved") return `${ICON.evolved} evolved v${e.version - 1} → v${e.version}`;
+  if (e.event === "laid" && e.fields["tier"] === "chicken") return `🐔 laid v1 as a chicken`;
+  if (e.event === "renamed") return `${ICON.renamed} renamed ${e.fields["from"] ?? "?"} → ${e.fields["to"] ?? "?"}`;
+  if (e.event === "imported") return `${ICON.imported} imported v${e.version} from ${e.fields["from"] ?? "?"}`;
+  return `${ICON[e.event]} ${e.event} v${e.version}`;
+}
+
+/** Fields already in the headline or the context line, so not repeated below it. */
+const SHOWN = new Set(["harness", "repo", "session", "from", "to", "tier"]);
+
+/**
+ * `deveggs history <id>`: the item's story as a readable timeline, oldest first. Each
+ * entry is a date and headline with its context (harness · repo · session), then the
+ * developer's words and the fields that explain it (scenario, result, cause, tuning,
+ * was/now/why…), wrapped to the terminal.
+ */
+export function formatTimeline(egg: Egg, entries: HistoryEntry[], options: ViewOptions, filtered = false): string {
+  const p = palette(options.color);
+  const pad = " ".repeat(12);
+  const counts = [...trialsByVersion(entries)];
+  const good = counts.reduce((n, [, c]) => n + c.good, 0);
+  const bad = counts.reduce((n, [, c]) => n + c.bad, 0);
+  const out = [
+    `${mark(egg)} ${p.bold(egg.id)}  ${p.dim(`${TIER_LABEL[egg.tier]} · v${egg.version} · ${entries.length} ${filtered ? "matching " : ""}event${entries.length === 1 ? "" : "s"}`)}`,
+    `   ${egg.summary}`,
+  ];
+  if (!entries.length) return [...out, "", filtered ? "nothing matches" : "no history yet"].join("\n");
+  for (const e of entries) {
+    const head = headline(e);
+    const paint = e.event === "trial" ? (e.good ? p.green : p.red) : e.event === "evolved" || e.event === "hatched" ? p.yellow : p.bold;
+    const where = [e.fields["harness"], e.fields["repo"], e.fields["session"] && `session ${e.fields["session"]}`].filter(Boolean).join(" · ");
+    out.push("", `${e.date}  ${paint(head)}${where ? `  ${p.dim(where)}` : ""}`);
+    const room = Math.max(30, options.width - pad.length);
+    if (e.quote) out.push(...wrap(`"${e.quote.replace(/\s*\n\s*/g, " ")}"`, room, pad).map((l, i) => (i ? l : pad + l)));
+    const keys = Object.keys(e.fields).filter((k) => !SHOWN.has(k));
+    const keyWidth = Math.max(0, ...keys.map((k) => k.length));
+    for (const key of keys) {
+      const label = `${key.padEnd(keyWidth)}  `;
+      const indent = pad + " ".repeat(label.length);
+      out.push(pad + p.dim(label) + wrap(e.fields[key] ?? "", Math.max(20, room - label.length), indent).join("\n"));
+    }
+    if (e.text) out.push(...e.text.split("\n").map((l) => pad + p.dim(l)));
+  }
+  const evolves = entries.filter((e) => e.event === "evolved").length;
+  const summary = [counts.length ? `✓${good} ✗${bad} across ${counts.length} version${counts.length === 1 ? "" : "s"}` : "no trials", `${evolves} evolve${evolves === 1 ? "" : "s"}`];
+  // A borrowed item's owner may have hatched it; only a hatch after its import is one here.
+  const imported = entries.map((e) => e.event).lastIndexOf("imported");
+  const hatched = entries.slice(imported + 1).find((e) => e.event === "hatched");
+  if (hatched) summary.push(`hatched ${hatched.date}`);
+  out.push("", p.dim(summary.join("  ·  ")));
   return out.join("\n");
 }

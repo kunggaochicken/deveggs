@@ -61,7 +61,7 @@ test("migrate moves a nested-git basket with its history and prints relink comma
   assert.equal(existsSync(old), false);
   assert.ok(existsSync(join(box.basket, "eggs", "never-push-to-main.md")));
   assert.ok(existsSync(join(box.basket, "README.md")), "README seeded");
-  assert.deepEqual(subjects(box), ["basket: migrate from my-basket/", "old basket history"]);
+  assert.deepEqual(subjects(box), ["history: move origin, evolution and trials of 1 item into history files", "basket: migrate from my-basket/", "old basket history"]);
   assert.equal(git(box, box.basket, "status", "--porcelain"), "");
   const fixed = join(box.basket, "skills", "chickens", "tidy");
   assert.ok(out.stdout.includes(`  ln -sfn ${fixed} ${claude}`), out.stdout);
@@ -91,7 +91,7 @@ test("migrate makes a plain basket a new git repo, replacing an empty scaffold",
   assert.equal(out.status, 0, out.stderr);
   assert.match(out.stdout, /\(new git repo\)/);
   assert.doesNotMatch(out.stdout, /set .* aside/);
-  assert.deepEqual(subjects(box), ["basket: migrate from my-basket/"]);
+  assert.deepEqual(subjects(box), ["history: move origin, evolution and trials of 1 item into history files", "basket: migrate from my-basket/"]);
   for (const d of ["chickens", "cracked", "scripts", "skills/eggs"]) assert.ok(existsSync(join(box.basket, d)), d);
   assert.equal(git(box, box.basket, "branch", "--show-current"), "main");
 });
@@ -155,7 +155,11 @@ test("rename moves the item, its skill and harness skill links, re-renders PREFE
   assert.match(prefs, /`ship-checklist`/);
   assert.doesNotMatch(prefs, /`ship`/);
   assert.equal(subjects(box)[0], "chicken: rename ship to ship-checklist");
-  assert.match(cli(box, "show", "ship-checklist").stdout, /renamed from: `ship`/);
+  assert.match(cli(box, "show", "ship-checklist").stdout, /renamed from {2}ship \(/);
+  assert.ok(existsSync(join(box.basket, "chickens", "ship-checklist.history.md")), "the history moves with the item");
+  assert.ok(!existsSync(join(box.basket, "chickens", "ship.history.md")));
+  const story = cli(box, "history", "ship-checklist").stdout;
+  assert.match(story, /🐔 laid v1[\s\S]*fact {2}Ship it checklist[\s\S]*🏷️ renamed ship → ship-checklist/);
 
   assert.match(cli(box, "rename", "ship", "x").stderr, /nothing in the basket named "ship"/);
   assert.match(cli(box, "rename", "guardian", "ship-checklist").stderr, /already in the basket/);

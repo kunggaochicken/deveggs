@@ -40,8 +40,13 @@ prove themselves hatch into chickens, permanent rules every agent follows.
   `deveggs evolve` changes it in place. It keeps the old wording and why it changed,
   and trials restart for the new version, so only trials of the new rule count toward
   hatching. If only the name is wrong, `deveggs rename <old-id> <new-id>` renames it
-  everywhere: its file and skill, links to that skill, references in other items, and
-  a "renamed from" note under its `## Evolution`.
+  everywhere: its file, history and skill, links to that skill, and references in
+  other items.
+- **📜 History:** every item keeps its story in `<id>.history.md` beside it: your
+  words that started it, every trial with its verdict (scenario, result, cause, the
+  tuning), every evolve, hatch, crack, rename and import. The item file stays the
+  short current rule. `deveggs history <id>` shows the timeline, and agents read it
+  before proposing to evolve, hatch or crack, citing the trials that back it.
 
 Skills work the same way: an egg skill is on trial, a chicken skill is permanent.
 
@@ -145,11 +150,12 @@ You mostly just talk to your agent. It runs these for you:
 ```bash
 deveggs lay "End each turn with a one-line summary" --id turn-summary   # 🥚 try it out
 deveggs lay "Never push to main" --id no-push-main --chicken            # 🐔 already sure
-deveggs feedback <id> --good                                            # log a trial
+deveggs feedback <id> --good --scenario "…" --cause "…"                 # log a trial and its verdict
 deveggs evolve <id> "<new fact>" --quote "<your words>"                 # 🧬 tune it, keeping the old wording
 deveggs hatch <id>                                                      # 🥚 -> 🐔
 deveggs crack <id>                                                      # 💥
-deveggs rename <old-id> <new-id>                                        # new name; references follow
+deveggs rename <old-id> <new-id>                                        # new name; history and references follow
+deveggs history <id> [--trials] [--since 2026-10-01] [--json]           # 📜 how it evolved, oldest first
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path

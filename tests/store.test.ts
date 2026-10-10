@@ -193,7 +193,9 @@ test("evolve rewrites the fact, re-renders, commits, and needs the developer's w
   assert.equal(subjects(box)[0], "egg: evolve terse to v2");
   assert.equal(git(box, box.basket, "status", "--porcelain"), "", "everything committed");
   assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /`terse` \| Summaries, except for decisions \|.*✓0 ✗0 \(v2\)/);
-  assert.match(cli(box, "show", "terse").stdout, /- was: End each turn with a one-line summary/);
+  assert.match(cli(box, "show", "terse").stdout, /was \(v1\) +End each turn with a one-line summary/);
+  const story = cli(box, "history", "terse").stdout;
+  assert.match(story, /🧬 evolved v1 → v2 {2}claude · grover\n {12}"give me the options"\n {12}was {2}End each turn with a one-line summary\n {12}now {2}Summaries, except for decisions\n {12}why {2}narrow/);
   cli(box, "crack", "terse");
   const cracked = cli(box, "evolve", "terse", "Anything", "--quote", "x");
   assert.equal(cracked.status, 1);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Basket, READY_AFTER } from "../src/basket.ts";
 import { displayWidth, markdownTable, table, palette, truncate } from "../src/table.ts";
-import { DEFAULT_WIDTH, formatList, formatShow, splitTrials, terminalOptions, trialCounts } from "../src/view.ts";
+import { DEFAULT_WIDTH, formatList, formatShow, formatTimeline, terminalOptions, trialCounts } from "../src/view.ts";
 
 const ESC = "\x1b[";
 const strip = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
@@ -17,7 +17,7 @@ function seeded(): { home: string; basket: Basket } {
   const b = new Basket(join(home, "basket"));
   b.lay({ summary: "Never push to main", chicken: true, tags: ["git"] });
   b.lay({ summary: "Post before and after screenshots for UI changes", tags: ["pull-requests"] });
-  b.lay({ summary: "Draw a diagram for complex explanations", tags: ["explaining"] });
+  b.lay({ summary: "Draw a diagram for complex explanations", tags: ["explaining"], harness: "claude", origin: { quote: "draw it", repo: "grover" }, today: "2026-10-05" });
   b.feedback("draw-a-diagram-for-complex-explanations", { good: true, harness: "codex", note: "clarified the flow", today: "2026-10-06" });
   b.feedback("draw-a-diagram-for-complex-explanations", { good: false, harness: "claude", note: "overkill", today: "2026-10-07" });
   b.lay({ summary: "End each turn with a one-line summary", tags: ["comms"] });
@@ -104,25 +104,15 @@ test("terminal options: color needs a TTY and no NO_COLOR; width falls back to 1
 
 test("show renders metadata as key/values and the trial log as a table", () => {
   const { basket } = seeded();
-  const out = formatShow(basket.get("draw-a-diagram-for-complex-explanations"), { width: 100, color: false });
+  const id = "draw-a-diagram-for-complex-explanations";
+  const out = formatShow(basket.get(id), { width: 100, color: false }, basket.history(id));
   assert.match(out, /^🥚 draw-a-diagram-for-complex-explanations\n/);
   assert.match(out, /\n {2}tier {7}egg \(on trial\)\n/);
   assert.match(out, /\n {2}trials {5}✓1 ✗1 {2}\(3 ✓ and no ✗ to hatch\)\n/);
-  assert.match(out, /## Origin/);
-  assert.match(out, /date {8}harness {2}✓\/✗ {2}note\n2026-10-06 {2}codex {4}✓ {4}clarified the flow\n2026-10-07 {2}claude {3}✗ {4}overkill$/);
+  assert.match(out, /\n {2}origin {5}"draw it"\n {13}2026-10-05 · claude · grover\n/);
+  assert.match(out, /date {8}harness {2}✓\/✗ {2}note\n2026-10-06 {2}codex {4}✓ {4}clarified the flow\n2026-10-07 {2}claude {3}✗ {4}overkill\n\nhow it got here: deveggs history draw-a-diagram-for-complex-explanations$/);
   const ready = formatShow(basket.get("end-each-turn-with-a-one-line-summary"), { width: 100, color: false });
   assert.match(ready, /🐣 ready to hatch: deveggs hatch end-each-turn-with-a-one-line-summary/);
-});
-
-test("splitTrials separates the log from notes and origin", () => {
-  const { prose, trials } = splitTrials("note\n\n## Trials\n\n- 2026-10-06 ✓ (claude) good one\n- 2026-10-07 ✗");
-  assert.equal(prose, "note");
-  assert.deepEqual(trials, [
-    { version: 1, date: "2026-10-06", good: true, harness: "claude", note: "good one" },
-    { version: 1, date: "2026-10-07", good: false, harness: "", note: "" },
-  ]);
-  const evolved = splitTrials("## Trials\n\n- 2026-10-06 ✓\n\n### v3\n\n- 2026-10-08 ✗");
-  assert.deepEqual(evolved.trials.map((t) => t.version), [1, 3]);
 });
 
 test("after an evolve, list and show split trials by version", () => {
@@ -133,13 +123,15 @@ test("after an evolve, list and show split trials by version", () => {
   b.feedback("terse", { good: false, harness: "codex", today: "2026-10-07" });
   b.evolve("terse", { summary: "One-line summaries, except for decisions", quote: "give me options", note: "narrow", today: "2026-10-08" });
   const egg = b.feedback("terse", { good: true, harness: "claude", note: "table helped", today: "2026-10-09" });
-  assert.equal(trialCounts(egg), "✓1 ✗1 (v1) · ✓1 ✗0 (v2)");
-  assert.match(formatList(b.all(), { width: 160, color: false }), /🥚 {2}terse .* ✓1 ✗1 \(v1\) · ✓1 ✗0 \(v2\) {2}One-line summaries, except/);
-  const out = formatShow(egg, { width: 100, color: false });
+  const history = b.history("terse");
+  assert.equal(trialCounts(egg, history), "✓1 ✗1 (v1) · ✓1 ✗0 (v2)");
+  assert.equal(trialCounts(egg), "✓1 ✗0 (v2)", "without its history, only the current version's counts");
+  assert.match(formatList(b.all(), { width: 160, color: false }, new Map([["terse", history]])), /🥚 {2}terse .* ✓1 ✗1 \(v1\) · ✓1 ✗0 \(v2\) {2}One-line summaries, except/);
+  const out = formatShow(egg, { width: 100, color: false }, history);
   assert.match(out, /\n {2}version {4}v2 \(evolved 2026-10-08\)\n/);
   assert.match(out, /\n {2}trials {5}✓1 ✗1 \(v1\) · ✓1 ✗0 \(v2\) {2}\(3 ✓ and no ✗ since v2 to hatch\)\n/);
-  assert.match(out, /## Evolution\n\n### v2 · 2026-10-08\n\n> give me options\n\n- was: One-line summaries\n/);
-  assert.match(out, /v {3}date {8}harness {2}✓\/✗ {2}note\nv1 {2}2026-10-06 {2}claude {3}✓\nv1 {2}2026-10-07 {2}codex {4}✗\nv2 {2}2026-10-09 {2}claude {3}✓ {4}table helped$/);
+  assert.match(out, /\n {2}was \(v1\) {3}One-line summaries\n/);
+  assert.match(out, /v {3}date {8}harness {2}✓\/✗ {2}note\nv1 {2}2026-10-06 {2}claude {3}✓\nv1 {2}2026-10-07 {2}codex {4}✗\nv2 {2}2026-10-09 {2}claude {3}✓ {4}table helped\n\nhow it got here: deveggs history terse$/);
   // A chicken that evolved shows its version in the list, not trial counts.
   b.lay({ id: "no-push", summary: "Never push to main", chicken: true });
   b.evolve("no-push", { summary: "Never push to main or release branches" });
@@ -161,4 +153,53 @@ test("the CLI prints plain text when piped, even with color allowed", () => {
   const ready = execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", cli, "list", "--tier", "ready"], { env, encoding: "utf8" });
   assert.match(ready, /🐣 {2}end-each-turn-with-a-one-line-summary/);
   assert.doesNotMatch(ready, /🐔 {2}/);
+});
+
+test("the history timeline tells the story oldest first, with every verdict field", () => {
+  const home = mkdtempSync(join(tmpdir(), "deveggs-view-"));
+  const b = new Basket(join(home, "basket"));
+  b.lay({ id: "terse", summary: "One-line summaries", harness: "claude", origin: { quote: "one line please", repo: "grover", session: "s1" }, today: "2026-10-06" });
+  b.feedback("terse", { good: false, harness: "codex", scenario: "design review", result: "lost the trade-offs", cause: "too broad", tuning: "narrow: decisions", today: "2026-10-07" });
+  b.evolve("terse", { summary: "One-line summaries, except decisions", quote: "give me options", note: "narrow: decisions", harness: "claude", today: "2026-10-08" });
+  for (let i = 0; i < READY_AFTER; i++) b.feedback("terse", { good: true, today: "2026-10-09" });
+  b.hatch("terse", { today: "2026-10-10", quote: "hatch it" });
+  const out = formatTimeline(b.get("terse"), b.history("terse"), { width: 100, color: false });
+  assert.equal(
+    out.split("\n").slice(0, 21).join("\n"),
+    [
+      "🐔 terse  chicken (permanent) · v2 · 7 events",
+      "   One-line summaries, except decisions",
+      "",
+      "2026-10-06  🥚 laid v1  claude · grover · session s1",
+      "            \"one line please\"",
+      "            fact  One-line summaries",
+      "",
+      "2026-10-07  ✗ trial v1  codex",
+      "            scenario  design review",
+      "            result    lost the trade-offs",
+      "            cause     too broad",
+      "            tuning    narrow: decisions",
+      "",
+      "2026-10-08  🧬 evolved v1 → v2  claude",
+      "            \"give me options\"",
+      "            was  One-line summaries",
+      "            now  One-line summaries, except decisions",
+      "            why  narrow: decisions",
+      "",
+      "2026-10-09  ✓ trial v2",
+      "",
+    ].join("\n"),
+  );
+  assert.match(out, /2026-10-10 {2}🐣 hatched v2\n {12}"hatch it"\n {12}trials {2}✓3 ✗0 \(v2\)\n\n✓3 ✗1 across 2 versions {2}· {2}1 evolve {2}· {2}hatched 2026-10-10$/);
+  assert.match(formatTimeline(b.get("terse"), [], { width: 100, color: false }, true), /nothing matches$/);
+});
+
+test("the history timeline wraps long fields under their label", () => {
+  const home = mkdtempSync(join(tmpdir(), "deveggs-view-"));
+  const b = new Basket(join(home, "basket"));
+  b.lay({ id: "x", summary: "X", today: "2026-10-06" });
+  b.feedback("x", { good: true, note: "word ".repeat(30).trim(), today: "2026-10-07" });
+  const out = formatTimeline(b.get("x"), b.history("x"), { width: 60, color: false });
+  for (const line of out.split("\n")) assert.ok(displayWidth(line) <= 60, `fits: ${line}`);
+  assert.match(out, /\n {12}note {2}word word[^\n]*\n {18}word/);
 });

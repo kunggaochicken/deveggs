@@ -125,21 +125,56 @@ other, which conflict, and which one should give way. Batch several recordings i
 one card table rather than one card each.
 
 Tunings are proposals: **apply them only with the developer's yes.** Record the trial
-first (`deveggs feedback <id> --good|--bad`), then apply the tuning:
+first, with the card's fields (see "Trying eggs"), then apply the tuning:
 
 - **Narrow, widen or reword** → `deveggs evolve <id> "<new fact>" --quote "<their words>"
   --note "<tuning>: <why>" --harness <you>`, e.g. `--note "narrow: decisions need the
-  trade-offs"`. Never hand-edit the item file. `evolve` keeps the id, tier, tags, origin
-  and trial log, records the old and new wording under `## Evolution`, and restarts the
-  trial counts: trials of the old wording stay in the log under their version, but only
+  trade-offs"`. Never hand-edit the item file. `evolve` keeps the id, tier, tags and
+  history, logs the old and new wording (was/now/why) in it, and restarts the
+  trial counts: trials of the old wording stay in the history under their version, but only
   trials since the latest evolve count toward hatching. It works on chickens too (they
   stay chickens), never on cracked items. Then show an egg card with a was/now/why block.
 - **Complement** → `deveggs lay` the new egg.
 - **Crack** → `deveggs crack <id>`, with the developer's yes.
 - **Rename** (the id reads wrong, the rule is fine) → `deveggs rename <old-id> <new-id>`,
-  with the developer's yes. Never rename files by hand: `rename` moves the item and its
-  skill, repoints harness skill links, rewrites `` `old-id` `` and `[[old-id]]` references
-  in other items and notes "renamed from" under `## Evolution`. Trials and version stay.
+  with the developer's yes. Never rename files by hand: `rename` moves the item, its
+  history and its skill, repoints harness skill links, rewrites `` `old-id` `` and
+  `[[old-id]]` references in other items and logs the old id. Trials and version stay.
+
+## Each item's history
+
+Every item has an append-only history, `<tier>/<id>.history.md` beside it, that
+deveggs writes: the lay (the developer's words, harness, repo, session), every trial
+with its verdict, every evolve (was/now/why and their words), and every hatch, crack,
+rename and import. The item file is only the current rule. Never edit either by hand.
+
+```
+deveggs history <id>                       # the whole story, oldest first
+deveggs history <id> --trials              # just the verdicts
+deveggs history <id> --since 2026-10-01 --version 2 --event evolved,hatched
+deveggs history <id> --json                # structured, to reason over
+```
+
+Use it, don't just write it:
+
+- **Before proposing an evolve, hatch or crack, read the item's history** and cite the
+  trials that back the proposal in the verdict card: date, harness, repo, scenario and
+  cause (e.g. "✗ 2026-10-09 grover, claude: a new request mid-task was done inline;
+  cause too narrow"). Say how many trials each version got, and whether a cause repeats.
+- **Let the history shape the tuning.** A cause that recurs across ✗s says what to
+  change (the same "too narrow" twice → widen the trigger). ✓s in one kind of scenario
+  and ✗s in another → narrow to where it works, or lay a complement for the rest. A
+  fact that keeps being reworded → propose wording that covers every past scenario,
+  and check it against each logged trial before showing it.
+- **Check new wording against old wording.** The evolves list what was tried and why
+  it changed. Don't propose a rule the history shows was already tried and failed.
+- **Answer "why is this a rule?" from it.** The lay entry holds the developer's own
+  words; quote them.
+
+A basket from before history files keeps this in `## Origin`, `## Evolution` and
+`## Trials` sections of the item. The first write command (or `deveggs migrate`) moves
+them into history files, recovering hatches and cracks from the basket's git log;
+`deveggs history` reads either.
 
 ## At session start
 
@@ -216,8 +251,8 @@ only read that repo.
   (`# | their tier | id | fact | from`), saying which ones the developer's basket already
   covers (`deveggs list`). Import only what they confirm, one `import` per item.
 - `import` adds it as a 🥚 egg, never a chicken, even if it was a chicken for its owner:
-  trials reset to ✓0 ✗0, the trial log cleared, and an Origin row records where it came
-  from. It copies a skill to `skills/eggs/<id>/` with `[egg: on trial]` on its description.
+  trials reset to ✓0 ✗0, their trials left behind, and an `imported` history entry records
+  where it came from (their shared history, minus trials, comes along). It copies a skill to `skills/eggs/<id>/` with `[egg: on trial]` on its description.
   It refuses an id already in the basket, and one the developer cracked: cracked items
   are never laid again. If an id clashes but the idea is new, lay it with another `--id` instead.
 - After importing, **show an egg card** for each item (see "Show, don't tell"). Then
@@ -227,14 +262,30 @@ only read that repo.
 ## Trying eggs: record feedback
 
 While an egg is on trial, follow it. Record feedback whenever it clearly helps or
-gets in the way:
+gets in the way, **with the verdict card's fields**, so the history holds why, not
+just ✓/✗:
 
 ```
-deveggs feedback <id> --good --harness <you> --note "made the PR summary scannable"
-deveggs feedback <id> --bad  --harness <you> --note "too terse for a design review"
+deveggs feedback <id> --good --harness <you> --scenario "PR summary for a 12-file change" \
+  --result "summary was scannable; developer merged without questions"
+deveggs feedback <id> --bad --harness <you> \
+  --scenario "design review with 4 trade-offs to weigh" \
+  --result "summary dropped the trade-offs; developer asked what the options were" \
+  --cause "too broad" --tuning "narrow: decisions get a table of options" \
+  --quote "what were the options?"
 ```
 
-Record feedback when there's a real signal, not every time the egg applies. The
+| Flag | Put in it |
+|---|---|
+| `--scenario` | What was going on when the egg applied |
+| `--result` | What following it led to, and how the developer reacted |
+| `--cause` | For a ✗ (or a mixed ✓): one cause from the table above |
+| `--tuning` | The tuning you proposed, and whether the developer said yes |
+| `--quote` | The developer's reaction, verbatim |
+| `--note` | Anything else worth keeping |
+
+Run it from the project's directory (the repo is picked up), or pass `--repo`; pass
+`--session <id>` if your harness has one. Record feedback when there's a real signal, not every time the egg applies. The
 developer's reactions count most: if they push back on behavior an egg caused,
 that's a `--bad`. Feedback from more than one harness is the strongest evidence.
 Show each recording as a verdict card (see "Show, don't tell"), batched into one table
@@ -251,17 +302,22 @@ natural pause, propose them in one batch:
 > |---|---|---|---|---|
 > | 1 | `terse-summaries` | End each turn with a one-line summary | ✓4 ✗0 (claude, codex) | "can you just give me one line at the end" (grover, 2026-10-06) |
 
-Get the origin and trial log from `deveggs show <id>`. Follow the table with a verdict
-card for any egg whose trials are mixed, so the developer sees why before deciding.
+Get the origin and trials from `deveggs history <id>`, and cite them. Follow the table
+with a verdict card for any egg whose trials are mixed, so the developer sees why
+before deciding.
 
-- Yes → `deveggs hatch <id>`. The egg becomes a chicken, and a skill moves to `skills/chickens/`.
-- No, drop it → `deveggs crack <id>`. It's kept so it's never laid again.
+- Yes → `deveggs hatch <id> --quote "<their yes>" --harness <you>`. The egg becomes a
+  chicken (its history and any skill move along), and the hatch is logged with its trial record.
+- No, drop it → `deveggs crack <id> --quote "<their words>" --note "<why>"`. It's kept so it's never laid again.
 - Not yet → leave it on trial.
 - They reword it → `deveggs evolve` it with their words. It stays on trial for the new
   version unless they also say to hatch it.
 
 **Never hatch, crack or evolve without the developer's say-so.** If an egg is
-collecting `--bad` feedback, suggest cracking it or evolving it (with a verdict card).
+collecting `--bad` feedback, suggest cracking it or evolving it (with a verdict card
+that cites its history). When reviewing the basket, also look at how items are used:
+an egg whose ✓s all come from one kind of scenario, or a chicken whose recent trials or
+corrections keep naming the same gap, is a candidate to evolve; propose it the same way.
 
 After hatching or cracking a skill, update its symlink in every harness skills
 folder that links into the basket (for example `~/.claude/skills/`,
@@ -271,7 +327,7 @@ new skill, so every harness can use it. `deveggs rename` repoints these links it
 
 ## Committing
 
-The basket is its own git repo. `lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack`
+The basket is its own git repo. `lay`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `import`
 and `render` commit there automatically, so you don't commit basket changes yourself, and nothing
 is lost even offline. Nothing pushes unless the developer chose it: **never push
 without the developer's yes.** `deveggs autopush status` shows where things stand.

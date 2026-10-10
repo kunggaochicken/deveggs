@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BasketError, type Egg, parseEgg, slugify, type Tier } from "./basket.ts";
+import { type HistoryEntry, historyFileName, isHistoryFile, parseHistory } from "./history.ts";
 import { run } from "./store.ts";
 import { type Cell, type Column, palette, table } from "./table.ts";
 import type { ViewOptions } from "./view.ts";
@@ -28,6 +29,8 @@ export interface SharedItem {
   egg: Egg;
   /** The item's skill folder in the checkout, if it has one. */
   skill?: string;
+  /** Its shared history (`<id>.history.md`), if it has one. */
+  history?: HistoryEntry[];
 }
 
 export interface SharedBasket {
@@ -102,7 +105,7 @@ export function sharedBasket(dir: string, user: string): SharedBasket {
   for (const [tier, sub] of SHARED_TIERS) {
     const tierDir = join(folder, sub);
     if (!existsSync(tierDir)) continue;
-    for (const file of readdirSync(tierDir).filter((f) => f.endsWith(".md")).sort()) {
+    for (const file of readdirSync(tierDir).filter((f) => f.endsWith(".md") && !isHistoryFile(f)).sort()) {
       let egg: Egg;
       try {
         egg = parseEgg(readFileSync(join(tierDir, file), "utf8"), tier);
@@ -111,7 +114,13 @@ export function sharedBasket(dir: string, user: string): SharedBasket {
       }
       if (`${egg.id}.md` !== file || !validId(egg.id)) continue;
       const skill = join(folder, "skills", sub, egg.id);
-      items.push({ user, egg, ...(existsSync(join(skill, "SKILL.md")) && { skill }) });
+      const history = join(tierDir, historyFileName(egg.id));
+      items.push({
+        user,
+        egg,
+        ...(existsSync(join(skill, "SKILL.md")) && { skill }),
+        ...(existsSync(history) && { history: parseHistory(readFileSync(history, "utf8")) }),
+      });
     }
   }
   return { user, about: about(folder), items };
