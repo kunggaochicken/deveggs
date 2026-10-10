@@ -89,7 +89,13 @@ const basket = new Basket(basketRoot);
 const warn = (message: string): void => console.error(`deveggs: warning: ${message}`);
 
 /** Read a file, or stdin for "-". */
-const readText = (file: string): string => readFileSync(file === "-" ? 0 : file, "utf8");
+function readText(file: string, flag: string): string {
+  try {
+    return readFileSync(file === "-" ? 0 : file, "utf8");
+  } catch (err) {
+    throw new BasketError(`can't read the ${flag} file ${file}: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`);
+  }
+}
 
 /** Every time an item is shown, its diagram comes with it: what it automates, at a glance. */
 function diagram(egg: Egg): void {
@@ -362,6 +368,7 @@ function main(argv: string[]): void {
         throw new BasketError(`invalid kind ${JSON.stringify(values.kind)}; expected one of ${KINDS.join(", ")}`);
       }
       const repo = values.repo ?? currentRepo();
+      const architecture = values.arch !== undefined ? readText(values.arch, "--arch") : undefined;
       prepare();
       const egg = basket.lay({
         summary,
@@ -374,7 +381,7 @@ function main(argv: string[]): void {
         },
         tags: values.tag?.split(",").map((t) => t.trim()).filter(Boolean) ?? [],
         ...(values.kind !== undefined && { kind: values.kind }),
-        ...(values.arch !== undefined && { architecture: readText(values.arch) }),
+        ...(architecture !== undefined && { architecture }),
         ...harness,
         ...note,
       });
@@ -506,8 +513,9 @@ function main(argv: string[]): void {
         console.log(formatArchitecture(basket.get(id), terminalOptions()));
         return;
       }
+      const architecture = readText(values.set, "--set");
       prepare();
-      const egg = basket.draw(id, readText(values.set));
+      const egg = basket.draw(id, architecture);
       basket.render();
       save(`${egg.tier}: draw ${egg.id}`);
       console.log(`${line(egg)}\n     🗺  architecture drawn`);

@@ -66,7 +66,7 @@ Scale it to the item:
   each script or skill file by its basket path, inputs and outputs, external systems
   (gh, launchd, harness hooks), and how it relates to other items. End with a
   `### 📁 Files` index (one `` - `path`: what it is `` bullet per file) so it's easy to
-  navigate; `deveggs render` links these from `PREFERENCES.md`. A ```` ```mermaid ````
+  navigate; `deveggs render` indexes them in `PREFERENCES.md`, linked to the item's diagram. A ```` ```mermaid ````
   block may follow the text one for GitHub; terminals show only the text one.
 
   ````markdown

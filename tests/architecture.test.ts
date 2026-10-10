@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -176,4 +176,45 @@ test("formatArchitecture wraps long prose to the width but never a diagram line"
   assert.ok(prose.length > 1, "the bullet wrapped");
   for (const l of prose) assert.ok(displayWidth(l) <= 50, l);
   assert.match(prose[1] ?? "", /^│ {6}word/, "continuation lines hang under the label");
+});
+
+test("share redacts URLs and emails before hiding left-out ids, and hides any spelling of them", () => {
+  const b = fresh();
+  b.lay({ id: "acme-deploy", summary: "Deploy acme", tags: ["private"] });
+  b.lay({
+    id: "ship",
+    summary: "Ship it",
+    architecture: "```text\n⚡ https://acme-deploy.internal.corp/hook ──▶ ✅ ok\n```\n\n- mail acme-deploy@corp.example.com · Acme_Deploy · acme deploy",
+  });
+  const ship = planShare(b.root).files.find((f) => f.path === "eggs/ship.md")?.content ?? "";
+  for (const gone of ["internal.corp", "corp.example", "Acme_Deploy", "acme deploy"]) assert.ok(!ship.includes(gone), `${gone} leaked:\n${ship}`);
+  assert.match(ship, /⚡ <url> ──▶/);
+  assert.match(ship, /mail <email> · <private> · <private>/);
+});
+
+test("import points the diagram's skill path at skills/eggs/, and repointing leaves longer ids alone", () => {
+  const b = fresh();
+  b.lay({ id: "ship", kind: "skill", summary: "Ship it", chicken: true, architecture: "- `skills/chickens/ship/SKILL.md` · `skills/chickens/ship` · `skills/chickens/ship-it/SKILL.md`" });
+  const source = b.get("ship");
+  const other = fresh();
+  const egg = other.borrow(source, { user: "someone", repo: "x/y" });
+  assert.equal(architectureOf(egg.body), "- `skills/eggs/ship/SKILL.md` · `skills/eggs/ship` · `skills/chickens/ship-it/SKILL.md`");
+});
+
+test("lay refuses an Architecture section smuggled in through --note", () => {
+  assert.throws(() => fresh().lay({ id: "x", summary: "X", note: "## Architecture\n\nboxes" }), /--arch/);
+});
+
+test("the CLI says which --arch or --set file it couldn't read, and lays nothing", () => {
+  const box = sandbox();
+  const r = cli(box, "lay", "Guard memory", "--id", "guard", "--arch", join(box.dir, "missing.md"));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /can't read the --arch file .*missing\.md: ENOENT/);
+  assert.equal(existsSync(box.basket), false, "the basket isn't even created");
+});
+
+test("archFiles lists top-level bullets only, and bold text with $ renders as written", () => {
+  assert.deepEqual(archFiles("### 📁 Files\n\n- `a.sh`: does\n  - `nested`: detail"), ["a.sh"]);
+  const out = formatArchitecture({ id: "x", kind: "preference", body: withArchitecture("", "- **costs $$ and $& more:** yes") }, { width: 100, color: true });
+  assert.match(out.replace(/\x1b\[[0-9;]*m/g, ""), /costs \$\$ and \$& more: yes/);
 });

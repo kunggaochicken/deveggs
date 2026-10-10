@@ -251,11 +251,15 @@ function rewriteRefs(file: string, oldId: string, newId: string): boolean {
   return true;
 }
 
-/** Rewrite a path in an item's Architecture section only (its history keeps the old one). */
+/**
+ * Rewrite a path (e.g. skills/eggs/<id>) in an item's Architecture section only; its history
+ * keeps the old one. A longer id that merely starts with the same words is left alone.
+ */
 function repointArchitecture(body: string, from: string, to: string): string {
   const arch = architectureOf(body);
-  if (arch === undefined || !arch.includes(from)) return body;
-  return withArchitecture(body, arch.split(from).join(to));
+  if (arch === undefined || from === to) return body;
+  const next = arch.replace(new RegExp(`${escapeRegExp(from)}(?![\\w-])`, "g"), () => to);
+  return next === arch ? body : withArchitecture(body, next);
 }
 
 // --- basket ------------------------------------------------------------------
@@ -409,7 +413,7 @@ ${formatEntry(entry)}
       mkdirSync(this.dir(to), { recursive: true });
       renameSync(this.historyPath(from, egg.id), this.historyPath(to, egg.id));
     }
-    egg = { ...egg, body: repointArchitecture(egg.body, `skills/${TIER_DIR[from]}/${egg.id}/`, `skills/${TIER_DIR[to]}/${egg.id}/`) };
+    egg = { ...egg, body: repointArchitecture(egg.body, `skills/${TIER_DIR[from]}/${egg.id}`, `skills/${TIER_DIR[to]}/${egg.id}`) };
     if (egg.kind === "skill" && existsSync(this.skillDir(from, egg.id))) {
       mkdirSync(this.skillDir(to), { recursive: true });
       renameSync(this.skillDir(from, egg.id), this.skillDir(to, egg.id));
@@ -440,6 +444,7 @@ ${formatEntry(entry)}
     const kind = input.kind ?? "preference";
     const tier: Tier = input.chicken ? "chicken" : "egg";
     const note = input.note?.trim();
+    if (note && /^## Architecture\s*$/m.test(note)) throw new BasketError("--note can't hold an ## Architecture section; pass the diagram with --arch");
     const rest = [note && (note.startsWith("## ") ? note : `## Notes\n\n${note}`)];
     const egg = this.save({
       id,
@@ -511,7 +516,8 @@ ${formatEntry(entry)}
       bad: 0,
       laid: date,
       updated: date,
-      body: stripLegacySections(source.body),
+      // It arrives as an egg, so its diagram's skill path follows it to skills/eggs/.
+      body: repointArchitecture(stripLegacySections(source.body), `skills/${TIER_DIR[source.tier]}/${source.id}`, `skills/eggs/${source.id}`),
     });
     writeFileSync(this.historyPath("egg", egg.id), formatHistory(egg.id, [...past, imported]));
     if (skill) {
@@ -627,7 +633,7 @@ ${formatEntry(entry)}
     });
     writeFileSync(this.historyPath(egg.tier, newId), formatHistory(newId, entries));
     const dir = `skills/${TIER_DIR[egg.tier]}/`;
-    const body = repointArchitecture(current.body, `${dir}${oldId}/`, `${dir}${newId}/`);
+    const body = repointArchitecture(current.body, `${dir}${oldId}`, `${dir}${newId}`);
     const renamed = this.save({ ...current, id: newId, updated: date, body });
     rmSync(this.path(egg.tier, oldId));
     rmSync(oldHistory, { force: true });

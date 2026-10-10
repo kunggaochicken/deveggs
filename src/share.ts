@@ -261,7 +261,7 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   });
   const arch = architectureOf(egg.body);
   if (isScaffold(arch)) add("unfinished diagram");
-  const architecture = arch && !isScaffold(arch) ? clean(hideIds(arch, hidden, hits)) : "";
+  const architecture = arch && !isScaffold(arch) ? hideIds(clean(arch), hidden, hits) : "";
   return {
     egg: { ...egg, summary, tags, harnesses: [], body: architecture ? `## ${ARCH_HEADING}\n\n${architecture}` : "" },
     history: shared,
@@ -269,11 +269,16 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   };
 }
 
-/** Replace references to left-out items (`id`, [[id]] and file paths naming them) with <private>. */
+/**
+ * Replace references to left-out items (`id`, [[id]], file paths naming them, and the id
+ * written with other case, `_` or spaces) with <private>. Runs after redaction, so swapping
+ * an id inside a URL or an email can't stop those from being redacted whole.
+ */
 function hideIds(text: string, ids: string[], hits: Hits): string {
   let out = text;
   for (const id of [...ids].sort((a, b) => b.length - a.length)) {
-    out = out.replace(new RegExp(`(?<![\\w-])${escape(id)}(?![\\w-])`, "g"), () => {
+    const loose = id.split("-").map(escape).join("[-_ ]");
+    out = out.replace(new RegExp(`(?<![\\w-])${loose}(?![\\w-])`, "gi"), () => {
       hits.set("private item", (hits.get("private item") ?? 0) + 1);
       return "<private>";
     });
@@ -310,7 +315,7 @@ export function readPrivateTerms(root: string): string[] {
  * Work out exactly what `deveggs share` would publish from the basket at `root`, and
  * what it redacted or left out. Reads the basket; writes nothing.
  *
- * Shared: chickens and eggs (sanitized), their histories (sanitized: see sanitizeEgg) and
+ * Shared: chickens and eggs (sanitized, with their architecture diagrams), their histories (sanitized: see sanitizeEgg) and
  * their skills (redacted).
  * Left out: cracked items and their skills, items tagged `private` and their skills,
  * skipped ids, ids that contain a private term, scripts/ (unless includeScripts), binary files, and everything else in the

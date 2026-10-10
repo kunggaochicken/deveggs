@@ -87,7 +87,7 @@ export function archFiles(architecture: string | undefined): string[] {
   const files: string[] = [];
   for (const line of architecture.split("\n").slice(at + 1)) {
     if (line.startsWith("### ")) break;
-    const m = /^- `([^`]+)`/.exec(line.trim());
+    const m = /^- `([^`]+)`/.exec(line); // top-level bullets only
     if (m?.[1] && !PLACEHOLDER.test(m[1])) files.push(m[1]);
   }
   return files;
@@ -184,7 +184,7 @@ function terminalLines(architecture: string, p: Palette, width: number): string[
     const plain = line.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/^- /, "  ");
     const bullet = plain.startsWith("  ");
     for (const wrapped of wrap(plain, width, bullet ? "     " : "  ")) {
-      out.push(bold.reduce((l, b) => l.replace(b, p.bold(b)), wrapped));
+      out.push(bold.reduce((l, b) => l.replace(b, () => p.bold(b)), wrapped));
     }
   }
   while (out.length && !out[0]?.trim()) out.shift();
