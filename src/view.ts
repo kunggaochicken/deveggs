@@ -115,7 +115,8 @@ export function formatShow(egg: Egg, options: ViewOptions, history: HistoryEntry
         }
       : { text: counts, paint: paintTrials(p) };
   const latest = history.filter((e) => e.event === "evolved").at(-1);
-  const laid = history.find((e) => e.event === "laid" || e.event === "imported");
+  // A borrowed item's origin here is its import; its owner's lay is in the history.
+  const laid = history.filter((e) => e.event === "imported").at(-1) ?? history.find((e) => e.event === "laid");
   const where = laid ? [laid.date, laid.fields["harness"], laid.fields["repo"], laid.event === "imported" && `borrowed from ${laid.fields["from"]}`].filter(Boolean).join(" · ") : "";
   const originRows: Array<[string, string]> = [
     ...(laid?.quote ? [["origin", `"${laid.quote.replace(/\s*\n\s*/g, " ")}"`] as [string, string]] : []),
@@ -250,7 +251,9 @@ export function formatTimeline(egg: Egg, entries: HistoryEntry[], options: ViewO
   }
   const evolves = entries.filter((e) => e.event === "evolved").length;
   const summary = [counts.length ? `✓${good} ✗${bad} across ${counts.length} version${counts.length === 1 ? "" : "s"}` : "no trials", `${evolves} evolve${evolves === 1 ? "" : "s"}`];
-  const hatched = entries.find((e) => e.event === "hatched");
+  // A borrowed item's owner may have hatched it; only a hatch after its import is one here.
+  const imported = entries.map((e) => e.event).lastIndexOf("imported");
+  const hatched = entries.slice(imported + 1).find((e) => e.event === "hatched");
   if (hatched) summary.push(`hatched ${hatched.date}`);
   out.push("", p.dim(summary.join("  ·  ")));
   return out.join("\n");

@@ -12,6 +12,7 @@ import {
   legacyHistory,
   type LoggedMove,
   parseHistory,
+  mergeHistory,
   sortHistory,
   stripLegacySections,
 } from "./history.ts";
@@ -315,11 +316,12 @@ export class Basket {
    * An item's history, oldest first. An item from before history files has its history
    * in legacy `## Origin`, `## Evolution` and `## Trials` sections; it's read from there.
    */
-  history(id: string): HistoryEntry[] {
+  history(id: string, moves: LoggedMove[] = []): HistoryEntry[] {
     const egg = this.get(id);
     const file = this.historyPath(egg.tier, id);
+    if (existsSync(file) && !hasLegacySections(egg.body)) return parseHistory(readFileSync(file, "utf8"));
     const logged = existsSync(file) ? parseHistory(readFileSync(file, "utf8")) : [];
-    return hasLegacySections(egg.body) || !existsSync(file) ? sortHistory([...legacyHistory(egg), ...logged]) : logged;
+    return mergeHistory(legacyHistory(egg, existsSync(file) ? [] : moves), logged);
   }
 
   /** Items still keeping their history in legacy sections of the item file (or with no history file). */
@@ -350,7 +352,7 @@ export class Basket {
     if (!hasLegacySections(egg.body) && (hasFile || !start)) return egg;
     const logged = hasFile ? parseHistory(readFileSync(file, "utf8")) : [];
     const loggedMoves = new Set(logged.filter((e) => e.event === "hatched" || e.event === "cracked").map((e) => e.event));
-    const entries = sortHistory([...legacyHistory(egg, moves.filter((m) => !loggedMoves.has(m.event))), ...logged]);
+    const entries = mergeHistory(legacyHistory(egg, moves.filter((m) => !loggedMoves.has(m.event))), logged);
     mkdirSync(this.dir(egg.tier), { recursive: true });
     writeFileSync(file, formatHistory(egg.id, entries));
     return this.save({ ...egg, body: stripLegacySections(egg.body) });
@@ -419,7 +421,11 @@ ${formatEntry(entry)}
       body: input.note?.trim() ?? "",
     });
     const origin = input.origin ?? {};
-    writeFileSync(this.historyPath(egg.tier, id), formatHistory(id, [{
+    // A history left by an item deleted to revive its id stays: the new lay is appended to it.
+    const leftover = TIERS.map((t) => this.historyPath(t, id)).find((f) => existsSync(f));
+    const before = leftover ? parseHistory(readFileSync(leftover, "utf8")) : [];
+    if (leftover) rmSync(leftover);
+    writeFileSync(this.historyPath(egg.tier, id), formatHistory(id, [...before, {
       date,
       event: "laid",
       version: 1,
@@ -436,7 +442,7 @@ ${formatEntry(entry)}
   /** An id already in the basket can't be laid or borrowed again; a cracked one never comes back. */
   private refuseExisting(id: string): void {
     const existing = this.find(id);
-    if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete it to revive`);
+    if (existing === "cracked") throw new BasketError(`${id} was cracked (rejected) before; delete cracked/${id}.md to revive it (its history comes back with it)`);
     if (existing) throw new BasketError(`${id} is already a${existing === "egg" ? "n egg" : " chicken"}; use feedback instead`);
   }
 
@@ -574,7 +580,7 @@ ${formatEntry(entry)}
     if (clash) throw new BasketError(`a skill folder ${clash} already exists; move it away to rename ${oldId}`);
 
     // Write the new file before removing anything, so a failure never loses the item.
-    const current = this.adoptLegacy(egg);
+    const current = this.adoptLegacy(egg, [], true);
     const oldHistory = this.historyPath(egg.tier, oldId);
     const entries = existsSync(oldHistory) ? parseHistory(readFileSync(oldHistory, "utf8")) : [];
     entries.push({

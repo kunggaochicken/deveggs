@@ -198,7 +198,9 @@ function context(parts: string[], harnesses: string[]): Record<string, string> {
   return out;
 }
 
-const TRIAL_LINE = /^- (\S+) ([✓✗])(?: \(([^)]*)\))?(?: (.*))?$/;
+const TRIAL_LINE = /^- (\d{4}-\d{2}-\d{2}) ([✓✗])(?: \(([^)]*)\))?(?: (.*))?$/;
+
+export const isDate = (text: string | undefined): text is string => /^\d{4}-\d{2}-\d{2}$/.test(text ?? "");
 
 /** A hatch or crack the basket's git log recorded, for items whose file never did. */
 export interface LoggedMove {
@@ -229,13 +231,17 @@ export function legacyHistory(egg: Egg, moves: LoggedMove[] = []): HistoryEntry[
   keep("Evolution", (evoBlocks[0] ?? "").startsWith("### ") ? [] : (evoBlocks[0] ?? "").split("\n"));
   for (const block of evoBlocks.filter((b) => b.startsWith("### "))) {
     const [heading = "", ...lines] = block.trimEnd().split("\n");
-    const [v = "", date = "", ...ctx] = heading.slice(4).split(" · ").map((s) => s.trim());
+    const [v = "", rawDate = "", ...ctx] = heading.slice(4).split(" · ").map((s) => s.trim());
+    // A heading without a real date keeps its place by the item's last update, and its text.
+    const date = isDate(rawDate) ? rawDate : egg.updated;
+    if (!isDate(rawDate)) ctx.unshift(rawDate);
     const quote = lines.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim();
     const fields: Record<string, string> = {};
     const other: string[] = [];
     for (const line of lines.filter((l) => !l.startsWith(">") && l.trim())) {
       const f = /^- (was|now|why|renamed from): (.*)$/.exec(line);
-      if (f) fields[f[1] === "renamed from" ? "from" : (f[1] ?? "")] = (f[2] ?? "").replace(/^`|`$/g, "").trim();
+      if (f?.[1] === "renamed from") fields["from"] = (f[2] ?? "").replace(/^`|`$/g, "").trim();
+      else if (f) fields[f[1] ?? ""] = (f[2] ?? "").trim();
       else other.push(line);
     }
     const renamed = v === "renamed";
@@ -244,7 +250,7 @@ export function legacyHistory(egg: Egg, moves: LoggedMove[] = []): HistoryEntry[
       event: renamed ? "renamed" : "evolved",
       version: renamed ? 0 : Number(v.replace(/^v/, "")) || 2,
       ...(quote && { quote }),
-      fields: { ...context(ctx, egg.harnesses), ...fields },
+      fields: { ...context(ctx.filter(Boolean), egg.harnesses), ...fields },
       ...(other.length && { text: other.join("\n") }),
     });
   }
@@ -260,12 +266,15 @@ export function legacyHistory(egg: Egg, moves: LoggedMove[] = []): HistoryEntry[
   // Origin: the quote, then `- date · harness · repo · session` and `- date · borrowed from user · repo` rows.
   const origin = section("Origin");
   const quote = origin.filter((l) => l.startsWith(">")).map((l) => l.replace(/^> ?/, "")).join("\n").trim();
-  const rows = origin.filter((l) => l.startsWith("- ")).map((l) => l.slice(2).split(" · ").map((s) => s.trim()));
-  keep("Origin", origin.filter((l) => !l.startsWith(">") && !l.startsWith("- ")));
+  const dated = (l: string): boolean => isDate(l.slice(2).split(" · ")[0]?.trim());
+  const rows = origin.filter((l) => l.startsWith("- ") && dated(l)).map((l) => l.slice(2).split(" · ").map((s) => s.trim()));
+  keep("Origin", origin.filter((l) => !l.startsWith(">") && !(l.startsWith("- ") && dated(l))));
   const firstFact = evolves[0]?.fields["was"] || egg.summary;
   const laidRow = rows.find((r) => !/^borrowed from /.test(r[1] ?? ""));
+  // Without its own row (an item borrowed before history files), a lay is dated no later than anything after it.
+  const earliest = [egg.laid, ...rows.map((r) => r[0] ?? ""), ...evolved.map((e) => e.date)].filter(isDate).sort()[0] ?? egg.laid;
   const laid: HistoryEntry = {
-    date: laidRow?.[0] || egg.laid,
+    date: laidRow?.[0] || earliest,
     event: "laid",
     version: 1,
     ...(quote && { quote }),
@@ -285,27 +294,32 @@ export function legacyHistory(egg: Egg, moves: LoggedMove[] = []): HistoryEntry[
   const trials: HistoryEntry[] = [];
   let version = 1;
   const odd: string[] = [];
+  let last: HistoryEntry | undefined;
   for (const line of section("Trials")) {
     const marker = /^### v(\d+)\s*$/.exec(line.trim());
     if (marker) {
       version = Number(marker[1]);
+      last = undefined;
       continue;
     }
     const m = TRIAL_LINE.exec(line.trim());
     if (m) {
-      trials.push({
+      last = {
         date: m[1] ?? "",
         event: "trial",
         version,
         good: m[2] === "✓",
         fields: cleanFields({ harness: m[3], note: m[4] }),
-      });
-    } else if (line.trim()) odd.push(line);
+      };
+      trials.push(last);
+    } else if (line.trim() && last) last.text = [last.text, line.trim()].filter(Boolean).join("\n"); // a trial note's next line
+    else if (line.trim()) odd.push(line);
   }
   keep("Trials", odd);
 
+  // A move before the item was laid belongs to an earlier item with the same id (cracked, deleted, laid again).
   const moved: HistoryEntry[] = moves
-    .filter((mv) => mv.id === egg.id)
+    .filter((mv) => mv.id === egg.id && mv.date >= laid.date)
     .map((mv) => {
       const v = versionOn(mv.date);
       const counts = trials.filter((t) => t.version === v && t.date <= mv.date);
@@ -362,23 +376,26 @@ export function movesFromLog(log: string): LoggedMove[] {
     .filter((parts): parts is [string, string] => parts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts[0] ?? ""))
     .reverse();
   const moves: LoggedMove[] = [];
-  const renames = new Map<string, string>();
   for (const [date, subject] of commits) {
     const hatch = /^chicken: hatch (\S+)$/.exec(subject);
     const crack = /^crack: (\S+)$/.exec(subject);
     const rename = /^\w+: rename (\S+) to (\S+)$/.exec(subject);
     if (hatch) moves.push({ id: hatch[1] ?? "", event: "hatched", date });
     else if (crack) moves.push({ id: crack[1] ?? "", event: "cracked", date });
-    else if (rename) renames.set(rename[1] ?? "", rename[2] ?? "");
+    // A rename carries only the moves made before it: a later item laid under the old id keeps its own.
+    else if (rename) for (const m of moves) if (m.id === rename[1]) m.id = rename[2] ?? m.id;
   }
-  const current = (id: string): string => {
-    const seen = new Set<string>();
-    let at = id;
-    while (renames.has(at) && !seen.has(at)) {
-      seen.add(at);
-      at = renames.get(at) ?? at;
-    }
-    return at;
-  };
-  return moves.map((m) => ({ ...m, id: current(m.id) }));
+  return moves;
+}
+
+/**
+ * Entries from legacy sections merged into an existing log (an older deveggs wrote to a
+ * migrated item): one lay only, the logged one, keeping any leftover text of the other.
+ */
+export function mergeHistory(fromLegacy: HistoryEntry[], logged: HistoryEntry[]): HistoryEntry[] {
+  const lay = logged.find((e) => e.event === "laid");
+  if (!lay) return sortHistory([...fromLegacy, ...logged]);
+  const built = fromLegacy.find((e) => e.event === "laid");
+  const merged = built?.text ? { ...lay, text: [lay.text, built.text].filter(Boolean).join("\n") } : lay;
+  return sortHistory([...fromLegacy.filter((e) => e !== built), ...logged.map((e) => (e === lay ? merged : e))]);
 }

@@ -2,7 +2,17 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { Basket, BasketError, type Egg, serializeEgg, type Tier } from "./basket.ts";
-import { cleanFields, formatHistory, hasLegacySections, type HistoryEntry, historyFileName, legacyHistory, stripLegacySections } from "./history.ts";
+import {
+  cleanFields,
+  formatHistory,
+  hasLegacySections,
+  type HistoryEntry,
+  historyFileName,
+  isDate,
+  legacyHistory,
+  type LoggedMove,
+  stripLegacySections,
+} from "./history.ts";
 import { run } from "./store.ts";
 import { type Cell, type Column, palette, table } from "./table.ts";
 import { mark, type ViewOptions } from "./view.ts";
@@ -43,6 +53,8 @@ export interface ShareOptions {
   skip?: string[];
   /** The developer's home directory, redacted to `~`. */
   home?: string;
+  /** Hatches and cracks from the basket's git log, for items whose history isn't migrated yet. */
+  moves?: LoggedMove[];
 }
 
 export interface ShareFile {
@@ -224,19 +236,19 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   const tags = egg.tags.map((t) => redact(t, terms, options.home, hits)).filter((t) => !t.includes("<"));
   const keepQuote = (e: HistoryEntry): { quote?: string } => (options.keepQuotes && e.quote && e.event !== "trial" ? { quote: clean(e.quote) } : {});
   const shared = entries.flatMap((e): HistoryEntry[] => {
-    const base = { date: e.date, event: e.event, version: e.version };
+    const base = { date: isDate(e.date) ? e.date : egg.laid, event: e.event, version: e.version };
     switch (e.event) {
       case "laid":
         return [{
           ...base,
           ...keepQuote(e),
           // The fact as laid is often the fact today: reuse its redaction rather than count it twice.
-          fields: cleanFields({ fact: e.fields["fact"] && (e.fields["fact"] === egg.summary ? summary : clean(e.fields["fact"])), tier: e.fields["tier"] }),
+          fields: cleanFields({ fact: e.fields["fact"] && (e.fields["fact"] === egg.summary ? summary : clean(e.fields["fact"])), tier: e.fields["tier"] && clean(e.fields["tier"]) }),
         }];
       case "evolved":
         return [{ ...base, ...keepQuote(e), fields: cleanFields({ was: clean(e.fields["was"] ?? ""), now: clean(e.fields["now"] ?? "") }) }];
       case "hatched":
-        return [{ ...base, ...keepQuote(e), fields: cleanFields({ trials: e.fields["trials"] }) }];
+        return [{ ...base, ...keepQuote(e), fields: cleanFields({ trials: e.fields["trials"] && clean(e.fields["trials"]) }) }];
       case "renamed":
         return [{ ...base, fields: cleanFields({ from: clean(e.fields["from"] ?? ""), to: clean(e.fields["to"] ?? "") }) }];
       case "imported":
@@ -294,7 +306,7 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
   for (const [tier, dir] of TIER_DIRS) {
     for (const egg of eggs.filter((e) => e.tier === tier)) raws.set(egg.id, readFileSync(join(root, dir, `${egg.id}.md`), "utf8"));
   }
-  const histories = new Map(eggs.map((e) => [e.id, basket.history(e.id)]));
+  const histories = new Map(eggs.map((e) => [e.id, basket.history(e.id, options.moves)]));
   const terms = cleanTerms([...(options.privateTerms ?? []), ...readPrivateTerms(root), ...autoTerms(eggs, options.home, publicNames, histories)]);
   const skip = new Set(options.skip ?? []);
   const files: ShareFile[] = [];

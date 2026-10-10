@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -502,4 +502,83 @@ test("legacyHistory reads a borrowed-from Origin row as an import", () => {
     ["laid", undefined, undefined],
     ["imported", "jane", "kunggaochicken/deveggs-baskets"],
   ]);
+});
+
+// --- review fixes: legacy edge cases ----------------------------------------------
+
+const legacyItem = (id: string, body: string, front = ""): string =>
+  `---\nid: ${id}\nkind: preference\ntags: \nharnesses: claude\ngood: 0\nbad: 0\n${front}laid: 2026-10-05\nupdated: 2026-10-06\n---\n${id} rule\n\n${body}\n`;
+
+test("migration keeps undated Origin rows and Evolution headings instead of dropping their entries", () => {
+  const b = fresh();
+  mkdirSync(join(b.root, "eggs"), { recursive: true });
+  writeFileSync(join(b.root, "eggs", "x.md"), legacyItem("x", [
+    "## Origin", "", "> my words", "", "- worked out in a standup", "",
+    "## Evolution", "", "### v2", "", "- was: Use `grep`", "- now: Use `rg` instead of `grep`",
+  ].join("\n"), "version: 2\n"));
+  b.migrateHistory();
+  const entries = parseHistory(historyText(b, "eggs", "x"));
+  assert.deepEqual(entries.map((e) => `${e.date} ${e.event}`), ["2026-10-05 laid", "2026-10-06 evolved"]);
+  assert.equal(entries[0]?.quote, "my words");
+  assert.match(entries[0]?.text ?? "", /- worked out in a standup/);
+  assert.equal(entries[0]?.fields["fact"], "Use `grep`", "backticks survive");
+  assert.equal(entries[1]?.fields["now"], "Use `rg` instead of `grep`");
+});
+
+test("legacy sections written into a migrated item merge without a second lay", () => {
+  const b = fresh();
+  b.lay({ id: "x", summary: "X", origin: { quote: "mine" }, today: "2026-10-05" });
+  const file = join(b.root, "eggs", "x.md");
+  writeFileSync(file, `${readFileSync(file, "utf8").trimEnd()}\n\n## Trials\n\n- 2026-10-06 ✓ (codex) an older deveggs wrote this\n`);
+  assert.deepEqual(events(b, "x"), ["2026-10-05 laid v1", "2026-10-06 trial ✓ v1"]);
+  b.feedback("x", { good: true, today: "2026-10-07" });
+  assert.deepEqual(events(b, "x"), ["2026-10-05 laid v1", "2026-10-06 trial ✓ v1", "2026-10-07 trial ✓ v1"]);
+  assert.equal(b.history("x")[0]?.quote, "mine");
+});
+
+test("multi-line legacy trial notes stay with their trial", () => {
+  const b = fresh();
+  mkdirSync(join(b.root, "eggs"), { recursive: true });
+  writeFileSync(join(b.root, "eggs", "x.md"), legacyItem("x", "## Trials\n\n- 2026-10-06 ✗ (claude) first line\n  and its second line"));
+  const trial = b.history("x").find((e) => e.event === "trial");
+  assert.equal(trial?.text, "and its second line");
+});
+
+test("an item borrowed before history files is laid no later than its owner's evolves", () => {
+  const b = fresh();
+  mkdirSync(join(b.root, "eggs"), { recursive: true });
+  writeFileSync(join(b.root, "eggs", "x.md"), legacyItem("x", [
+    "## Origin", "", "> theirs", "- 2026-10-05 · borrowed from jane · kunggaochicken/deveggs-baskets", "",
+    "## Evolution", "", "### v2 · 2026-03-01", "", "- was: A", "- now: B",
+  ].join("\n"), "version: 2\n"));
+  assert.deepEqual(events(b, "x"), ["2026-03-01 laid v1", "2026-03-01 evolved v2", "2026-10-05 imported v2"]);
+});
+
+test("movesFromLog carries only earlier moves across a rename, and a revived id ignores older moves", () => {
+  const log = [
+    "2026-10-04\tchicken: hatch foo",
+    "2026-10-03\tegg: lay foo",
+    "2026-10-02\tegg: rename foo to bar",
+    "2026-10-01\tcrack: foo",
+  ].join("\n");
+  assert.deepEqual(movesFromLog(log), [
+    { id: "bar", event: "cracked", date: "2026-10-01" },
+    { id: "foo", event: "hatched", date: "2026-10-04" },
+  ]);
+  const egg = parseEgg(legacyItem("foo", "## Origin\n\n- 2026-10-03 · grover").replace("laid: 2026-10-05", "laid: 2026-10-03"), "chicken");
+  assert.deepEqual(legacyHistory(egg, [{ id: "foo", event: "cracked", date: "2026-09-01" }]).map((e) => e.event), ["laid"]);
+});
+
+test("rename starts a history for an item that had none, and a revived id gets its old history back", () => {
+  const b = fresh();
+  mkdirSync(join(b.root, "eggs"), { recursive: true });
+  writeFileSync(join(b.root, "eggs", "bare.md"), legacyItem("bare", ""));
+  b.rename("bare", "plain", { today: "2026-10-08" });
+  assert.deepEqual(events(b, "plain"), ["2026-10-05 laid v1", "2026-10-08 renamed v1"]);
+  b.crack("plain", { today: "2026-10-09" });
+  assert.throws(() => b.lay({ id: "plain", summary: "Again" }), /delete cracked\/plain\.md to revive it/);
+  rmSync(join(b.root, "cracked", "plain.md"));
+  b.lay({ id: "plain", summary: "Again", today: "2026-10-10" });
+  assert.deepEqual(events(b, "plain"), ["2026-10-05 laid v1", "2026-10-08 renamed v1", "2026-10-09 cracked v1", "2026-10-10 laid v1"]);
+  assert.ok(!existsSync(join(b.root, "cracked", "plain.history.md")));
 });

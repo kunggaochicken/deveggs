@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
-import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, movesFromLog } from "./history.ts";
+import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
@@ -97,8 +97,7 @@ function prepare(): void {
  */
 function migrateHistory(): string[] {
   if (!basket.needsHistoryMigration().length) return [];
-  const log = run("git", ["log", "--format=%ad%x09%s", "--date=short"], basketRoot);
-  const ids = basket.migrateHistory(log.status === 0 ? movesFromLog(log.stdout) : []);
+  const ids = basket.migrateHistory(loggedMoves());
   if (ids.length) {
     console.log(`📜 moved the history of ${ids.length} item${ids.length === 1 ? "" : "s"} into <tier>/<id>.history.md (see: deveggs history <id>)`);
     save(`history: move origin, evolution and trials of ${ids.length} item${ids.length === 1 ? "" : "s"} into history files`);
@@ -106,7 +105,17 @@ function migrateHistory(): string[] {
   return ids;
 }
 
-const histories = (eggs: Egg[]): Map<string, HistoryEntry[]> => new Map(eggs.map((e) => [e.id, basket.history(e.id)]));
+/** Hatches and cracks from the basket's git log, for items whose history isn't migrated yet. */
+function loggedMoves(): LoggedMove[] {
+  if (!existsSync(basketRoot) || !basket.needsHistoryMigration().length) return [];
+  const log = run("git", ["log", "--format=%ad%x09%s", "--date=short"], basketRoot);
+  return log.status === 0 ? movesFromLog(log.stdout) : [];
+}
+
+const histories = (eggs: Egg[]): Map<string, HistoryEntry[]> => {
+  const moves = loggedMoves();
+  return new Map(eggs.map((e) => [e.id, basket.history(e.id, moves)]));
+};
 
 /** Commit a write in the basket repo, and push it when autopush is on. Warns, never fails. */
 function save(message: string): void {
@@ -246,6 +255,7 @@ function share(values: ShareFlags): void {
       privateTerms: csv(values.private),
       skip: csv(values.skip),
       home: homedir(),
+      moves: loggedMoves(),
     },
     [user],
   );
@@ -441,7 +451,7 @@ function main(argv: string[]): void {
     case "show": {
       const id = requireId(positionals);
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
-      console.log(formatShow(basket.get(id), terminalOptions(), basket.history(id)));
+      console.log(formatShow(basket.get(id), terminalOptions(), basket.history(id, loggedMoves())));
       return;
     }
     case "history": {
@@ -455,7 +465,7 @@ function main(argv: string[]): void {
       const version = values.version === undefined ? undefined : Number(values.version.replace(/^v/, ""));
       if (version !== undefined && !(Number.isInteger(version) && version > 0)) throw new BasketError(`invalid --version ${JSON.stringify(values.version)}; expected a number like 2`);
       const egg = basket.get(id);
-      const all = basket.history(id);
+      const all = basket.history(id, loggedMoves());
       const entries = filterHistory(all, {
         events: events as HistoryEvent[],
         ...(values.since !== undefined && { since: values.since }),
