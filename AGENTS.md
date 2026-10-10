@@ -37,7 +37,10 @@ repo. `deveggs where` prints the path.
 - Follow `skills/deveggs/SKILL.md`.
 - Items are `<basket>/{eggs,chickens,cracked}/<id>.md`. The folder is the tier (🥚 trial,
   🐔 permanent, 💥 rejected), the frontmatter holds kind, tags and trial counts, and
-  the first body line is the fact; the rest is notes on the current rule. Change a fact
+  the first body line is the fact. Right after it, `## Architecture` diagrams what the
+  item automates (a one-line flow for a preference, a component map with its files for a
+  workflow, script or skill); draw or redraw it with `deveggs arch <id> --set <file>`. The
+  rest is notes on the current rule. Change a fact
   with `deveggs evolve`, not by hand: it logs the old wording and restarts trials for the
   new version.
 - Each item's history is `<id>.history.md` beside it (moves with it on hatch, crack and

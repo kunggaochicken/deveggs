@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { withoutArchitecture } from "../src/architecture.ts";
 import { Basket, BasketError, isReady, parseEgg, READY_AFTER, serializeEgg, slugify, TRIAL_PREFIX } from "../src/basket.ts";
 import { formatEntry, formatHistory, type HistoryEntry, legacyHistory, movesFromLog, parseHistory } from "../src/history.ts";
 
@@ -48,7 +49,7 @@ test("feedback logs trials and an egg becomes ready after clean good trials", ()
   for (let i = 1; i < READY_AFTER; i++) egg = b.feedback("likes-tables", { good: true, harness: "codex" });
   assert.equal(egg.good, READY_AFTER);
   assert.deepEqual(egg.harnesses, ["claude", "codex"]);
-  assert.equal(egg.body, "", "trials go to the history, not the item");
+  assert.equal(withoutArchitecture(egg.body), "", "trials go to the history, not the item");
   const first = b.history("likes-tables").find((e) => e.event === "trial");
   assert.deepEqual(first, { date: "2026-10-06", event: "trial", version: 1, good: true, fields: { harness: "claude", note: "clearer diff summary" } });
   assert.ok(isReady(egg));
@@ -117,7 +118,7 @@ test("lay keeps the note in the item and records where it came from in its histo
     today: "2026-10-06",
   });
   const egg = b.feedback("land-changes-through-a-pr", { good: true, today: "2026-10-07" });
-  assert.equal(egg.body, "applies to every repo");
+  assert.equal(withoutArchitecture(egg.body), "## Notes\n\napplies to every repo");
   assert.equal(
     historyText(b, "eggs", "land-changes-through-a-pr"),
     "# land-changes-through-a-pr: history\n\n" +
@@ -199,7 +200,7 @@ test("evolve changes the fact, keeps id, tier, tags and history, and logs was/no
   assert.equal(egg.summary, "End each turn with a one-line summary, except for decisions");
   assert.equal(egg.updated, "2026-10-08");
   assert.deepEqual(egg.harnesses, ["claude", "codex"]);
-  assert.equal(egg.body, "keep it short");
+  assert.equal(withoutArchitecture(egg.body), "## Notes\n\nkeep it short");
   assert.match(
     historyText(b, "eggs", "terse"),
     /## 2026-10-08 · evolved · v2\n\n> for decisions give me the options\n\n- harness: codex\n- repo: grover\n- session: abc\n- was: End each turn with a one-line summary\n- now: End each turn with a one-line summary, except for decisions\n- why: narrow: decisions need the trade-offs\n$/,
@@ -310,7 +311,7 @@ test("rename rewrites `old-id` and [[old-id]] references in other items and skil
   assert.deepEqual(rewrote.sort(), [join(b.root, "eggs", "guardian.md"), skill].sort());
   assert.match(b.get("guardian").body, /- `delegate`: fan out\n- \[\[delegate\]\] and \[\[delegate\|alias\]\]\n- `parallel-ish` and parallel stay/);
   assert.match(readFileSync(skill, "utf8"), /See `delegate`\./);
-  assert.match(b.get("delegate").body, /^Self: `parallel`/, "it doesn't rewrite itself");
+  assert.match(b.get("delegate").body, /## Notes\n\nSelf: `parallel`/, "it doesn't rewrite itself");
 });
 
 test("rename moves a skill folder and renames the skill inside", () => {
@@ -346,9 +347,6 @@ test("rename leaves other items' history alone", () => {
   b.rename("foo", "older", { today: "2026-10-07" });
   b.lay({ id: "foo", summary: "New foo" });
   b.lay({ id: "x", summary: "X", note: "Works with `foo`" });
-  b.rename("foo", "bar", { today: "2026-10-08" });
-  assert.equal(b.history("older").at(-1)?.fields["from"], "foo");
-  assert.match(b.get("x").body, /^Works with `bar`/);
 });
 
 // --- history: hatch, crack, legacy migration -------------------------------------

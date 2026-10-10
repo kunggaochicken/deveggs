@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { Basket, BasketError, type Egg, serializeEgg, type Tier } from "./basket.ts";
+import { architectureOf, ARCH_HEADING, isScaffold, withoutArchitecture } from "./architecture.ts";
 import {
   cleanFields,
   formatHistory,
@@ -210,13 +211,14 @@ const CONTEXT_FIELDS = ["harness", "repo", "session"];
 
 /**
  * Strip an item down to what is safe to publish: id, kind, tags, trial counts, dates and
- * the fact, plus a history of its lay, evolves (each version's was/now wording), hatch,
+ * the fact, its architecture diagram (unless still a scaffold; references in it to items
+ * left out of the share, `hidden`, become `<private>`), plus a history of its lay, evolves (each version's was/now wording), hatch,
  * renames and imports. Quotes (unless keepQuotes), context (harness, repo, session),
  * harnesses, notes (and every why, scenario, cause and tuning), trials and cracks are
  * removed; everything kept is redacted. `history` is the item's history; without it,
  * it's read from legacy body sections.
  */
-export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, terms: string[] = [], history?: HistoryEntry[]): SanitizedEgg {
+export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, terms: string[] = [], history?: HistoryEntry[], hidden: string[] = []): SanitizedEgg {
   const hits: Hits = new Map();
   const removed: string[] = [];
   const entries = historyOf(egg, history);
@@ -230,7 +232,7 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   if (entries.some((e) => e.event === "trial")) add("trial notes");
   if (entries.some((e) => e.event === "evolved" && e.quote) && !options.keepQuotes) add("evolution quote");
   const noted = (e: HistoryEntry): boolean => e.event !== "trial" && Object.keys(e.fields).some((k) => ["why", "note", "scenario", "result", "cause", "tuning"].includes(k));
-  if (stripLegacySections(egg.body) || entries.some((e) => noted(e) || e.text)) add("notes");
+  if (withoutArchitecture(stripLegacySections(egg.body)) || entries.some((e) => noted(e) || e.text)) add("notes");
   const clean = (text: string): string => redact(text, terms, options.home, hits);
   const summary = clean(egg.summary);
   const tags = egg.tags.map((t) => redact(t, terms, options.home, hits)).filter((t) => !t.includes("<"));
@@ -257,11 +259,26 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
         return []; // trials (the developer's own loop) and cracks
     }
   });
+  const arch = architectureOf(egg.body);
+  if (isScaffold(arch)) add("unfinished diagram");
+  const architecture = arch && !isScaffold(arch) ? clean(hideIds(arch, hidden, hits)) : "";
   return {
-    egg: { ...egg, summary, tags, harnesses: [], body: "" },
+    egg: { ...egg, summary, tags, harnesses: [], body: architecture ? `## ${ARCH_HEADING}\n\n${architecture}` : "" },
     history: shared,
     redactions: [...removed, ...labels(hits)],
   };
+}
+
+/** Replace references to left-out items (`id`, [[id]] and file paths naming them) with <private>. */
+function hideIds(text: string, ids: string[], hits: Hits): string {
+  let out = text;
+  for (const id of [...ids].sort((a, b) => b.length - a.length)) {
+    out = out.replace(new RegExp(`(?<![\\w-])${escape(id)}(?![\\w-])`, "g"), () => {
+      hits.set("private item", (hits.get("private item") ?? 0) + 1);
+      return "<private>";
+    });
+  }
+  return out;
 }
 
 // --- the plan ------------------------------------------------------------------
@@ -324,6 +341,7 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
             ? "id has a private term; rename it or --skip it"
             : undefined;
 
+  const hidden = eggs.filter((e) => excluded(e.id, "egg")).map((e) => e.id); // cracked ids aren't secret
   for (const [tier, dir] of TIER_DIRS) {
     for (const egg of eggs.filter((e) => e.tier === tier)) {
       const path = `${dir}/${egg.id}.md`;
@@ -332,7 +350,7 @@ export function planShare(root: string, options: ShareOptions = {}, publicNames:
         items.push({ path, mark: mark(egg), shared: false, why, redactions: [] });
         continue;
       }
-      const clean = sanitizeEgg(egg, raws.get(egg.id) ?? "", options, terms, histories.get(egg.id));
+      const clean = sanitizeEgg(egg, raws.get(egg.id) ?? "", options, terms, histories.get(egg.id), hidden);
       files.push({ path, content: serializeEgg(clean.egg) });
       if (clean.history.length) files.push({ path: `${dir}/${historyFileName(egg.id)}`, content: formatHistory(egg.id, clean.history) });
       items.push({ path, mark: mark(egg), shared: true, redactions: clean.redactions, fact: clean.egg.summary });
