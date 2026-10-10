@@ -240,7 +240,7 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   const tags = egg.tags.map((t) => redact(t, terms, options.home, hits)).filter((t) => !t.includes("<"));
   const quote = options.keepQuotes && s.quote ? clean(s.quote) : "";
   const evolved = evolution.map((e) =>
-    formatEvolution({ ...e, context: [], quote: options.keepQuotes && e.quote ? clean(e.quote) : "", was: clean(e.was), now: clean(e.now), why: "" }));
+    formatEvolution({ ...e, context: [], quote: options.keepQuotes && e.quote ? clean(e.quote) : "", was: clean(e.was), now: clean(e.now), why: "", ...(e.renamedFrom && { renamedFrom: clean(e.renamedFrom) }) }));
   const body = [
     quote ? ["## Origin", "", ...quote.split("\n").map((l) => `> ${l}`)].join("\n") : "",
     evolved.length ? ["## Evolution", "", evolved.join("\n\n")].join("\n") : "",

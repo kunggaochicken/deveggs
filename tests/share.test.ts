@@ -340,3 +340,11 @@ test("share --repo and --dir pick another destination; bad values are rejected",
   assert.match(cli(box, "share", "--dry-run", "--as", "tester", "--dir", "../x").stderr, /invalid --dir/);
   assert.equal(shareDir("tester"), "baskets/tester");
 });
+
+test("sanitizeEgg keeps a rename in the evolution, redacting the old id", () => {
+  const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-share-")));
+  b.lay({ id: "acme-terse", summary: "One-line summaries" });
+  b.rename("acme-terse", "terse", "2026-10-08");
+  const { egg } = sanitizeEgg(b.get("terse"), "", {}, ["acme"]);
+  assert.match(egg.body, /^## Evolution\n\n### renamed · 2026-10-08\n\n- renamed from: `<private>-terse`$/);
+});

@@ -11,7 +11,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { BasketError } from "./basket.ts";
 import { commitBasket, ensureBasket, run } from "./store.ts";
 
@@ -85,6 +85,45 @@ export function staleLinks(legacy: string, target: string, home: string = homedi
     }
   }
   return out;
+}
+
+/**
+ * After `deveggs rename`, harness skill links named `oldName` that point at the old skill
+ * folder are replaced by links named `newName` to the new folder. A link whose new name is
+ * already taken is left alone and returned in `skipped`.
+ */
+export function renameLinks(oldDir: string, newDir: string, oldName: string, newName: string, home: string = homedir()): { moved: Relink[]; skipped: string[] } {
+  const moved: Relink[] = [];
+  const skipped: string[] = [];
+  // The old folder is gone by now; its parent still resolves, symlinks and all.
+  const targets = [...spellings(oldDir), ...spellings(dirname(oldDir)).map((p) => join(p, basename(oldDir)))];
+  for (const rel of HARNESS_SKILLS) {
+    const link = join(home, rel, oldName);
+    let isLink = false;
+    try {
+      isLink = lstatSync(link).isSymbolicLink();
+    } catch {
+      continue;
+    }
+    if (!isLink || !targets.includes(resolve(dirname(link), readlinkSync(link)))) continue;
+    const next = join(home, rel, newName);
+    if (existsSync(next) || isSymlink(next)) {
+      skipped.push(link);
+      continue;
+    }
+    rmSync(link);
+    symlinkSync(newDir, next);
+    moved.push({ link: next, from: link, to: newDir });
+  }
+  return { moved, skipped };
+}
+
+function isSymlink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 export function relink(links: Relink[]): void {

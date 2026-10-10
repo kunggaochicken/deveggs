@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Basket, BasketError, type Egg, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
-import { hasContent, legacyBasket, lnCommand, migrate, relink } from "./migrate.ts";
+import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, mark, terminalOptions, trialCounts } from "./view.ts";
@@ -28,6 +28,10 @@ usage:
                                      change an egg's or chicken's rule: keeps its id, tier,
                                      tags, origin and trials, records was/now/why under
                                      ## Evolution, and restarts trials for the new version
+  deveggs rename <old-id> <new-id>     rename an egg, chicken or cracked item: moves its file
+                                     and skill (and harness skill links), notes the old id
+                                     under ## Evolution, and rewrites \`old-id\` and [[old-id]]
+                                     references in other items
   deveggs hatch <id>                   egg -> chicken (permanent)
   deveggs crack <id>                   reject an egg, or retire a chicken
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
@@ -338,6 +342,22 @@ function main(argv: string[]): void {
       if (egg.tier === "egg") {
         console.log(`     trials restart at ✓0 ✗0 for v${egg.version} (v${was.version}'s ✓${was.good} ✗${was.bad} stay in the log); hatching needs ${READY_AFTER} ✓ and no ✗ from here`);
       }
+      return;
+    }
+    case "rename": {
+      const [from, to] = positionals;
+      if (!from || !to || positionals.length > 2) throw new BasketError("usage: deveggs rename <old-id> <new-id>");
+      if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(from)}; ${emptyNote()}`);
+      prepare();
+      const { egg, rewrote } = basket.rename(from, to);
+      const links = renameLinks(basket.skillDir(egg.tier, from), basket.skillDir(egg.tier, to), from, to);
+      basket.render();
+      save(`${egg.tier}: rename ${from} to ${to}`);
+      console.log(line(egg));
+      console.log(`     renamed from ${from}`);
+      for (const file of rewrote) console.log(`     updated references in ${file}`);
+      for (const r of links.moved) console.log(`     relinked ${r.from} -> ${r.link}`);
+      for (const l of links.skipped) console.log(`     left ${l} alone: ${to} is already taken there; relink it by hand`);
       return;
     }
     case "hatch":

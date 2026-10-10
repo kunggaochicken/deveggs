@@ -106,6 +106,8 @@ export interface Evolution {
   was: string;
   now: string;
   why: string;
+  /** Set on a rename entry: the id the item had before. Its version is 0 and was/now are empty. */
+  renamedFrom?: string;
 }
 
 export class BasketError extends Error {}
@@ -198,11 +200,15 @@ export function formatOrigin(date: string, harness: string | undefined, origin: 
 
 const quoteLines = (quote: string): string[] => quote.split("\n").map((l) => `> ${l}`);
 
-/** One `## Evolution` entry: a `### vN · date · context` heading, the quote, then was/now/why. */
+/**
+ * One `## Evolution` entry: a `### vN · date · context` heading, the quote, then was/now/why.
+ * A rename (`deveggs rename`) is a `### renamed · date` heading and a `- renamed from:` line.
+ */
 export function formatEvolution(e: Evolution): string {
-  const lines = [`### ${[`v${e.version}`, e.date, ...e.context].join(" · ")}`, ""];
+  const lines = [`### ${[e.renamedFrom ? "renamed" : `v${e.version}`, e.date, ...e.context].join(" · ")}`, ""];
   if (e.quote) lines.push(...quoteLines(e.quote), "");
-  lines.push(`- was: ${e.was}`, `- now: ${e.now}`);
+  if (e.renamedFrom) lines.push(`- renamed from: \`${e.renamedFrom}\``);
+  else lines.push(`- was: ${e.was}`, `- now: ${e.now}`);
   if (e.why) lines.push(`- why: ${e.why}`);
   return lines.join("\n");
 }
@@ -218,7 +224,9 @@ export function parseEvolution(body: string): Evolution[] {
       const [heading = "", ...lines] = entry.trim().split("\n");
       const [v = "", date = "", ...context] = heading.slice(4).split(" · ").map((s) => s.trim());
       const field = (name: string): string => lines.find((l) => l.startsWith(`- ${name}: `))?.slice(name.length + 4).trim() ?? "";
+      const renamed = v === "renamed" ? { renamedFrom: field("renamed from").replace(/^`|`$/g, "") } : {};
       return {
+        ...renamed,
         version: Number(v.replace(/^v/, "")) || 0,
         date,
         context,
@@ -271,6 +279,18 @@ function skillStub(egg: Egg): string {
     "<!-- Write the skill here. While it's an egg, record trials with `deveggs feedback`. -->",
     "",
   ].join("\n");
+}
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Point `` `old` `` and `[[old]]` (also `[[old|alias]]`, `[[old#part]]`) at the new id. True if the file changed. */
+function rewriteRefs(file: string, oldId: string, newId: string): boolean {
+  const text = readFileSync(file, "utf8");
+  const id = escapeRegExp(oldId);
+  const next = text.replace(new RegExp(`\`${id}\``, "g"), `\`${newId}\``).replace(new RegExp(`\\[\\[${id}(?=[\\]|#])`, "g"), `[[${newId}`);
+  if (next === text) return false;
+  writeFileSync(file, next);
+  return true;
 }
 
 // --- basket ------------------------------------------------------------------
@@ -491,6 +511,53 @@ export class Basket {
       return desc.slice(prefix.length) === egg.summary ? `description: ${prefix}${summary}` : line;
     });
     writeFileSync(file, text);
+  }
+
+  /**
+   * Rename an item: move its file (and skill folder, if any) to the new id, record the old
+   * id under `## Evolution`, and rewrite `` `old-id` `` and `[[old-id]]` references in the
+   * other items and in skills. Its tier, version, trials and history stay as they were.
+   * Returns the renamed item and the files whose references were rewritten.
+   */
+  rename(oldId: string, newId: string, date: string = today()): { egg: Egg; rewrote: string[] } {
+    if (slugify(newId) !== newId) {
+      throw new BasketError(`invalid id ${JSON.stringify(newId)}; use lowercase words joined by dashes, e.g. pr-screenshots`);
+    }
+    const egg = this.get(oldId);
+    if (oldId === newId) throw new BasketError(`${oldId} is already called that`);
+    const taken = this.find(newId);
+    if (taken) throw new BasketError(`${newId} is already in the basket (${taken}); pick another id`);
+    const clash = TIERS.map((t) => this.skillDir(t, newId)).find((dir) => existsSync(dir));
+    if (clash) throw new BasketError(`a skill folder ${clash} already exists; move it away to rename ${oldId}`);
+
+    const skill = this.skillDir(egg.tier, oldId);
+    if (existsSync(skill)) {
+      renameSync(skill, this.skillDir(egg.tier, newId));
+      const file = join(this.skillDir(egg.tier, newId), "SKILL.md");
+      if (existsSync(file)) {
+        const text = readFileSync(file, "utf8")
+          .replace(new RegExp(`^name: ${oldId}$`, "m"), `name: ${newId}`)
+          .replace(new RegExp(`^# ${oldId}$`, "m"), `# ${newId}`);
+        writeFileSync(file, text);
+      }
+    }
+    rmSync(this.path(egg.tier, oldId));
+    const entry = formatEvolution({ version: 0, date, context: [], quote: "", was: "", now: "", why: "", renamedFrom: oldId });
+    const renamed = this.save({ ...egg, id: newId, updated: date, body: addEvolution(egg.body, entry) });
+
+    const self = this.path(egg.tier, newId);
+    const rewrote = this.markdownFiles().filter((file) => file !== self && rewriteRefs(file, oldId, newId));
+    return { egg: renamed, rewrote };
+  }
+
+  /** Every item file, and every Markdown file under skills/. */
+  private markdownFiles(): string[] {
+    const walk = (dir: string): string[] =>
+      existsSync(dir)
+        ? readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+            e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith(".md") ? [join(dir, e.name)] : [])
+        : [];
+    return [...TIERS.flatMap((t) => walk(this.dir(t))), ...walk(join(this.root, "skills"))];
   }
 
   /** The developer liked it: hatch the egg into a permanent chicken. */
