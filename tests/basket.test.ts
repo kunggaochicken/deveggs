@@ -303,3 +303,14 @@ test("rename refuses a missing item, a taken id, an invalid id and a clashing sk
   assert.throws(() => b.rename("a", "d"), /skill folder .* already exists/);
   assert.ok(existsSync(join(b.root, "eggs", "a.md")), "nothing moved");
 });
+
+test("rename leaves other items' Evolution history alone", () => {
+  const b = fresh();
+  b.lay({ id: "foo", summary: "Foo" });
+  b.rename("foo", "older", "2026-10-07");
+  b.lay({ id: "foo", summary: "New foo" });
+  b.lay({ id: "x", summary: "X", note: "Works with `foo`" });
+  b.rename("foo", "bar", "2026-10-08");
+  assert.match(b.get("older").body, /- renamed from: `foo`$/);
+  assert.match(b.get("x").body, /^Works with `bar`/);
+});

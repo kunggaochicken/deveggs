@@ -266,9 +266,8 @@ collecting `--bad` feedback, suggest cracking it or evolving it (with a verdict 
 After hatching or cracking a skill, update its symlink in every harness skills
 folder that links into the basket (for example `~/.claude/skills/`,
 `~/.codex/skills/`). On hatch, repoint the link from `~/.deveggs/skills/eggs/<id>` to
-`~/.deveggs/skills/chickens/<id>`. On crack, remove it. `deveggs rename` repoints
-these links itself. Do the same when you lay a
-new skill, so every harness can use it.
+`~/.deveggs/skills/chickens/<id>`. On crack, remove it. Do the same when you lay a
+new skill, so every harness can use it. `deveggs rename` repoints these links itself.
 
 ## Committing
 

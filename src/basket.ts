@@ -283,11 +283,18 @@ function skillStub(egg: Egg): string {
 
 const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Point `` `old` `` and `[[old]]` (also `[[old|alias]]`, `[[old#part]]`) at the new id. True if the file changed. */
+/**
+ * Point `` `old` `` and `[[old]]` (also `[[old|alias]]`, `[[old#part]]`) at the new id.
+ * `## Evolution` sections are history and stay as written. True if the file changed.
+ */
 function rewriteRefs(file: string, oldId: string, newId: string): boolean {
   const text = readFileSync(file, "utf8");
   const id = escapeRegExp(oldId);
-  const next = text.replace(new RegExp(`\`${id}\``, "g"), `\`${newId}\``).replace(new RegExp(`\\[\\[${id}(?=[\\]|#])`, "g"), `[[${newId}`);
+  const swap = (part: string): string =>
+    /^## Evolution\s*$/.test(part.split("\n")[0] ?? "")
+      ? part
+      : part.replace(new RegExp(`\`${id}\``, "g"), `\`${newId}\``).replace(new RegExp(`\\[\\[${id}(?=[\\]|#])`, "g"), `[[${newId}`);
+  const next = text.split(/^(?=## )/m).map(swap).join("");
   if (next === text) return false;
   writeFileSync(file, next);
   return true;
@@ -530,20 +537,22 @@ export class Basket {
     const clash = TIERS.map((t) => this.skillDir(t, newId)).find((dir) => existsSync(dir));
     if (clash) throw new BasketError(`a skill folder ${clash} already exists; move it away to rename ${oldId}`);
 
+    // Write the new file before removing anything, so a failure never loses the item.
+    const entry = formatEvolution({ version: 0, date, context: [], quote: "", was: "", now: "", why: "", renamedFrom: oldId });
+    const renamed = this.save({ ...egg, id: newId, updated: date, body: addEvolution(egg.body, entry) });
+    rmSync(this.path(egg.tier, oldId));
     const skill = this.skillDir(egg.tier, oldId);
     if (existsSync(skill)) {
       renameSync(skill, this.skillDir(egg.tier, newId));
       const file = join(this.skillDir(egg.tier, newId), "SKILL.md");
       if (existsSync(file)) {
+        const old = escapeRegExp(oldId);
         const text = readFileSync(file, "utf8")
-          .replace(new RegExp(`^name: ${oldId}$`, "m"), `name: ${newId}`)
-          .replace(new RegExp(`^# ${oldId}$`, "m"), `# ${newId}`);
+          .replace(new RegExp(`^name: ${old}$`, "m"), `name: ${newId}`)
+          .replace(new RegExp(`^# ${old}$`, "m"), `# ${newId}`);
         writeFileSync(file, text);
       }
     }
-    rmSync(this.path(egg.tier, oldId));
-    const entry = formatEvolution({ version: 0, date, context: [], quote: "", was: "", now: "", why: "", renamedFrom: oldId });
-    const renamed = this.save({ ...egg, id: newId, updated: date, body: addEvolution(egg.body, entry) });
 
     const self = this.path(egg.tier, newId);
     const rewrote = this.markdownFiles().filter((file) => file !== self && rewriteRefs(file, oldId, newId));

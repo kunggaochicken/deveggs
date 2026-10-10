@@ -350,7 +350,12 @@ function main(argv: string[]): void {
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(from)}; ${emptyNote()}`);
       prepare();
       const { egg, rewrote } = basket.rename(from, to);
-      const links = renameLinks(basket.skillDir(egg.tier, from), basket.skillDir(egg.tier, to), from, to);
+      let links: ReturnType<typeof renameLinks> = { moved: [], skipped: [] };
+      try {
+        links = renameLinks(basket.skillDir(egg.tier, from), basket.skillDir(egg.tier, to), from, to);
+      } catch (err) {
+        warn(`couldn't repoint harness skill links named ${from} (${(err as Error).message}); relink them to ${basket.skillDir(egg.tier, to)} by hand`);
+      }
       basket.render();
       save(`${egg.tier}: rename ${from} to ${to}`);
       console.log(line(egg));
