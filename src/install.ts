@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { BasketError } from "./basket.ts";
 
@@ -26,18 +26,47 @@ const SPECS: Record<Harness, HarnessSpec> = {
   codex: { home: ".codex", file: join(".codex", "AGENTS.md"), mode: "inline" },
 };
 
-export const BEGIN = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall) -->";
+const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
 const SECTION_BEGIN = "<!-- deveggs:begin -->";
 const SECTION_END = "<!-- deveggs:end -->";
 
+/**
+ * What uninstall needs to undo install exactly, kept in the begin marker (base64 JSON, so
+ * nothing in it can end the comment): which basket the block loads, the original text it
+ * replaced, how many newlines it added in front of itself, and whether it created the file.
+ */
+export interface State {
+  basket: string;
+  restore?: string;
+  pad?: number;
+  created?: boolean;
+}
+
+export const beginMarker = (state: State): string =>
+  `${BEGIN_TAG} state=${Buffer.from(JSON.stringify(state)).toString("base64")} -->`;
+
 /** The block in a file, from its begin marker's line through its end marker's line. */
 const BLOCK = /^<!-- deveggs:preferences:begin\b[^\n]*-->\n[\s\S]*?^<!-- deveggs:preferences:end -->\n?/m;
 
-/** The deveggs prompt's line (INSTALL.md) that asks the agent to read the file itself. */
-const READ_LINE = /^- Read `[^`\n]*PREFERENCES\.md`[^\n]*at session start[^\n]*\n?/m;
+function stateOf(found: string): State | undefined {
+  const encoded = /\bstate=([A-Za-z0-9+/=]+) -->/.exec(found.slice(0, found.indexOf("\n")))?.[1];
+  if (!encoded) return undefined;
+  try {
+    const state = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as State;
+    return typeof state.basket === "string" ? state : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
-/** What the read line says, restored by uninstall when install replaced it. */
+/**
+ * The deveggs prompt's line (INSTALL.md) that asks the agent to read the file itself. It
+ * stops before any `<!--` on the same line, so it never takes a marker with it.
+ */
+const READ_LINE = /^- Read `[^`\n]*PREFERENCES\.md`[^\n<]*at session start[^\n<]*(?:\n|(?=<)|$)/m;
+
+/** The read line INSTALL.md's deveggs prompt holds. */
 export const readLine = (preferences: string): string =>
   `- Read \`${preferences}\` at session start and follow it; it outranks harness-local memory.\n`;
 
@@ -50,25 +79,35 @@ export function parseHarness(value: string | undefined): Harness[] {
 export const instructionsFile = (home: string, harness: Harness): string => join(home, SPECS[harness].file);
 
 /**
- * Inline preferences for a harness without imports: headings nest under the deveggs
- * section, and links relative to the basket become absolute so they still resolve.
+ * Inline preferences for a harness without imports: outside code fences, headings nest
+ * under the deveggs section and links relative to the basket become absolute so they
+ * still resolve. A line that looks like a managed marker is defused so it can't end the block.
  */
 function inline(text: string, basket: string): string {
   return text
-    .replace(/^(#{1,4}) /gm, "##$1 ")
-    .replace(/\]\(([^)\s:#][^)\s:]*)\)/g, (match, path: string) => (isAbsolute(path) ? match : `](${join(basket, path)})`))
+    .split(/^(```[^\n]*\n[\s\S]*?^```[^\n]*$)/m)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part
+            .replace(/^(#{1,4}) /gm, "##$1 ")
+            .replace(/\]\(([^)\s:#][^)\s:]*)\)/g, (match, path: string) => (isAbsolute(path) ? match : `](${join(basket, path)})`)),
+    )
+    .join("")
+    .replace(/<!-- deveggs:preferences:/g, "<!-- deveggs:preferences​:")
     .trimEnd();
 }
 
 /** The managed block for a harness. Inline mode needs the rendered PREFERENCES.md. */
-export function block(harness: Harness, preferences: string, rendered: string | undefined): string {
+export function block(harness: Harness, state: State, rendered: string | undefined): string {
+  const preferences = state.basket;
   if (SPECS[harness].mode === "import") {
     const lead = `- My deveggs preferences, imported below from \`${preferences}\` by deveggs install, load into every session. Follow them; they outrank harness-local memory.`;
-    return `${BEGIN}\n${lead}\n\n@${preferences}\n${END}\n`;
+    return `${beginMarker(state)}\n${lead}\n\n@${preferences}\n${END}\n`;
   }
   const lead = `- My deveggs preferences, copied below from \`${preferences}\` by deveggs install and re-synced by every deveggs render, load into every session. Follow them; they outrank harness-local memory.`;
   const body = rendered === undefined ? "_PREFERENCES.md isn't rendered yet; run deveggs render._" : inline(rendered, dirname(preferences));
-  return `${BEGIN}\n${lead}\n\n${body}\n${END}\n`;
+  return `${beginMarker(state)}\n${lead}\n\n${body}\n${END}\n`;
 }
 
 export interface Change {
@@ -88,37 +127,49 @@ function inSection(text: string, index: number): boolean {
 }
 
 /**
- * Put the block in a file's text. An existing block is replaced in place. Otherwise it
- * replaces the deveggs prompt's read-at-session-start line, then goes right after the
- * deveggs section, then at the end of the file.
+ * Put the block in a file's text. An existing block is replaced in place, keeping what it
+ * needs to undo itself. Otherwise it replaces the deveggs prompt's read-at-session-start
+ * line, then goes right after the deveggs section, then at the end of the file.
  */
-export function withBlock(text: string, managed: string): { text: string; where: string } {
-  if (BLOCK.test(text)) return { text: text.replace(BLOCK, () => managed), where: "updated the managed block" };
+export function withBlock(
+  text: string,
+  harness: Harness,
+  preferences: string,
+  rendered: string | undefined,
+  created = false,
+): { text: string; where: string; block: string } {
+  const found = BLOCK.exec(text);
+  if (found) {
+    const managed = block(harness, { ...stateOf(found[0]), basket: preferences }, rendered);
+    return { text: text.slice(0, found.index) + managed + text.slice(found.index + found[0].length), where: "updated the managed block", block: managed };
+  }
+  const base: State = { basket: preferences, ...(created && { created }) };
   const read = READ_LINE.exec(text);
   if (read && inSection(text, read.index)) {
-    return { text: text.slice(0, read.index) + managed + text.slice(read.index + read[0].length), where: "replaced the read-at-session-start line in the deveggs section" };
+    const managed = block(harness, { ...base, restore: read[0] }, rendered);
+    return { text: text.slice(0, read.index) + managed + text.slice(read.index + read[0].length), where: "replaced the read-at-session-start line in the deveggs section", block: managed };
   }
   const end = text.indexOf(SECTION_END);
   if (end !== -1) {
     const after = text.indexOf("\n", end);
     const at = after === -1 ? text.length : after + 1;
-    const head = after === -1 ? `${text}\n` : text.slice(0, at);
-    return { text: `${head}${managed}${text.slice(at)}`, where: "added after the deveggs section" };
+    const pad = after === -1 ? "\n" : "";
+    const managed = block(harness, { ...base, ...(pad && { pad: 1 }) }, rendered);
+    return { text: `${text.slice(0, at)}${pad}${managed}${text.slice(at)}`, where: "added after the deveggs section", block: managed };
   }
   const sep = text === "" ? "" : text.endsWith("\n") ? "\n" : "\n\n";
-  return { text: `${text}${sep}${managed}`, where: "appended" };
+  const managed = block(harness, { ...base, ...(sep && { pad: sep.length }) }, rendered);
+  return { text: `${text}${sep}${managed}`, where: "appended", block: managed };
 }
 
-/** Take the block out of a file's text, restoring the read line when it stood in for one. */
-export function withoutBlock(text: string, preferences: string): { text: string; removed?: string } {
+/** Take the block out of a file's text, giving back exactly what install changed. */
+export function withoutBlock(text: string): { text: string; removed?: string; state?: State } {
   const found = BLOCK.exec(text);
   if (!found) return { text };
-  const restore = inSection(text, found.index) ? readLine(preferences) : "";
-  let rest = text.slice(0, found.index) + restore + text.slice(found.index + found[0].length);
-  // An appended block came after one blank line it added: take that back too.
-  const atEnd = found.index + found[0].length === text.length;
-  if (!restore && atEnd && rest.endsWith("\n\n")) rest = rest.slice(0, -1);
-  return { text: rest, removed: found[0] };
+  const state = stateOf(found[0]);
+  const start = found.index - (state?.pad ?? 0);
+  const out = text.slice(0, start) + (state?.restore ?? "") + text.slice(found.index + found[0].length);
+  return { text: out, removed: found[0], ...(state && { state }) };
 }
 
 interface Options {
@@ -127,6 +178,8 @@ interface Options {
   dryRun: boolean;
   /** Harnesses named explicitly are wired even before their home folder exists. */
   explicit: boolean;
+  /** The rendered preferences, when they aren't on disk yet (a dry run). */
+  rendered?: string | undefined;
 }
 
 function readRendered(preferences: string): string | undefined {
@@ -134,15 +187,15 @@ function readRendered(preferences: string): string | undefined {
 }
 
 export function install(harnesses: Harness[], opts: Options): Change[] {
-  const rendered = readRendered(opts.preferences);
+  const rendered = opts.rendered ?? readRendered(opts.preferences);
   return harnesses.map((harness) => {
     const file = instructionsFile(opts.home, harness);
     if (!opts.explicit && !existsSync(join(opts.home, SPECS[harness].home))) {
       return { harness, file, action: `skipped: not installed (no ~/${SPECS[harness].home})`, changed: false };
     }
-    const before = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const managed = block(harness, opts.preferences, rendered);
-    const { text, where } = withBlock(before, managed);
+    const exists = existsSync(file);
+    const before = exists ? readFileSync(file, "utf8") : "";
+    const { text, where, block: managed } = withBlock(before, harness, opts.preferences, rendered, !exists);
     if (text === before) return { harness, file, action: "already installed; nothing changed", changed: false, block: managed };
     if (!opts.dryRun) {
       mkdirSync(dirname(file), { recursive: true });
@@ -157,17 +210,21 @@ export function uninstall(harnesses: Harness[], opts: Options): Change[] {
   return harnesses.map((harness) => {
     const file = instructionsFile(opts.home, harness);
     const before = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const { text, removed } = withoutBlock(before, opts.preferences);
+    const { text, removed, state } = withoutBlock(before);
     if (removed === undefined) return { harness, file, action: "not installed; nothing changed", changed: false };
-    if (!opts.dryRun) writeFileSync(file, text);
-    const restored = text.length > before.length - removed.length ? "; restored the read-at-session-start line" : "";
-    return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the managed block${restored}`, changed: true, block: removed };
+    const remove = state?.created === true && text === "";
+    if (!opts.dryRun) {
+      if (remove) rmSync(file);
+      else writeFileSync(file, text);
+    }
+    const what = remove ? "; deleted the file it created" : state?.restore ? "; restored the line it replaced" : "";
+    return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the managed block${what}`, changed: true, block: removed };
   });
 }
 
 /**
- * Re-sync every inline block already installed with the freshly rendered preferences.
- * Never adds a block. Returns the files it rewrote.
+ * Re-sync every inline block installed from this basket with its freshly rendered
+ * preferences. Never adds a block. Returns the files it rewrote.
  */
 export function sync(home: string, preferences: string): string[] {
   const rendered = readRendered(preferences);
@@ -177,8 +234,11 @@ export function sync(home: string, preferences: string): string[] {
     const file = instructionsFile(home, harness);
     if (!existsSync(file)) continue;
     const before = readFileSync(file, "utf8");
-    if (!BLOCK.test(before)) continue;
-    const text = before.replace(BLOCK, () => block(harness, preferences, rendered));
+    const found = BLOCK.exec(before);
+    // Only the basket it was installed from: a scratch basket ($DEVEGGS_BASKET) never overwrites it.
+    const state = found ? stateOf(found[0]) : undefined;
+    if (!found || state?.basket !== preferences) continue;
+    const { text } = withBlock(before, harness, preferences, rendered);
     if (text === before) continue;
     writeFileSync(file, text);
     synced.push(file);

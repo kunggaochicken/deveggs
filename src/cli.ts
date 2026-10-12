@@ -591,7 +591,9 @@ function main(argv: string[]): void {
         render();
         save("render");
       }
-      const opts = { home: homedir(), preferences: basket.preferencesPath, dryRun, explicit: values.harness !== undefined && values.harness !== "all" };
+      // A dry run previews what install would render, without writing it.
+      const rendered = dryRun && command === "install" && existsSync(basketRoot) ? basket.preferences() : undefined;
+      const opts = { home: homedir(), preferences: basket.preferencesPath, dryRun, explicit: values.harness !== undefined && values.harness !== "all", rendered };
       const changes = command === "install" ? install(harnesses, opts) : uninstall(harnesses, opts);
       printChanges(changes, command === "install" ? "+" : "-");
       if (dryRun) console.log("--dry-run: nothing written.");

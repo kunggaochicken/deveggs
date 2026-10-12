@@ -57,8 +57,10 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      own. Skip this change if the harness has no skills folder.
    - **The deveggs prompt.** Add this block to the end of its global
      instructions file, filling in `<repo>`. If the block already exists (between
-     the `deveggs:begin` and `deveggs:end` markers), replace it. Leave the rest of the
-     file untouched, and create the file if it doesn't exist.
+     the `deveggs:begin` and `deveggs:end` markers), replace it, but keep any
+     `deveggs:preferences:begin` … `deveggs:preferences:end` block inside it as it is
+     (`deveggs install` below re-checks it either way). Leave the rest of the file
+     untouched, and create the file if it doesn't exist.
 
      ```markdown
      <!-- deveggs:begin -->
