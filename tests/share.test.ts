@@ -128,7 +128,7 @@ test("autoTerms picks up origin repos and the home folder, but not public names"
 
 test("sanitizeEgg keeps an evolution's was/now but drops its quote, context and why unless keepQuotes", () => {
   const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-share-")));
-  b.lay({ id: "terse", summary: "One-line summaries for acme", harness: "claude", origin: { quote: "one line", repo: "moonjelly" } });
+  b.lay({ id: "terse", summary: "One-line summaries for acme", harness: "claude", origin: { quote: "one line", repo: "moonjelly" }, today: "2026-10-07" });
   b.evolve("terse", {
     summary: "One-line summaries, except decisions",
     quote: `options please, see /Users/jane/notes with ${GHP}`,
@@ -147,7 +147,7 @@ test("sanitizeEgg keeps an evolution's was/now but drops its quote, context and 
   assert.equal(plain.egg.body, "");
   assert.equal(
     formatHistory("terse", plain.history).split("-->\n\n")[1],
-    "## 2026-10-10 · laid · v1\n\n- fact: One-line summaries for <private>\n\n" +
+    "## 2026-10-07 · laid · v1\n\n- fact: One-line summaries for <private>\n\n" +
       "## 2026-10-08 · evolved · v2\n\n- was: One-line summaries for <private>\n- now: One-line summaries, except decisions\n\n" +
       "## 2026-10-10 · hatched · v2\n\n- trials: ✓0 ✗1 (v2)\n",
   );
