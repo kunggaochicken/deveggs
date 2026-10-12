@@ -8,7 +8,7 @@ import { formatArchitecture } from "./architecture.ts";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
-import { type Change, install, parseHarness, sync, uninstall } from "./install.ts";
+import { CURSOR_HINT, type Change, install, parseHarness, sync, uninstall } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
@@ -57,13 +57,15 @@ usage:
                                      trial and verdict, evolve, hatch, crack, rename and
                                      import (events: ${EVENTS.join(", ")})
   deveggs render                       rebuild PREFERENCES.md in the basket (and re-sync
-                                     the copies deveggs install keeps for Codex)
-  deveggs install [--harness claude-code|codex|all] [--dry-run]
+                                     the copies deveggs install keeps for Codex and Gemini)
+  deveggs install [--harness claude-code|codex|gemini|all] [--dry-run]
                                      load PREFERENCES.md into every session: adds a
                                      managed block to each harness's global instructions
-                                     (Claude Code: an @import; Codex: the preferences
-                                     inline, re-synced on render). Idempotent
-  deveggs uninstall [--harness claude-code|codex|all] [--dry-run]
+                                     (Claude Code: an @import; Codex, and Gemini CLI and
+                                     Antigravity via ~/.gemini/GEMINI.md: the preferences
+                                     inline, re-synced on render). Idempotent. Cursor
+                                     keeps global rules in its settings: paste them there
+  deveggs uninstall [--harness claude-code|codex|gemini|all] [--dry-run]
                                      remove that block again
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
@@ -153,7 +155,7 @@ const histories = (eggs: Egg[]): Map<string, HistoryEntry[]> => {
 
 /**
  * Rebuild PREFERENCES.md, then re-sync the copies deveggs install keeps in harnesses
- * without imports (Codex). Returns the harness files it rewrote.
+ * it copies them into (Codex, Gemini). Returns the harness files it rewrote.
  */
 function render(): string[] {
   basket.render();
@@ -625,6 +627,7 @@ function main(argv: string[]): void {
       const opts = { home: homedir(), preferences: basket.preferencesPath, dryRun, explicit: values.harness !== undefined && values.harness !== "all", rendered };
       const changes = command === "install" ? install(harnesses, opts) : uninstall(harnesses, opts);
       printChanges(changes, command === "install" ? "+" : "-");
+      if (command === "install" && !opts.explicit && existsSync(join(homedir(), ".cursor"))) console.log(CURSOR_HINT);
       if (dryRun) console.log("--dry-run: nothing written.");
       else if (changes.some((c) => c.changed)) console.log(command === "install" ? "new sessions load your preferences without being asked to read them." : "new sessions no longer load your preferences on their own.");
       return;
