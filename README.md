@@ -175,8 +175,8 @@ each harness's global instructions file, between managed markers:
 |---|---|---|
 | Claude Code | `~/.claude/CLAUDE.md` | an `@/abs/path/to/.deveggs/PREFERENCES.md` import, resolved by Claude Code at session start |
 | Codex | `~/.codex/AGENTS.md` | Codex has no imports, so the rendered preferences are copied in, and every `deveggs render` (every change to your basket) re-syncs the copy |
-| Gemini CLI, Antigravity | `~/.gemini/GEMINI.md` | copied in and re-synced like Codex: both read this file, but Gemini CLI only imports files under `~/.gemini` and Antigravity has its own `@[label](path)` include syntax |
-| Cursor | none | Cursor keeps global User Rules in its settings (Customize → Rules), not a file, so paste the deveggs prompt there; `deveggs install` reminds you |
+| Gemini CLI, Antigravity | `~/.gemini/GEMINI.md` | copied in and re-synced like Codex: both read this file, but Gemini CLI's imports from that file usually can't reach `~/.deveggs` (only files under its project root, `~/.gemini`) and Antigravity has its own `@[label](path)` include syntax |
+| Cursor | none | Cursor keeps global User Rules in its settings (Cursor Settings → Rules → User Rules), not a file, so paste the deveggs prompt there; `deveggs install` reminds you |
 
 ```bash
 deveggs install --dry-run                 # show what would change

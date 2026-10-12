@@ -64,7 +64,8 @@ usage:
                                      (Claude Code: an @import; Codex, and Gemini CLI and
                                      Antigravity via ~/.gemini/GEMINI.md: the preferences
                                      inline, re-synced on render). Idempotent. Cursor
-                                     keeps global rules in its settings: paste them there
+                                     keeps global rules in its settings: paste the
+                                     deveggs prompt there
   deveggs uninstall [--harness claude-code|codex|gemini|all] [--dry-run]
                                      remove that block again
   deveggs where                        print the basket's path

@@ -11,12 +11,12 @@ import { BasketError } from "./basket.ts";
 //
 // Gemini CLI does have `@path` imports in GEMINI.md, but it only resolves them inside the
 // importing file's project root, which for the global ~/.gemini/GEMINI.md is ~/.gemini
-// itself, so an import of ~/.deveggs/PREFERENCES.md is refused. Antigravity reads the same
+// itself unless HOME is a git repo, so an import of ~/.deveggs/PREFERENCES.md is refused. Antigravity reads the same
 // ~/.gemini/GEMINI.md but uses its own `@[label](path)` include syntax. Inline text is
 // the one form both load, so Gemini gets the codex treatment.
 //
 // Cursor has no file for global rules: its User Rules live in the app's settings
-// (Customize → Rules), so there's no Cursor harness here; see CURSOR_HINT.
+// (Cursor Settings → Rules → User Rules), so there's no Cursor harness here; see CURSOR_HINT.
 
 export const HARNESSES = ["claude-code", "codex", "gemini"] as const;
 export type Harness = (typeof HARNESSES)[number];
@@ -37,7 +37,7 @@ const SPECS: Record<Harness, HarnessSpec> = {
   gemini: { home: ".gemini", file: join(".gemini", "GEMINI.md"), mode: "inline" },
 };
 
-/** What `install --harness all` tells a developer who has Cursor, which keeps global rules only in its settings. */
+/** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
 export const CURSOR_HINT =
   "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules";
 
@@ -94,9 +94,17 @@ export function parseHarness(value: string | undefined): Harness[] {
 export const instructionsFile = (home: string, harness: Harness): string => join(home, SPECS[harness].file);
 
 /**
+ * A word Gemini CLI would import as a file (`@notes.md`, `@./x`, or Antigravity's `@[l](p)`):
+ * an `@` after whitespace, followed by `.`, `/`, a letter or `[`. Like Gemini CLI, it skips
+ * backtick code spans and fences (the first alternative), so code is copied as is.
+ */
+const GEMINI_IMPORT = /(`+)[\s\S]*?\1|(^|\s)@(?=[./A-Za-z[])/gm;
+
+/**
  * Inline preferences for a harness without imports: outside code fences, headings nest
  * under the deveggs section and links relative to the basket become absolute so they
- * still resolve. A line that looks like a managed marker is defused so it can't end the block.
+ * still resolve. A line that looks like a managed marker is defused so it can't end the block,
+ * and for Gemini a word outside code that it would import gets a zero-width space after its `@`.
  */
 function inline(text: string, basket: string, harness: Harness): string {
   return text
@@ -106,11 +114,10 @@ function inline(text: string, basket: string, harness: Harness): string {
         ? part
         : part
             .replace(/^(#{1,4}) /gm, "##$1 ")
-            .replace(/\]\(([^)\s:#][^)\s:]*)\)/g, (match, path: string) => (isAbsolute(path) ? match : `](${join(basket, path)})`))
-            // Gemini CLI would try to import a word like `@notes.md` as a file; a zero-width space keeps it text.
-            .replace(/(^|\s)@(?=[./A-Za-z[])/g, (match) => (harness === "gemini" ? `${match}\u200b` : match)),
+            .replace(/\]\(([^)\s:#][^)\s:]*)\)/g, (match, path: string) => (isAbsolute(path) ? match : `](${join(basket, path)})`)),
     )
     .join("")
+    .replace(harness === "gemini" ? GEMINI_IMPORT : /$^/, (match, code: string | undefined, before: string) => (code ? match : `${before}@\u200b`))
     .replace(/<!-- deveggs:preferences:/g, "<!-- deveggs:preferences​:")
     .trimEnd();
 }

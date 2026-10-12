@@ -239,13 +239,21 @@ test("install copies the preferences inline into ~/.gemini/GEMINI.md, for Gemini
   assert.equal(read(geminiMd(box)), original);
 });
 
-test("inline Gemini preferences can't trigger an @import; other harnesses keep the text as is", () => {
-  const rendered = "# P\n\n- see @notes.md and @./x.md, @[label](/y.md); mail me@example.com\n\n```sh\n@keep.md\n```\n";
+test("inline Gemini preferences can't trigger an @import; code and other harnesses keep the text as is", () => {
+  const rendered = "# P\n\n- see @notes.md and @./x.md, @[label](/y.md); mail me@example.com\n- run `npm i @scope/pkg`\n  ```sh\n  @indented.md\n  ```\n\n```sh\n@keep.md\n```\n";
   const gemini = block("gemini", { basket: "/b/PREFERENCES.md" }, rendered);
-  assert.doesNotMatch(gemini.replace(/```sh\n@keep\.md/, ""), /(^|\s)@[./A-Za-z[]/m, gemini);
+  for (const word of ["@notes.md", "@./x.md", "@[label]"]) assert.ok(gemini.includes(` @\u200b${word.slice(1)}`), `${word} is defused: ${gemini}`);
   assert.ok(gemini.includes("me@example.com"));
+  assert.ok(gemini.includes("`npm i @scope/pkg`"), "inline code is left alone");
+  assert.ok(gemini.includes("  ```sh\n  @indented.md\n  ```"), "indented fences too");
   assert.ok(gemini.includes("```sh\n@keep.md\n```"), "code fences are left alone");
+  assert.equal(block("gemini", { basket: "/b/PREFERENCES.md" }, rendered), gemini, "stable across re-syncs");
   assert.ok(block("codex", { basket: "/b/PREFERENCES.md" }, rendered).includes(" @notes.md"));
+  // Install and uninstall stay exact with a defused copy in the block.
+  const original = section("/b/PREFERENCES.md");
+  const installed = withBlock(original, "gemini", "/b/PREFERENCES.md", rendered).text;
+  assert.equal(withBlock(installed, "gemini", "/b/PREFERENCES.md", rendered).text, installed);
+  assert.equal(withoutBlock(installed).text, original);
 });
 
 test("install --harness all tells a Cursor user where its global rules go", () => {
@@ -258,4 +266,17 @@ test("install --harness all tells a Cursor user where its global rules go", () =
   assert.equal(all.stdout.match(/cursor: no global rules file to write; paste the deveggs prompt .* User Rules/g)?.length, 1, all.stdout);
   assert.equal(existsSync(join(box.home, ".cursor", "rules")), false, "writes nothing under ~/.cursor");
   assert.doesNotMatch(cli(box, "install", "--harness", "claude-code").stdout, /cursor/);
+  assert.match(cli(box, "install", "--dry-run").stdout, /cursor: no global rules file/);
+  assert.doesNotMatch(cli(box, "uninstall").stdout, /cursor/);
+});
+
+test("a write to another basket never overwrites the installed Gemini copy", () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".gemini"));
+  assert.equal(cli(box, "lay", "Use tabs").status, 0);
+  cli(box, "install", "--harness", "gemini");
+  const installed = read(geminiMd(box));
+  const scratch = { ...box, env: { ...box.env, DEVEGGS_BASKET: join(box.dir, "scratch") } };
+  assert.equal(cli(scratch, "lay", "Scratch only").status, 0);
+  assert.equal(read(geminiMd(box)), installed);
 });
