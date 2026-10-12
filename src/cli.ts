@@ -8,6 +8,7 @@ import { formatArchitecture } from "./architecture.ts";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
+import { type Change, install, parseHarness, sync, uninstall } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
@@ -50,7 +51,15 @@ usage:
                                      how an item evolved, oldest first: its origin, every
                                      trial and verdict, evolve, hatch, crack, rename and
                                      import (events: ${EVENTS.join(", ")})
-  deveggs render                       rebuild PREFERENCES.md in the basket
+  deveggs render                       rebuild PREFERENCES.md in the basket (and re-sync
+                                     the copies deveggs install keeps for Codex)
+  deveggs install [--harness claude-code|codex|all] [--dry-run]
+                                     load PREFERENCES.md into every session: adds a
+                                     managed block to each harness's global instructions
+                                     (Claude Code: an @import; Codex: the preferences
+                                     inline, re-synced on render). Idempotent
+  deveggs uninstall [--harness claude-code|codex|all] [--dry-run]
+                                     remove that block again
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
@@ -136,6 +145,31 @@ const histories = (eggs: Egg[]): Map<string, HistoryEntry[]> => {
   const moves = loggedMoves();
   return new Map(eggs.map((e) => [e.id, basket.history(e.id, moves)]));
 };
+
+/**
+ * Rebuild PREFERENCES.md, then re-sync the copies deveggs install keeps in harnesses
+ * without imports (Codex). Returns the harness files it rewrote.
+ */
+function render(): string[] {
+  basket.render();
+  try {
+    return sync(homedir(), basket.preferencesPath);
+  } catch (err) {
+    warn(`couldn't sync installed preferences (${(err as Error).message}); rerun deveggs install`);
+    return [];
+  }
+}
+
+function printChanges(changes: Change[], verb: string): void {
+  for (const c of changes) {
+    console.log(`${c.changed ? "🔌" : "·"} ${c.harness}: ${c.file}\n     ${c.action}`);
+    if (c.changed && c.block) {
+      const lines = c.block.trimEnd().split("\n");
+      const shown = lines.length > 8 ? [...lines.slice(0, 5), `   … ${lines.length - 6} more lines …`, lines[lines.length - 1] ?? ""] : lines;
+      for (const l of shown) console.log(`     ${verb} ${l}`);
+    }
+  }
+}
 
 /** Commit a write in the basket repo, and push it when autopush is on. Warns, never fails. */
 function save(message: string): void {
@@ -250,7 +284,7 @@ function borrow(ref: string | undefined, repoFlag: string | undefined): void {
     prepare();
     return basket.borrow(item.egg, { user, repo }, item.skill, undefined, item.history);
   });
-  basket.render();
+  render();
   save(`egg: import ${egg.id} from ${user}`);
   console.log(line(egg));
   console.log(`     borrowed from ${user}'s basket in ${repo}; on trial in your basket`);
@@ -385,7 +419,7 @@ function main(argv: string[]): void {
         ...harness,
         ...note,
       });
-      basket.render();
+      render();
       save(`${egg.tier}: lay ${egg.id}`);
       console.log(line(egg));
       if (egg.kind === "skill") console.log(`     write it: ${join(basket.skillDir(egg.tier, egg.id), "SKILL.md")}`);
@@ -410,7 +444,7 @@ function main(argv: string[]): void {
         ...(values.tuning !== undefined && { tuning: values.tuning }),
         ...(values.quote !== undefined && { quote: values.quote }),
       });
-      basket.render();
+      render();
       save(`trial: ${values.good ? "good" : "bad"} ${egg.id}`);
       console.log(line(egg));
       if (isReady(egg)) console.log(`     🐣 ready to hatch: deveggs hatch ${egg.id}`);
@@ -434,7 +468,7 @@ function main(argv: string[]): void {
         ...harness,
         ...note,
       });
-      basket.render();
+      render();
       save(`${egg.tier}: evolve ${egg.id} to v${egg.version}`);
       console.log(line(egg));
       console.log(`     was (v${was.version}): ${was.summary}`);
@@ -457,7 +491,7 @@ function main(argv: string[]): void {
       } catch (err) {
         warn(`couldn't repoint harness skill links named ${from} (${(err as Error).message}); relink them to ${basket.skillDir(egg.tier, to)} by hand`);
       }
-      basket.render();
+      render();
       save(`${egg.tier}: rename ${from} to ${to}`);
       console.log(line(egg));
       console.log(`     renamed from ${from}`);
@@ -473,7 +507,7 @@ function main(argv: string[]): void {
       if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
       prepare();
       const egg = command === "hatch" ? basket.hatch(id, eventInput()) : basket.crack(id, eventInput());
-      basket.render();
+      render();
       save(command === "hatch" ? `chicken: hatch ${egg.id}` : `crack: ${egg.id}`);
       console.log(line(egg));
       diagram(egg);
@@ -516,7 +550,7 @@ function main(argv: string[]): void {
       const architecture = readText(values.set, "--set");
       prepare();
       const egg = basket.draw(id, architecture);
-      basket.render();
+      render();
       save(`${egg.tier}: draw ${egg.id}`);
       console.log(`${line(egg)}\n     🗺  architecture drawn`);
       diagram(egg);
@@ -540,12 +574,30 @@ function main(argv: string[]): void {
       if (only && eggs.length === 1) diagram(only);
       return;
     }
-    case "render":
+    case "render": {
       prepare();
-      basket.render();
+      const synced = render();
       save("render");
       console.log(`wrote ${basket.preferencesPath}`);
+      for (const file of synced) console.log(`synced ${file}`);
       return;
+    }
+    case "install":
+    case "uninstall": {
+      const harnesses = parseHarness(values.harness);
+      const dryRun = values["dry-run"];
+      if (command === "install" && !dryRun) {
+        prepare();
+        render();
+        save("render");
+      }
+      const opts = { home: homedir(), preferences: basket.preferencesPath, dryRun, explicit: values.harness !== undefined && values.harness !== "all" };
+      const changes = command === "install" ? install(harnesses, opts) : uninstall(harnesses, opts);
+      printChanges(changes, command === "install" ? "+" : "-");
+      if (dryRun) console.log("--dry-run: nothing written.");
+      else if (changes.some((c) => c.changed)) console.log(command === "install" ? "new sessions load your preferences without being asked to read them." : "new sessions no longer load your preferences on their own.");
+      return;
+    }
     case "migrate": {
       const result = migrate(legacy, basketRoot, join(repoRoot, "templates"));
       result.messages.forEach((m) => console.log(m));

@@ -161,9 +161,29 @@ Confirm with me before changing any files outside the deveggs repo.
 ```
 
 That agent clones the repo and wires up every coding agent it finds on your machine.
-It links the deveggs skill into each one and adds a short deveggs prompt to each one's
-global instructions. It shows you the plan and waits for your yes. Requires
+It links the deveggs skill into each one, adds a short deveggs prompt to each one's
+global instructions, and runs `deveggs install` so your preferences load into every
+session on their own. It shows you the plan and waits for your yes. Requires
 Node >= 22.18 and git.
+
+### How your preferences reach every session
+
+Agents don't have to remember to read your preferences. `deveggs install` puts them in
+each harness's global instructions file, between managed markers:
+
+| Harness | File | How |
+|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | an `@/abs/path/to/.deveggs/PREFERENCES.md` import, resolved by Claude Code at session start |
+| Codex | `~/.codex/AGENTS.md` | Codex has no imports, so the rendered preferences are copied in, and every `deveggs render` (every change to your basket) re-syncs the copy |
+
+```bash
+deveggs install --dry-run                 # show what would change
+deveggs install [--harness claude-code|codex|all]
+deveggs uninstall [--harness …]           # take it out again
+```
+
+It's idempotent, and it replaces the deveggs prompt's "read PREFERENCES.md at session
+start" line (uninstall puts it back).
 
 ## Usage
 
@@ -182,6 +202,7 @@ deveggs history <id> [--trials] [--since 2026-10-01] [--json]           # 📜 h
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
+deveggs install [--harness claude-code|codex|all] [--dry-run]           # load your preferences into every session
 deveggs share --dry-run --as <you>                                      # preview sharing your basket
 deveggs browse [<username>]                                             # browse shared baskets
 deveggs import <username>/<id>                                          # borrow one as an egg

@@ -70,9 +70,17 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      <!-- deveggs:end -->
      ```
 
+   - **Load the preferences.** For Claude Code and Codex, `<repo>/bin/deveggs install`
+     loads `~/.deveggs/PREFERENCES.md` into every session, so no agent has to remember
+     to read it: it replaces the block's "Read … at session start" line with a managed
+     `deveggs:preferences` block (an `@` import for Claude Code; for Codex, which has
+     no imports, the preferences inline, re-synced by every `deveggs render`). Include
+     the output of `<repo>/bin/deveggs install --dry-run` in the plan. Other harnesses
+     keep the read line.
+
    Show the developer the whole plan as one list: every harness, every link, every
-   file. **Confirm**, then make the changes. Run `<repo>/bin/deveggs render` so
-   `~/.deveggs/PREFERENCES.md` exists and is current. A harness with no global
+   file. **Confirm**, then make the changes, then run `<repo>/bin/deveggs install`
+   (it renders `~/.deveggs/PREFERENCES.md` first). A harness with no global
    instructions file (Cursor) needs one manual step: give the developer the block to paste into its settings.
    That is the only paste left.
 6. **Learn the skill.** Read `<repo>/skills/deveggs/SKILL.md` so you know how to lay
@@ -101,8 +109,8 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      basket up (automatically after every change once `deveggs autopush on` is set)
    - on a new machine, clone their basket repo into `~/.deveggs/` and follow this
      guide again
-   - to uninstall, ask any agent to remove the deveggs symlinks and the
-     `deveggs:begin` … `deveggs:end` block from each harness
+   - to uninstall, run `deveggs uninstall`, then ask any agent to remove the deveggs
+     symlinks and the `deveggs:begin` … `deveggs:end` block from each harness
    - to share their basket, `deveggs share --dry-run` shows what would be shared
      and what it redacts; `deveggs share` then opens a PR to
      `kunggaochicken/deveggs-baskets`.

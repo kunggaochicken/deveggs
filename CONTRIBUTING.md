@@ -9,7 +9,7 @@ not here (see [Sharing your basket](#sharing-your-basket)).
 
 This repo is the deveggs **code**:
 
-- `src/` and `bin/deveggs`: the CLI (`lay`, `arch`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`,
+- `src/` and `bin/deveggs`: the CLI (`lay`, `arch`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`, `install`,
   `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
@@ -61,6 +61,7 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
 | `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
 | Harness wiring (Claude Code, Codex, Cursor, …) | `INSTALL.md`, as instructions, not code. Add a harness by adding a row to its table. |
+| `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, and re-syncing inline copies on render | `src/install.ts` |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |
 
