@@ -516,8 +516,10 @@ ${formatEntry(entry)}
       version: source.version,
       fields: cleanFields({ fact: source.summary, from: from.user, basket: from.repo, note: `was their ${source.tier}` }),
     };
+    // Their enforcer (a hook or script on their machine) isn't installed here.
+    const { enforcedBy: _, ...rest } = source;
     const egg = this.save({
-      ...source,
+      ...rest,
       tier: "egg",
       harnesses: [],
       good: 0,
@@ -690,8 +692,8 @@ ${formatEntry(entry)}
   enforce(id: string, paths: string[], date: string = today()): Egg {
     const egg = this.get(id);
     const clean = [...new Set(paths.map((p) => p.trim()).filter(Boolean))];
-    const bad = clean.find((p) => p.includes(",") || p.includes("\n"));
-    if (bad !== undefined) throw new BasketError(`invalid enforcer ${JSON.stringify(bad)}: one path per argument, no commas`);
+    const bad = clean.find((p) => /[,`\n]/.test(p));
+    if (bad !== undefined) throw new BasketError(`invalid enforcer ${JSON.stringify(bad)}: one path per argument, no commas or backticks`);
     const { enforcedBy: _, ...rest } = egg;
     return this.save({ ...rest, updated: date, ...(clean.length > 0 && { enforcedBy: clean }) });
   }

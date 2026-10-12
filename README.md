@@ -185,10 +185,10 @@ deveggs uninstall [--harness …]           # take it out again
 It's idempotent, and it replaces the deveggs prompt's "read PREFERENCES.md at session
 start" line (uninstall puts it back).
 
-Each rule in `PREFERENCES.md` comes with when it fires (from its diagram), and agents
+Each rule in `PREFERENCES.md` comes with when it fires (its architecture's `Fires when` line), and agents
 name the ids of the rules that shaped a decision, so you can see which ones work.
 Subagents mostly inherit it too: Claude Code's `general-purpose` and custom agents and
-Codex subagents do; Claude Code's `Explore` and `Plan` don't, so agents brief them with
+Codex subagents do (custom agents tested via `claude --agents`); Claude Code's `Explore` and `Plan` don't, so agents brief them with
 the rules that apply. The ideas come partly from
 [pstack](docs/prior-art/pstack.md).
 

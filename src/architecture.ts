@@ -87,7 +87,7 @@ export function isScaffold(architecture: string | undefined): boolean {
 export function firesWhen(body: string): string | undefined {
   const arch = architectureOf(body);
   if (!arch) return undefined;
-  const m = /^- (?:⚡\s*)?\*\*Fires when:?\*\*:?\s*(.+)$/m.exec(arch);
+  const m = /^\s*[-*] (?:⚡️?\s*)?\*\*Fires when:?\*\*:?\s*(.+)$/im.exec(arch);
   const text = m?.[1]?.trim();
   return text && !PLACEHOLDER.test(text) ? text : undefined;
 }

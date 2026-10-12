@@ -269,7 +269,7 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
       tags,
       harnesses: [],
       body: architecture ? `## ${ARCH_HEADING}\n\n${architecture}` : "",
-      ...(egg.enforcedBy && { enforcedBy: egg.enforcedBy.map(clean) }),
+      ...(egg.enforcedBy && { enforcedBy: egg.enforcedBy.map(clean).filter((p) => !p.includes("<")) }),
     },
     history: shared,
     redactions: [...removed, ...labels(hits)],

@@ -305,7 +305,7 @@ Subagents don't all start with your preferences, so check before you delegate:
 
 | Subagent | Gets `PREFERENCES.md`? |
 |---|---|
-| Claude Code `general-purpose` and custom agents (`~/.claude/agents/`) | ✓ They load `~/.claude/CLAUDE.md` with its `@` imports |
+| Claude Code `general-purpose` and custom agents (tested via `claude --agents`) | ✓ They load `~/.claude/CLAUDE.md` with its `@` imports |
 | Claude Code `Explore` and `Plan` | ✗ They load no `CLAUDE.md` at all |
 | Codex subagents (`spawn_agent`) | ✓ They load `~/.codex/AGENTS.md`, synced block included |
 

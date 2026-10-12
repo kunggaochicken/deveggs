@@ -572,6 +572,7 @@ function main(argv: string[]): void {
         return;
       }
       if (paths.length && values.clear) throw new BasketError("pass paths or --clear, not both");
+      if (paths.length && paths.every((p) => !p.trim())) throw new BasketError("empty path; to remove the enforcer, pass --clear");
       prepare();
       const egg = basket.enforce(id, paths);
       for (const path of egg.enforcedBy ?? []) {

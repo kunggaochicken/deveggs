@@ -216,6 +216,8 @@ test("enforce names what enforces an item, warns about missing paths, shows it, 
   assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /Never push to main 🛡 `guard\.sh`/);
   assert.match(cli(box, "show", "no-push").stdout, /enforced by +🛡 guard\.sh, ~\/\.claude\/hooks\/missing\.sh/);
   assert.match(cli(box, "enforce", "no-push", "x", "--clear").stderr, /not both/);
+  assert.match(cli(box, "enforce", "no-push", " ").stderr, /empty path; to remove the enforcer, pass --clear/);
+  assert.match(cli(box, "show", "no-push").stdout, /enforced by +🛡 guard\.sh/, "an empty path doesn't clear it");
   const cleared = cli(box, "enforce", "no-push", "--clear");
   assert.match(cleared.stdout, /text only: nothing enforces it/);
   assert.equal(subjects(box)[0], "chicken: unenforce no-push");

@@ -135,6 +135,7 @@ test("enforce records what enforces an item, round-trips, renders with 🛡 and 
   assert.match(out, /\| `no-push` \| - \| Never push to main 🛡 `~\/\.claude\/hooks\/no-push\.sh`, `scripts\/ci-guard` \| general \|/);
   assert.match(out, /🛡 marks a rule something enforces/);
   assert.throws(() => b.enforce("no-push", ["a, b"]), /one path per argument/);
+  assert.throws(() => b.enforce("no-push", ["a`b"]), /no commas or backticks/);
   const cleared = b.enforce("no-push", []);
   assert.equal(cleared.enforcedBy, undefined);
   assert.doesNotMatch(readFileSync(join(b.root, "chickens", "no-push.md"), "utf8"), /enforced_by/);
