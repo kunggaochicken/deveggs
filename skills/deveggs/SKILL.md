@@ -284,9 +284,16 @@ them into history files, recovering hatches and cracks from the basket's git log
 
 ## At session start
 
-Read `~/.deveggs/PREFERENCES.md` (or `PREFERENCES.md` in the folder `deveggs where`
-prints). It lists the chickens, then the eggs with their ids. Skills from both tiers are already installed. Egg skills have descriptions
-that start with `[egg: on trial]`.
+Your preferences are already in your context: `deveggs install` loads
+`~/.deveggs/PREFERENCES.md` into every session through the harness's global
+instructions file (an `@` import in Claude Code, a copy that `deveggs render` keeps in
+sync in Codex), so you don't read it yourself. It lists the chickens, then the eggs
+with their ids. Skills from both tiers are already installed. Egg skills have
+descriptions that start with `[egg: on trial]`.
+
+If the preferences aren't in your context (a harness `deveggs install` doesn't cover
+yet, or it hasn't been run), read `PREFERENCES.md` in the folder `deveggs where`
+prints, and offer to run `deveggs install` so later sessions get it without asking.
 
 ## Laying eggs
 

@@ -16,6 +16,10 @@ repo. `deveggs where` prints the path.
 - PR process, commit style and where each kind of change goes: `CONTRIBUTING.md`.
 - Model changes go in `src/basket.ts`. Harness wiring is agent-native: it lives in
   `INSTALL.md` as instructions, not code. Add a new harness by adding a row to its table.
+  The one exception is loading `PREFERENCES.md` into every session, which must not
+  depend on an agent remembering to read it: `deveggs install` (`src/install.ts`) writes
+  a managed block into each harness's global instructions, and `render` keeps inline
+  copies in sync. Add a harness there by adding it to `SPECS`.
 
 ## Personal basket vs shared baskets
 
