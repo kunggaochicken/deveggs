@@ -8,8 +8,17 @@ import { BasketError } from "./basket.ts";
 // (Codex reads ~/.codex/AGENTS.md verbatim) gets the rendered preferences inline,
 // which every `deveggs render` re-syncs. Either way the change sits between managed
 // markers, so install is idempotent and uninstall undoes it exactly.
+//
+// Gemini CLI does have `@path` imports in GEMINI.md, but it only resolves them inside the
+// importing file's project root, which for the global ~/.gemini/GEMINI.md is ~/.gemini
+// itself unless HOME is a git repo, so an import of ~/.deveggs/PREFERENCES.md is refused. Antigravity reads the same
+// ~/.gemini/GEMINI.md but uses its own `@[label](path)` include syntax. Inline text is
+// the one form both load, so Gemini gets the codex treatment.
+//
+// Cursor has no file for global rules: its User Rules live in the app's settings
+// (Cursor Settings → Rules → User Rules), so there's no Cursor harness here; see CURSOR_HINT.
 
-export const HARNESSES = ["claude-code", "codex"] as const;
+export const HARNESSES = ["claude-code", "codex", "gemini"] as const;
 export type Harness = (typeof HARNESSES)[number];
 
 interface HarnessSpec {
@@ -24,7 +33,13 @@ interface HarnessSpec {
 const SPECS: Record<Harness, HarnessSpec> = {
   "claude-code": { home: ".claude", file: join(".claude", "CLAUDE.md"), mode: "import" },
   codex: { home: ".codex", file: join(".codex", "AGENTS.md"), mode: "inline" },
+  // Gemini CLI and Antigravity both read ~/.gemini/GEMINI.md.
+  gemini: { home: ".gemini", file: join(".gemini", "GEMINI.md"), mode: "inline" },
 };
+
+/** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
+export const CURSOR_HINT =
+  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules";
 
 const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
@@ -79,11 +94,19 @@ export function parseHarness(value: string | undefined): Harness[] {
 export const instructionsFile = (home: string, harness: Harness): string => join(home, SPECS[harness].file);
 
 /**
+ * A word Gemini CLI would import as a file (`@notes.md`, `@./x`, or Antigravity's `@[l](p)`):
+ * an `@` after whitespace, followed by `.`, `/`, a letter or `[`. Like Gemini CLI, it skips
+ * backtick code spans and fences (the first alternative), so code is copied as is.
+ */
+const GEMINI_IMPORT = /(`+)[\s\S]*?\1|(^|\s)@(?=[./A-Za-z[])/gm;
+
+/**
  * Inline preferences for a harness without imports: outside code fences, headings nest
  * under the deveggs section and links relative to the basket become absolute so they
- * still resolve. A line that looks like a managed marker is defused so it can't end the block.
+ * still resolve. A line that looks like a managed marker is defused so it can't end the block,
+ * and for Gemini a word outside code that it would import gets a zero-width space after its `@`.
  */
-function inline(text: string, basket: string): string {
+function inline(text: string, basket: string, harness: Harness): string {
   return text
     .split(/^(```[^\n]*\n[\s\S]*?^```[^\n]*$)/m)
     .map((part, i) =>
@@ -94,6 +117,7 @@ function inline(text: string, basket: string): string {
             .replace(/\]\(([^)\s:#][^)\s:]*)\)/g, (match, path: string) => (isAbsolute(path) ? match : `](${join(basket, path)})`)),
     )
     .join("")
+    .replace(harness === "gemini" ? GEMINI_IMPORT : /$^/, (match, code: string | undefined, before: string) => (code ? match : `${before}@\u200b`))
     .replace(/<!-- deveggs:preferences:/g, "<!-- deveggs:preferences​:")
     .trimEnd();
 }
@@ -106,7 +130,7 @@ export function block(harness: Harness, state: State, rendered: string | undefin
     return `${beginMarker(state)}\n${lead}\n\n@${preferences}\n${END}\n`;
   }
   const lead = `- My deveggs preferences, copied below from \`${preferences}\` by deveggs install and re-synced by every deveggs render, load into every session. Follow them; they outrank harness-local memory.`;
-  const body = rendered === undefined ? "_PREFERENCES.md isn't rendered yet; run deveggs render._" : inline(rendered, dirname(preferences));
+  const body = rendered === undefined ? "_PREFERENCES.md isn't rendered yet; run deveggs render._" : inline(rendered, dirname(preferences), harness);
   return `${beginMarker(state)}\n${lead}\n\n${body}\n${END}\n`;
 }
 

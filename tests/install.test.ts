@@ -7,10 +7,11 @@ import { cli, type Sandbox, sandbox } from "./sandbox.ts";
 
 const BEGIN = "<!-- deveggs:preferences:begin";
 
-// Every CLI test runs in a sandbox HOME: never the developer's real ~/.claude or ~/.codex.
+// Every CLI test runs in a sandbox HOME: never the developer's real ~/.claude, ~/.codex or ~/.gemini.
 
 const claudeMd = (box: Sandbox): string => join(box.home, ".claude", "CLAUDE.md");
 const agentsMd = (box: Sandbox): string => join(box.home, ".codex", "AGENTS.md");
+const geminiMd = (box: Sandbox): string => join(box.home, ".gemini", "GEMINI.md");
 const read = (file: string): string => readFileSync(file, "utf8");
 
 /** The deveggs prompt INSTALL.md adds, with its read-at-session-start line. */
@@ -119,7 +120,7 @@ test("uninstall restores each file exactly", () => {
   assert.equal(r.stdout.match(/removed the managed block; restored the line it replaced/g)?.length, 2, r.stdout);
   assert.equal(read(claudeMd(box)), claude);
   assert.equal(read(agentsMd(box)), codex);
-  assert.equal(cli(box, "uninstall").stdout.match(/not installed; nothing changed/g)?.length, 2);
+  assert.equal(cli(box, "uninstall").stdout.match(/not installed; nothing changed/g)?.length, 3);
 });
 
 test("without a deveggs section the block is appended, and uninstall takes it out", () => {
@@ -146,7 +147,7 @@ test("--harness all skips harnesses that aren't installed; a named one is wired 
   assert.ok(read(agentsMd(box)).includes(BEGIN));
   const bad = cli(box, "install", "--harness", "cursor");
   assert.equal(bad.status, 1);
-  assert.match(bad.stderr, /invalid --harness "cursor"; expected one of claude-code, codex, all/);
+  assert.match(bad.stderr, /invalid --harness "cursor"; expected one of claude-code, codex, gemini, all/);
 });
 
 test("a read line outside the deveggs section is left alone", () => {
@@ -156,7 +157,7 @@ test("a read line outside the deveggs section is left alone", () => {
   assert.equal(out.where, "appended");
   assert.ok(out.text.startsWith(readLine(prefs)));
   assert.equal(withoutBlock(out.text).text, text);
-  assert.deepEqual(parseHarness(undefined), ["claude-code", "codex"]);
+  assert.deepEqual(parseHarness(undefined), ["claude-code", "codex", "gemini"]);
 });
 
 test("uninstall gives back exactly what install replaced or added", () => {
@@ -172,7 +173,7 @@ test("uninstall gives back exactly what install replaced or added", () => {
     "",
   ];
   for (const original of cases) {
-    for (const harness of ["claude-code", "codex"] as const) {
+    for (const harness of ["claude-code", "codex", "gemini"] as const) {
       const installed = withBlock(original, harness, prefs, "# P\n").text;
       assert.equal(withBlock(installed, harness, prefs, "# P\n").text, installed, `idempotent: ${JSON.stringify(original)}`);
       assert.equal(withoutBlock(installed).text, original, `round trip: ${JSON.stringify(original)}`);
@@ -209,4 +210,73 @@ test("--dry-run previews what the basket would render, even before PREFERENCES.m
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stdout, /isn't rendered yet/);
   assert.equal(existsSync(join(box.basket, "PREFERENCES.md")), false, "a dry run writes nothing");
+});
+
+test("install copies the preferences inline into ~/.gemini/GEMINI.md, for Gemini CLI and Antigravity alike", () => {
+  const box = sandbox();
+  const prefs = join(box.basket, "PREFERENCES.md");
+  mkdirSync(join(box.home, ".gemini"));
+  // A hand-written deveggs prompt with no trailing newline, as on a real machine.
+  const original = section(prefs).trimEnd();
+  writeFileSync(geminiMd(box), original);
+  assert.equal(cli(box, "lay", "Use tabs").status, 0);
+  const r = cli(box, "install");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /gemini: .*GEMINI\.md\n\s+installed: copies .*PREFERENCES\.md inline \(re-synced by deveggs render\); replaced the read-at-session-start line/);
+  let text = read(geminiMd(box));
+  assert.ok(text.includes("`use-tabs`"), text);
+  assert.ok(!text.includes(`@${prefs}`), "an @import of a path outside ~/.gemini wouldn't load");
+  assert.ok(text.endsWith(`${END}\n- Use the \`deveggs\` skill.\n<!-- deveggs:end -->`), text);
+  assert.equal(cli(box, "install").stdout.match(/already installed; nothing changed/g)?.length, 1, "idempotent");
+
+  cli(box, "lay", "Never push to main", "--chicken");
+  text = read(geminiMd(box));
+  assert.ok(text.includes("`never-push-to-main`"), "render re-syncs the Gemini copy");
+  assert.equal(text.split(BEGIN).length, 2);
+
+  const u = cli(box, "uninstall", "--harness", "gemini");
+  assert.match(u.stdout, /removed the managed block; restored the line it replaced/);
+  assert.equal(read(geminiMd(box)), original);
+});
+
+test("inline Gemini preferences can't trigger an @import; code and other harnesses keep the text as is", () => {
+  const rendered = "# P\n\n- see @notes.md and @./x.md, @[label](/y.md); mail me@example.com\n- run `npm i @scope/pkg`\n  ```sh\n  @indented.md\n  ```\n\n```sh\n@keep.md\n```\n";
+  const gemini = block("gemini", { basket: "/b/PREFERENCES.md" }, rendered);
+  for (const word of ["@notes.md", "@./x.md", "@[label]"]) assert.ok(gemini.includes(` @\u200b${word.slice(1)}`), `${word} is defused: ${gemini}`);
+  assert.ok(gemini.includes("me@example.com"));
+  assert.ok(gemini.includes("`npm i @scope/pkg`"), "inline code is left alone");
+  assert.ok(gemini.includes("  ```sh\n  @indented.md\n  ```"), "indented fences too");
+  assert.ok(gemini.includes("```sh\n@keep.md\n```"), "code fences are left alone");
+  assert.equal(block("gemini", { basket: "/b/PREFERENCES.md" }, rendered), gemini, "stable across re-syncs");
+  assert.ok(block("codex", { basket: "/b/PREFERENCES.md" }, rendered).includes(" @notes.md"));
+  // Install and uninstall stay exact with a defused copy in the block.
+  const original = section("/b/PREFERENCES.md");
+  const installed = withBlock(original, "gemini", "/b/PREFERENCES.md", rendered).text;
+  assert.equal(withBlock(installed, "gemini", "/b/PREFERENCES.md", rendered).text, installed);
+  assert.equal(withoutBlock(installed).text, original);
+});
+
+test("install --harness all tells a Cursor user where its global rules go", () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".claude"));
+  assert.doesNotMatch(cli(box, "install").stdout, /cursor/);
+  mkdirSync(join(box.home, ".cursor"));
+  const all = cli(box, "install", "--harness", "all");
+  assert.equal(all.status, 0, all.stderr);
+  assert.equal(all.stdout.match(/cursor: no global rules file to write; paste the deveggs prompt .* User Rules/g)?.length, 1, all.stdout);
+  assert.equal(existsSync(join(box.home, ".cursor", "rules")), false, "writes nothing under ~/.cursor");
+  assert.doesNotMatch(cli(box, "install", "--harness", "claude-code").stdout, /cursor/);
+  assert.match(cli(box, "install", "--dry-run").stdout, /cursor: no global rules file/);
+  assert.doesNotMatch(cli(box, "uninstall").stdout, /cursor/);
+});
+
+test("a write to another basket never overwrites the installed Gemini copy", () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".gemini"));
+  assert.equal(cli(box, "lay", "Use tabs").status, 0);
+  cli(box, "install", "--harness", "gemini");
+  const installed = read(geminiMd(box));
+  const scratch = { ...box, env: { ...box.env, DEVEGGS_BASKET: join(box.dir, "scratch") } };
+  assert.equal(cli(scratch, "lay", "Scratch only").status, 0);
+  assert.equal(read(geminiMd(box)), installed);
 });

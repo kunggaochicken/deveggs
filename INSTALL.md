@@ -42,8 +42,8 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
    | --- | --- | --- | --- |
    | Claude Code | `~/.claude` | `~/.claude/CLAUDE.md` | `~/.claude/skills/` |
    | Codex | `~/.codex` | `~/.codex/AGENTS.md` | `~/.codex/skills/` |
-   | Cursor | `~/.cursor` | none: User Rules in Cursor Settings → Rules | none: it already reads `~/.claude/skills/` and `~/.codex/skills/`* |
-   | Gemini CLI | `~/.gemini` | `~/.gemini/GEMINI.md` | `~/.gemini/skills/` |
+   | Cursor | `~/.cursor` | none: User Rules in Cursor Settings → Rules → User Rules | none: it already reads `~/.claude/skills/` and `~/.codex/skills/`* |
+   | Gemini CLI, Antigravity | `~/.gemini` | `~/.gemini/GEMINI.md` (both read it) | `~/.gemini/skills/` (Antigravity: `~/.gemini/antigravity/skills/`) |
 
    \* If neither Claude Code nor Codex is installed, **copy** (don't symlink) the skill
    folders into `~/.cursor/skills/`. Cursor may not follow symlinks there.
@@ -72,11 +72,12 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      <!-- deveggs:end -->
      ```
 
-   - **Load the preferences.** For Claude Code and Codex, `<repo>/bin/deveggs install`
+   - **Load the preferences.** For Claude Code, Codex and Gemini CLI/Antigravity, `<repo>/bin/deveggs install`
      loads `~/.deveggs/PREFERENCES.md` into every session, so no agent has to remember
      to read it: it replaces the block's "Read … at session start" line with a managed
      `deveggs:preferences` block (an `@` import for Claude Code; for Codex, which has
-     no imports, the preferences inline, re-synced by every `deveggs render`). Include
+     no imports, and `~/.gemini/GEMINI.md`, whose imports can't reach `~/.deveggs`, the
+     preferences inline, re-synced by every `deveggs render`). Include
      the output of `<repo>/bin/deveggs install --dry-run` in the plan. Other harnesses
      keep the read line.
 
