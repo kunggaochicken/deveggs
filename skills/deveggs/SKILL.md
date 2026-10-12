@@ -93,6 +93,10 @@ Scale it to the item:
   - `scripts/memory-guardian.plist`: the launchd job
   ````
 
+The **Fires when** bullet is also the "fires when" column of `PREFERENCES.md`, so every
+agent sees when a rule applies, not just what it says. Keep it a short situation
+("a PR changes UI", "about to push"), under about ten words.
+
 Draw it with `deveggs lay … --arch <file>`, or after laying with
 `deveggs arch <id> --set <file>` (`-` reads stdin). Read the scripts and skills you
 draw, so paths and steps are accurate. Keep it the first section: no `## ` headings
@@ -294,6 +298,44 @@ descriptions that start with `[egg: on trial]`.
 If the preferences aren't in your context (a harness `deveggs install` doesn't cover
 yet, or it hasn't been run), read `PREFERENCES.md` in the folder `deveggs where`
 prints, and offer to run `deveggs install` so later sessions get it without asking.
+
+### Subagents
+
+Subagents don't all start with your preferences, so check before you delegate:
+
+| Subagent | Gets `PREFERENCES.md`? |
+|---|---|
+| Claude Code `general-purpose` and custom agents (`~/.claude/agents/`) | ✓ They load `~/.claude/CLAUDE.md` with its `@` imports |
+| Claude Code `Explore` and `Plan` | ✗ They load no `CLAUDE.md` at all |
+| Codex subagents (`spawn_agent`) | ✓ They load `~/.codex/AGENTS.md`, synced block included |
+
+When you brief an `Explore` or `Plan` agent, or any harness's subagent that doesn't
+load global instructions, put the chickens and eggs that bear on its task in the brief,
+by id and rule (for example `absolute-file-paths`: report files by absolute path).
+
+## Cite what you applied
+
+When a chicken or egg shapes a decision, name its id in your reply and the choice it
+changed: "Opened a separate PR (`separate-prs`)." Cite only items that actually
+applied, never the whole list. Citations make the basket's effect visible, so the
+developer can tell a rule that works from one that's ignored.
+
+A cited egg is a trial in progress. Once you see how it went (the developer accepted
+the result, or pushed back), record it with `deveggs feedback` (see "Trying eggs").
+
+## Enforce what text can't
+
+A rule in text is the weakest form of a rule. When an item is broken twice despite its
+text, or can be checked mechanically (a hook that blocks `git push` to `main`, a lint, a
+CI check, a script), propose an enforcer as a 🛡 table row: what it checks, where it
+runs, what it blocks. Then:
+
+1. Write it only with the developer's yes. **Never install a hook or change harness
+   settings without asking.** Put basket-owned enforcers in `~/.deveggs/scripts/`.
+2. Record it: `deveggs enforce <id> <path> [<path> …]` (basket-relative, absolute or
+   `~/` paths). `PREFERENCES.md` and `deveggs show` mark it with 🛡.
+3. When it misfires, fix the enforcer rather than rewording the rule.
+   `deveggs enforce <id> --clear` removes it.
 
 ## Laying eggs
 

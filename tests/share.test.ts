@@ -372,3 +372,11 @@ test("sanitizeEgg keeps a rename in the history, redacting the old id", () => {
   const { history } = sanitizeEgg(b.get("terse"), "", {}, ["acme"], b.history("terse"));
   assert.deepEqual(history.at(-1), { date: "2026-10-08", event: "renamed", version: 1, fields: { from: "<private>-terse", to: "terse" } });
 });
+
+test("sanitizeEgg keeps what enforces an item, redacted like the rest", () => {
+  const egg = { ...parseEgg(raw, "egg"), enforcedBy: ["/Users/jane/acme/hooks/no-push.sh", "scripts/guard"] };
+  const { egg: clean } = sanitizeEgg(egg, raw, { home: "/Users/jane" }, ["acme"]);
+  assert.equal(clean.enforcedBy?.length, 2);
+  assert.doesNotMatch(clean.enforcedBy?.[0] ?? "", /jane|acme/);
+  assert.equal(clean.enforcedBy?.[1], "scripts/guard");
+});

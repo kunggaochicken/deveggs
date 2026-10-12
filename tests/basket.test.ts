@@ -96,11 +96,49 @@ test("render writes chickens and eggs as Markdown tables", () => {
   const out = b.render();
   assert.equal(readFileSync(b.preferencesPath, "utf8"), out);
   const [chickens = "", eggs = ""] = out.split("## 🥚 Eggs");
-  assert.match(chickens, /\| id \| fact \| tags \|\n\|---\|---\|---\|\n\| `never-push-to-main` \| Never push to main \| git \|/);
-  assert.match(eggs, /\|  \| id \| fact \| tags \| trials \|/);
-  assert.match(eggs, /\| 🐣 \| `try-terse-summaries` \| Try terse summaries \| comms \| ✓3 ✗0 \|/);
-  assert.match(eggs, /\| 🥚 \| `run-tests-then-commit` \| Run tests \\\| then commit _\(workflow\)_ \| git, testing \| ✓0 ✗1 \|/);
+  assert.match(chickens, /\| id \| fires when \| fact \| tags \|\n\|---\|---\|---\|---\|\n\| `never-push-to-main` \| - \| Never push to main \| git \|/);
+  assert.match(eggs, /\|  \| id \| fires when \| fact \| tags \| trials \|/);
+  assert.match(eggs, /\| 🐣 \| `try-terse-summaries` \| - \| Try terse summaries \| comms \| ✓3 ✗0 \|/);
+  assert.match(eggs, /\| 🥚 \| `run-tests-then-commit` \| - \| Run tests \\\| then commit _\(workflow\)_ \| git, testing \| ✓0 ✗1 \|/);
   assert.doesNotMatch(out, /Rejected/);
+});
+
+test("render says when each rule fires, from its architecture's Fires when bullet", () => {
+  const b = fresh();
+  const arch = (when: string): string => ["```text", "⚡ PR changes UI ──▶ 🤖 screenshots ──▶ ✅ seen", "```", "", `- ⚡ **Fires when:** ${when}`, "- 🎯 **Judged by:** ✓ seen · ✗ noise"].join("\n");
+  b.lay({ id: "no-push", summary: "Never push to main", chicken: true, architecture: arch("about to push | merge") });
+  b.lay({ id: "shots", summary: "Screenshot UI changes", architecture: arch("a PR changes something on screen") });
+  b.lay({ id: "sketch", summary: "Still a scaffold" });
+  const out = b.render();
+  assert.match(out, /\| `no-push` \| about to push \\\| merge \| Never push to main \| general \|/);
+  assert.match(out, /\| 🥚 \| `shots` \| a PR changes something on screen \| Screenshot UI changes \| general \| ✓0 ✗0 \|/);
+  assert.match(out, /\| 🥚 \| `sketch` \| - \| Still a scaffold \|/, "a ‹placeholder› isn't a trigger");
+});
+
+test("render tells agents to cite the items that shaped a decision", () => {
+  const out = fresh().render();
+  assert.match(out, /\*\*Cite what you applied\.\*\* When a chicken or egg shapes a decision, name its id in your reply/);
+  assert.match(out, /record it with `deveggs feedback`/);
+  assert.ok(out.indexOf("Cite what you applied") < out.indexOf("## 🐔 Chickens"), "the rule comes before the tables");
+});
+
+test("enforce records what enforces an item, round-trips, renders with 🛡 and clears", () => {
+  const b = fresh();
+  b.lay({ id: "no-push", summary: "Never push to main", chicken: true, today: "2026-10-01" });
+  const egg = b.enforce("no-push", ["~/.claude/hooks/no-push.sh", "scripts/ci-guard", "scripts/ci-guard"], "2026-10-12");
+  assert.deepEqual(egg.enforcedBy, ["~/.claude/hooks/no-push.sh", "scripts/ci-guard"]);
+  assert.equal(egg.updated, "2026-10-12");
+  const raw = readFileSync(join(b.root, "chickens", "no-push.md"), "utf8");
+  assert.match(raw, /^enforced_by: ~\/\.claude\/hooks\/no-push\.sh, scripts\/ci-guard$/m);
+  assert.deepEqual(parseEgg(raw, "chicken"), egg);
+  const out = b.render();
+  assert.match(out, /\| `no-push` \| - \| Never push to main 🛡 `~\/\.claude\/hooks\/no-push\.sh`, `scripts\/ci-guard` \| general \|/);
+  assert.match(out, /🛡 marks a rule something enforces/);
+  assert.throws(() => b.enforce("no-push", ["a, b"]), /one path per argument/);
+  const cleared = b.enforce("no-push", []);
+  assert.equal(cleared.enforcedBy, undefined);
+  assert.doesNotMatch(readFileSync(join(b.root, "chickens", "no-push.md"), "utf8"), /enforced_by/);
+  assert.doesNotMatch(b.render(), /🛡/, "no legend when nothing is enforced");
 });
 
 test("render says so when a tier is empty", () => {
@@ -267,7 +305,7 @@ test("render marks evolved eggs with their version", () => {
   const b = fresh();
   b.lay({ id: "x", summary: "One" });
   b.evolve("x", { summary: "Two" });
-  assert.match(b.render(), /\| 🥚 \| `x` \| Two \| general \| ✓0 ✗0 \(v2\) \|/);
+  assert.match(b.render(), /\| 🥚 \| `x` \| - \| Two \| general \| ✓0 ✗0 \(v2\) \|/);
 });
 
 test("rename moves the item and its history, keeps its tier and trials, and logs the old id", () => {

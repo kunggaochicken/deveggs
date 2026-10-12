@@ -45,6 +45,11 @@ usage:
   deveggs crack <id> [--quote text] [--note why] [--harness name]   reject an egg, or retire a chicken
   deveggs arch <id> [--set <file|->]  print an item's architecture diagram, or (with --set)
                                      draw it: the ## Architecture section after its fact
+  deveggs enforce <id> [<path> ...] [--clear]
+                                     say what enforces an item besides its text (a hook,
+                                     lint or script; basket-relative, absolute or ~/ path);
+                                     shown with 🛡 in PREFERENCES.md and deveggs show.
+                                     No paths prints it; --clear removes it
   deveggs list [--tier egg|chicken|cracked|ready] [--kind k]
   deveggs show <id>
   deveggs history <id> [--trials] [--event e1,e2] [--since YYYY-MM-DD] [--version N] [--json]
@@ -374,6 +379,7 @@ function main(argv: string[]): void {
       dir: { type: "string" },
       arch: { type: "string" },
       set: { type: "string" },
+      clear: { type: "boolean", default: false },
     },
   });
   const legacy = legacyBasket(repoRoot);
@@ -554,6 +560,28 @@ function main(argv: string[]): void {
       save(`${egg.tier}: draw ${egg.id}`);
       console.log(`${line(egg)}\n     🗺  architecture drawn`);
       diagram(egg);
+      return;
+    }
+    case "enforce": {
+      const [id, ...paths] = positionals;
+      if (!id) throw new BasketError("usage: deveggs enforce <id> [<path> ...] [--clear]");
+      if (missing()) throw new BasketError(`nothing in the basket named ${JSON.stringify(id)}; ${emptyNote()}`);
+      if (!paths.length && !values.clear) {
+        const egg = basket.get(id);
+        console.log(egg.enforcedBy?.length ? `🛡 ${egg.id} is enforced by ${egg.enforcedBy.join(", ")}` : `${egg.id} is text only; nothing enforces it`);
+        return;
+      }
+      if (paths.length && values.clear) throw new BasketError("pass paths or --clear, not both");
+      prepare();
+      const egg = basket.enforce(id, paths);
+      for (const path of egg.enforcedBy ?? []) {
+        const at = path.startsWith("~/") ? join(homedir(), path.slice(2)) : resolve(basketRoot, path);
+        if (!existsSync(at)) warn(`${path} doesn't exist (yet) at ${at}`);
+      }
+      render();
+      save(`${egg.tier}: ${egg.enforcedBy ? `enforce ${egg.id}` : `unenforce ${egg.id}`}`);
+      console.log(line(egg));
+      console.log(egg.enforcedBy ? `     🛡 enforced by ${egg.enforcedBy.join(", ")}` : "     text only: nothing enforces it");
       return;
     }
     case "list": {
