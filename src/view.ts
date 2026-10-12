@@ -143,6 +143,7 @@ export function formatShow(egg: Egg, options: ViewOptions, history: HistoryEntry
         ["tier", TIER_LABEL[egg.tier]],
         ["kind", `${KIND_ICON[egg.kind]} ${egg.kind}`],
         ["tags", egg.tags.join(", ") || "-"],
+        ...(egg.enforcedBy?.length ? [["enforced by", `🛡 ${egg.enforcedBy.join(", ")}`] as [string, string]] : []),
         ...versionRow,
         ["trials", trialCell],
         ["harnesses", egg.harnesses.join(", ") || "-"],

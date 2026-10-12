@@ -79,6 +79,19 @@ export function isScaffold(architecture: string | undefined): boolean {
   return architecture !== undefined && PLACEHOLDER.test(architecture);
 }
 
+/**
+ * When the item applies: its architecture's `- ⚡ **Fires when:** …` bullet, so
+ * PREFERENCES.md can say when each rule fires, not just what it says. Undefined when
+ * there's no such bullet or it's still a ‹placeholder›.
+ */
+export function firesWhen(body: string): string | undefined {
+  const arch = architectureOf(body);
+  if (!arch) return undefined;
+  const m = /^\s*[-*] (?:⚡️?\s*)?\*\*Fires when:?\*\*:?\s*(.+)$/im.exec(arch);
+  const text = m?.[1]?.trim();
+  return text && !PLACEHOLDER.test(text) ? text : undefined;
+}
+
 /** The files an architecture names under its `### … Files` heading: each bullet's first `path`. */
 export function archFiles(architecture: string | undefined): string[] {
   if (!architecture) return [];

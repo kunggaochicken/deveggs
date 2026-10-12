@@ -192,7 +192,7 @@ test("evolve rewrites the fact, re-renders, commits, and needs the developer's w
   assert.match(r.stdout, /trials restart at ✓0 ✗0 for v2/);
   assert.equal(subjects(box)[0], "egg: evolve terse to v2");
   assert.equal(git(box, box.basket, "status", "--porcelain"), "", "everything committed");
-  assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /`terse` \| Summaries, except for decisions \|.*✓0 ✗0 \(v2\)/);
+  assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /`terse` \| - \| Summaries, except for decisions \|.*✓0 ✗0 \(v2\)/);
   assert.match(cli(box, "show", "terse").stdout, /was \(v1\) +End each turn with a one-line summary/);
   const story = cli(box, "history", "terse").stdout;
   assert.match(story, /🧬 evolved v1 → v2 {2}claude · grover\n {12}"give me the options"\n {12}was {2}End each turn with a one-line summary\n {12}now {2}Summaries, except for decisions\n {12}why {2}narrow/);
@@ -200,4 +200,26 @@ test("evolve rewrites the fact, re-renders, commits, and needs the developer's w
   const cracked = cli(box, "evolve", "terse", "Anything", "--quote", "x");
   assert.equal(cracked.status, 1);
   assert.match(cracked.stderr, /cracked/);
+});
+
+test("enforce names what enforces an item, warns about missing paths, shows it, and clears it", () => {
+  const box = sandbox();
+  cli(box, "lay", "Never push to main", "--id", "no-push", "--chicken");
+  assert.match(cli(box, "enforce", "no-push").stdout, /no-push is text only; nothing enforces it/);
+  writeFileSync(join(box.basket, "guard.sh"), "#!/bin/sh\n");
+  const r = cli(box, "enforce", "no-push", "guard.sh", "~/.claude/hooks/missing.sh");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /🛡 enforced by guard\.sh, ~\/\.claude\/hooks\/missing\.sh/);
+  assert.match(r.stderr, /~\/\.claude\/hooks\/missing\.sh doesn't exist \(yet\)/);
+  assert.doesNotMatch(r.stderr, /guard\.sh doesn't exist/);
+  assert.equal(subjects(box)[0], "chicken: enforce no-push");
+  assert.match(readFileSync(join(box.basket, "PREFERENCES.md"), "utf8"), /Never push to main 🛡 `guard\.sh`/);
+  assert.match(cli(box, "show", "no-push").stdout, /enforced by +🛡 guard\.sh, ~\/\.claude\/hooks\/missing\.sh/);
+  assert.match(cli(box, "enforce", "no-push", "x", "--clear").stderr, /not both/);
+  assert.match(cli(box, "enforce", "no-push", " ").stderr, /empty path; to remove the enforcer, pass --clear/);
+  assert.match(cli(box, "show", "no-push").stdout, /enforced by +🛡 guard\.sh/, "an empty path doesn't clear it");
+  const cleared = cli(box, "enforce", "no-push", "--clear");
+  assert.match(cleared.stdout, /text only: nothing enforces it/);
+  assert.equal(subjects(box)[0], "chicken: unenforce no-push");
+  assert.doesNotMatch(cli(box, "show", "no-push").stdout, /enforced by/);
 });

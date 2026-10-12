@@ -249,3 +249,12 @@ test("import refuses an id already in the basket or cracked, and unknown items",
   assert.match(cli(box, "import", "alice").stderr, /usage: deveggs import/);
   assert.equal(subjects(box)[0], "crack: diagrams");
 });
+
+test("Basket.borrow leaves the owner's enforcer behind: it isn't installed here", () => {
+  const dir = checkout();
+  const b = new Basket(mkdtempSync(join(tmpdir(), "deveggs-basket-")));
+  const shared = findShared(dir, "alice", "small-prs").egg;
+  const egg = b.borrow({ ...shared, enforcedBy: ["~/.claude/hooks/pr-size.sh"] }, from, undefined, "2026-10-08");
+  assert.equal(egg.enforcedBy, undefined);
+  assert.doesNotMatch(readFileSync(join(b.root, "eggs", "small-prs.md"), "utf8"), /enforced_by/);
+});

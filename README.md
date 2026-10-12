@@ -185,6 +185,13 @@ deveggs uninstall [--harness …]           # take it out again
 It's idempotent, and it replaces the deveggs prompt's "read PREFERENCES.md at session
 start" line (uninstall puts it back).
 
+Each rule in `PREFERENCES.md` comes with when it fires (its architecture's `Fires when` line), and agents
+name the ids of the rules that shaped a decision, so you can see which ones work.
+Subagents mostly inherit it too: Claude Code's `general-purpose` and custom agents and
+Codex subagents do (custom agents tested via `claude --agents`); Claude Code's `Explore` and `Plan` don't, so agents brief them with
+the rules that apply. The ideas come partly from
+[pstack](docs/prior-art/pstack.md).
+
 ## Usage
 
 You mostly just talk to your agent. It runs these for you:
@@ -199,6 +206,7 @@ deveggs hatch <id>                                                      # 🥚 -
 deveggs crack <id>                                                      # 💥
 deveggs rename <old-id> <new-id>                                        # new name; history and references follow
 deveggs history <id> [--trials] [--since 2026-10-01] [--json]           # 📜 how it evolved, oldest first
+deveggs enforce <id> <hook-or-script-path>                              # 🛡 note what enforces it beyond its text
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path

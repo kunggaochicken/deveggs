@@ -263,7 +263,14 @@ export function sanitizeEgg(egg: Egg, raw: string, options: ShareOptions = {}, t
   if (isScaffold(arch)) add("unfinished diagram");
   const architecture = arch && !isScaffold(arch) ? hideIds(clean(arch), hidden, hits) : "";
   return {
-    egg: { ...egg, summary, tags, harnesses: [], body: architecture ? `## ${ARCH_HEADING}\n\n${architecture}` : "" },
+    egg: {
+      ...egg,
+      summary,
+      tags,
+      harnesses: [],
+      body: architecture ? `## ${ARCH_HEADING}\n\n${architecture}` : "",
+      ...(egg.enforcedBy && { enforcedBy: egg.enforcedBy.map(clean).filter((p) => !p.includes("<")) }),
+    },
     history: shared,
     redactions: [...removed, ...labels(hits)],
   };

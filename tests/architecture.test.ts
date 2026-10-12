@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { architectureOf, archFiles, formatArchitecture, isScaffold, scaffold, withArchitecture, withoutArchitecture } from "../src/architecture.ts";
+import { architectureOf, archFiles, firesWhen, formatArchitecture, isScaffold, scaffold, withArchitecture, withoutArchitecture } from "../src/architecture.ts";
 import { Basket } from "../src/basket.ts";
 import { planShare, sanitizeEgg } from "../src/share.ts";
 import { displayWidth } from "../src/table.ts";
@@ -217,4 +217,15 @@ test("archFiles lists top-level bullets only, and bold text with $ renders as wr
   assert.deepEqual(archFiles("### 📁 Files\n\n- `a.sh`: does\n  - `nested`: detail"), ["a.sh"]);
   const out = formatArchitecture({ id: "x", kind: "preference", body: withArchitecture("", "- **costs $$ and $& more:** yes") }, { width: 100, color: true });
   assert.match(out.replace(/\x1b\[[0-9;]*m/g, ""), /costs \$\$ and \$& more: yes/);
+});
+
+test("firesWhen reads the Fires when bullet, and skips placeholders and items without one", () => {
+  const b = fresh();
+  assert.equal(firesWhen(b.lay({ id: "guard", summary: "Run a guard", kind: "script", architecture: GUARD }).body), "memory pressure rises");
+  assert.equal(firesWhen(b.lay({ id: "sketch", summary: "Sketch" }).body), undefined, "the scaffold's ‹the situation› is not a trigger");
+  assert.equal(firesWhen(withArchitecture("", "```text\n⚡ a ──▶ ✅ b\n```")), undefined);
+  assert.equal(firesWhen(withArchitecture("", "- **Fires when:** a PR opens")), "a PR opens", "the ⚡ is optional");
+  assert.equal(firesWhen(withArchitecture("", "- ⚡\uFE0F **Fires when:** emoji variant")), "emoji variant", "⚡ with its emoji selector");
+  assert.equal(firesWhen(withArchitecture("", "* **fires when:** star bullet")), "star bullet");
+  assert.equal(firesWhen(""), undefined);
 });
