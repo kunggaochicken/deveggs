@@ -1,6 +1,6 @@
 ---
 name: deveggs
-description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "let's try…", "I prefer…", a correction that applies beyond this project, a workflow, script or skill they keep re-explaining), when an on-trial egg clearly helps or hurts, when they ask to review, hatch or crack their preferences, or when they want ideas or to borrow from other developers' shared baskets. Tends their harness-agnostic basket of eggs (on trial) and chickens (permanent) instead of harness-local memory.
+description: Use when the developer states or reveals how they like to work with agents ("always…", "never…", "let's try…", "I prefer…", praise for how you did something ("I really like that you…", "perfect, keep doing that"), a correction that applies beyond this project, a workflow, script or skill they keep re-explaining), when an on-trial egg clearly helps or hurts, when they ask to review, hatch or crack their preferences, or when they want ideas or to borrow from other developers' shared baskets. Tends their harness-agnostic basket of eggs (on trial) and chickens (permanent) instead of harness-local memory.
 ---
 
 # deveggs: tend the developer's basket
@@ -340,8 +340,10 @@ runs, what it blocks. Then:
 ## Laying eggs
 
 Spot preferences yourself, as the developer works. They never have to ask you to
-look. Corrections, "always/never", "let's try…" and steps they repeat are all
-signals. But **never lay without their yes**: propose each one in one line (or a
+look. Corrections, praise, "always/never", "let's try…" and steps they repeat are
+all signals. Praise ("I really like that you…", "this is great, keep doing X",
+"perfect, that format") is as strong a signal as a correction: it names a behavior
+they want kept. But **never lay without their yes**: propose each one in one line (or a
 table, for several) and lay only what they confirm.
 
 | Signal | Command |
@@ -353,6 +355,7 @@ table, for several) and lay only what they confirm.
 | A shell snippet they keep rewriting | `--kind script`, then write `~/.deveggs/scripts/<id>` |
 | A workflow that should be its own skill | `--kind skill`, then fill in the generated `SKILL.md` |
 | You *noticed* a pattern they never stated | Ask in one line first: "Lay an egg for X?" |
+| Praise for something you did: "I really like that you…", "perfect, keep doing that" | (a) Find the item that produced it: an egg → `deveggs feedback <id> --good --quote "<their words>"` (see "Trying eggs"); a chicken → note it, no trial needed. (b) Part of the praise no item covers → propose a new egg in one line, with its diagram |
 
 Rules:
 
@@ -386,7 +389,7 @@ above still applies the rest of the time.
   their words verbatim as `--quote`, confirm in one line and lay.
 - **Without text**: scan this session for anything that reflects a recurring pattern
   in how they work: corrections, instructions they repeated or re-specified,
-  always/never statements, workflows they walked you through, and standards they
+  behavior they praised, always/never statements, workflows they walked you through, and standards they
   held you to. Propose candidates as one table
   (`# | tier | proposed rule | from your words | tag`), each followed by its one-line
   🗺 diagram, and lay only what they confirm.
@@ -447,7 +450,8 @@ deveggs feedback <id> --bad --harness <you> \
 Run it from the project's directory (the repo is picked up), or pass `--repo`; pass
 `--session <id>` if your harness has one. Record feedback when there's a real signal, not every time the egg applies. The
 developer's reactions count most: if they push back on behavior an egg caused,
-that's a `--bad`. Feedback from more than one harness is the strongest evidence.
+that's a `--bad`; if they praise it ("I really like that you…"), that's a `--good`,
+with their words as `--quote`. Feedback from more than one harness is the strongest evidence.
 Show each recording as a verdict card (see "Show, don't tell"), batched into one table
 when there are several.
 
