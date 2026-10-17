@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
+<title id="title">Learn conservatively, preserve evidence</title><desc id="desc">Observed feedback is classified by context; attention adapts while preference changes remain explicit.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#567086"/></marker></defs>
+<rect width="960" height="450" fill="#f5f8fc"/>
+<text x="32" y="39" font-family="Arial,sans-serif" font-size="23" font-weight="bold" fill="#15344d">Learn conservatively, preserve evidence</text>
+<path d="M302 155 L345 155" stroke="#567086" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M615 155 L658 155" stroke="#567086" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M790 225 L790 356" stroke="#567086" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M790 356 L615 356" stroke="#567086" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<text x="702.5" y="348.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#365469">propose</text>
+<rect x="32" y="85" width="270" height="140" rx="12" fill="white" stroke="#6798b7" stroke-width="2"/><text x="50" y="115" font-family="Arial,sans-serif" font-size="18" font-weight="bold" fill="#15344d">Observe</text>
+<text x="50" y="141" font-family="Arial,sans-serif" font-size="15" fill="#365469">Outcome: helped / hurt / mixed</text>
+<text x="50" y="163" font-family="Arial,sans-serif" font-size="15" fill="#365469">Adherence: followed / missed</text>
+<text x="50" y="185" font-family="Arial,sans-serif" font-size="15" fill="#365469">Source: developer or agent</text>
+<rect x="345" y="85" width="270" height="140" rx="12" fill="white" stroke="#6798b7" stroke-width="2"/><text x="363" y="115" font-family="Arial,sans-serif" font-size="18" font-weight="bold" fill="#15344d">Classify evidence</text>
+<text x="363" y="141" font-family="Arial,sans-serif" font-size="15" fill="#365469">Exact / partial / inherited</text>
+<text x="363" y="163" font-family="Arial,sans-serif" font-size="15" fill="#365469">Same rule revision only</text>
+<text x="363" y="185" font-family="Arial,sans-serif" font-size="15" fill="#365469">Distinct incidents and sessions</text>
+<rect x="658" y="85" width="270" height="140" rx="12" fill="white" stroke="#6798b7" stroke-width="2"/><text x="676" y="115" font-family="Arial,sans-serif" font-size="18" font-weight="bold" fill="#15344d">Adapt attention</text>
+<text x="676" y="141" font-family="Arial,sans-serif" font-size="15" fill="#365469">Show reason and uncertainty</text>
+<text x="676" y="163" font-family="Arial,sans-serif" font-size="15" fill="#365469">Highlight repeated frustrations</text>
+<text x="676" y="185" font-family="Arial,sans-serif" font-size="15" fill="#365469">Never remove a valued rule</text>
+<rect x="345" y="300" width="270" height="112" rx="12" fill="white" stroke="#6798b7" stroke-width="2"/><text x="363" y="330" font-family="Arial,sans-serif" font-size="18" font-weight="bold" fill="#15344d">Preference change proposal</text>
+<text x="363" y="356" font-family="Arial,sans-serif" font-size="15" fill="#365469">Evidence + wording + scope</text>
+<text x="363" y="378" font-family="Arial,sans-serif" font-size="15" fill="#365469">Developer explicitly decides</text>
+</svg>
