@@ -8,7 +8,7 @@ import { formatArchitecture } from "./architecture.ts";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
-import { CURSOR_HINT, type Change, install, parseHarness, SCOUT_NOTES, sync, uninstall } from "./install.ts";
+import { CURSOR_HINT, type Change, HARNESS_NAMES, install, parseHarness, SCOUT_NOTES, sync, uninstall } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
 import { ADAPTERS, GUARD, isScoutHarness, logRun, modelFor, parseHookInput, scout, SCOUT_HARNESSES, type HookInput } from "./scout.ts";
@@ -70,12 +70,13 @@ usage:
                                      prompt there
   deveggs uninstall [--harness claude-code|codex|gemini|all] [--dry-run]
                                      remove that block and hook again
-  deveggs scout --hook --harness claude-code|codex
+  deveggs scout --hook [--harness claude-code|codex]
                                      that harness's UserPromptSubmit hook (deveggs install
                                      adds it): its own fresh-context headless CLI (claude
                                      -p, codex exec) picks the eggs and chickens that fit
                                      the prompt and injects them as context. Fails open;
-                                     logs to <basket>/logs/scout.log
+                                     logs to <basket>/logs/scout.log. --harness defaults
+                                     to claude-code
   deveggs scout --dry-run [--harness claude-code|codex] "<prompt>"
                                      show what the scout picks for a prompt, and its latency
   deveggs where                        print the basket's path
@@ -375,7 +376,7 @@ function scoutCommand(hook: boolean, positionals: string[], harness: string | un
       input = parseHookInput(readFileSync(0, "utf8"));
       if (!input || !existsSync(basketRoot)) return;
       const result = scout(input, { items: items(), adapter: ADAPTERS[name], env: process.env });
-      logRun(basketRoot, input, result, new Date(), name);
+      logRun(basketRoot, input, result, name);
       if (result.output) process.stdout.write(`${result.output}\n`);
     } catch {
       // fail open
@@ -694,7 +695,7 @@ function main(argv: string[]): void {
         }
       }
       if (command === "install" && !opts.explicit && existsSync(join(homedir(), ".cursor"))) console.log(CURSOR_HINT);
-      const hooked = changes.filter((c) => c.changed && c.hook).map((c) => c.harness);
+      const hooked = changes.filter((c) => c.changed && c.hook).map((c) => HARNESS_NAMES[c.harness]);
       // A worktree's .git is a file. A hook pinned to a worktree goes quiet once it's deleted.
       if (command === "install" && hooked.length && existsSync(join(repoRoot, ".git")) && !statSync(join(repoRoot, ".git")).isDirectory()) {
         warn(`the scout hook points into a git worktree (${repoRoot}); once it's removed the hook does nothing. Run deveggs install from your main deveggs checkout.`);

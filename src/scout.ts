@@ -330,11 +330,15 @@ export const CODEX_ARGS = [
  * saved to disk (--ephemeral), no config.toml (so no MCP servers, profiles or hook trust),
  * hooks off, no execpolicy rules, a read-only sandbox (exec never asks for approval), low
  * reasoning, no project docs. Codex has no flag to drop its tools or replace its system
- * prompt, so the routing instruction leads the prompt. Its stdout is the final message only,
- * and it signs in with the developer's own Codex login.
+ * prompt, and ~/.codex/AGENTS.md still loads, so the routing instruction leads the prompt
+ * and tells it to leave tools and those instructions alone. Its stdout is the final message
+ * only, and it signs in with the developer's own Codex login.
  */
+export const CODEX_PREAMBLE =
+  "Answer from this message alone: run no commands, call no tools, and ignore any AGENTS.md or other standing instructions you were given; they are not the task.";
+
 export const askCodex: Ask = (prompt, { model, timeoutMs }) =>
-  runHeadless("codex", [...CODEX_ARGS, "--model", model, "-"], `${SYSTEM_PROMPT}\n\n${prompt}`, timeoutMs);
+  runHeadless("codex", [...CODEX_ARGS, "--model", model, "-"], `${CODEX_PREAMBLE}\n${SYSTEM_PROMPT}\n\n${prompt}`, timeoutMs);
 
 /** What differs per harness: reading its transcript, running its own headless checker, printing its hook output. */
 export interface Adapter {
@@ -425,7 +429,7 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
  * harness. logs/ gets its own `.gitignore` so a basket that doesn't ignore it never commits
  * the log.
  */
-export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, at = new Date(), harness: ScoutHarness = "claude-code"): void {
+export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, harness: ScoutHarness = "claude-code", at = new Date()): void {
   try {
     const dir = join(basket, "logs");
     mkdirSync(dir, { recursive: true });

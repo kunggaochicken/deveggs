@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type Egg } from "../src/basket.ts";
-import { ADAPTERS, type Ask, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseHookInput, parseVerdict, scout, scoutPrompt, transcriptTail } from "../src/scout.ts";
+import { ADAPTERS, type Ask, CODEX_PREAMBLE, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseHookInput, parseVerdict, scout, scoutPrompt, transcriptTail } from "../src/scout.ts";
 import { cli, fakePath, type Sandbox, sandbox } from "./sandbox.ts";
 
 const egg = (id: string, tier: Egg["tier"], summary: string, when?: string): Egg => ({
@@ -158,8 +158,8 @@ test("scout reads the transcript's tail and doesn't repeat the new prompt", () =
 
 test("logRun appends one JSON line per run and keeps logs/ out of the basket's git", () => {
   const box = sandbox();
-  logRun(box.basket, { prompt: "x", sessionId: "s1" }, { applied: [{ id: "a", why: "" }], ms: 12, candidates: 3 }, new Date("2026-10-29T00:00:00Z"));
-  logRun(box.basket, undefined, { applied: [], error: "timed out", ms: 25000, candidates: 3 }, new Date("2026-10-29T00:00:01Z"), "codex");
+  logRun(box.basket, { prompt: "x", sessionId: "s1" }, { applied: [{ id: "a", why: "" }], ms: 12, candidates: 3 }, "claude-code", new Date("2026-10-29T00:00:00Z"));
+  logRun(box.basket, undefined, { applied: [], error: "timed out", ms: 25000, candidates: 3 }, "codex", new Date("2026-10-29T00:00:01Z"));
   const lines = readFileSync(join(box.basket, "logs", "scout.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.deepEqual(lines, [
     { at: "2026-10-29T00:00:00.000Z", harness: "claude-code", session: "s1", ms: 12, candidates: 3, apply: ["a"] },
@@ -338,7 +338,8 @@ test("deveggs scout --hook --harness codex asks codex exec, never claude, and lo
   assert.deepEqual(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2), ["--model", "gpt-6-luna"]);
   assert.equal(args[args.length - 1], "-", "the prompt comes on stdin");
   const stdin = readFileSync(join(box.dir, "stdin"), "utf8");
-  assert.ok(stdin.startsWith("You route a developer's standing preferences"), "the routing instruction leads, since codex has no system prompt flag");
+  assert.ok(stdin.startsWith(CODEX_PREAMBLE), "the preamble leads: codex has no system prompt flag and loads AGENTS.md");
+  assert.ok(stdin.includes(`${CODEX_PREAMBLE}\nYou route a developer's standing preferences`), "then the routing instruction");
   assert.match(stdin, /<new-request>\npostgres or sqlite\?/);
   assert.match(readFileSync(join(box.dir, "env"), "utf8"), /^DEVEGGS_SCOUT=1$/m, "the child carries the recursion guard");
   const log = JSON.parse(readFileSync(join(box.basket, "logs", "scout.log"), "utf8").trim());

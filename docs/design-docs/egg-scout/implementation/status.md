@@ -8,7 +8,7 @@
 | Per-harness adapters (Claude Code, Codex) | ✅ done | Yes | Fake `codex` CLI tests; dry runs; a real `codex exec` session with the hook inline | This PR |
 | Install / uninstall of the Codex hook (`~/.codex/hooks.json`) | ✅ done | Yes | Fixture with other tools' Codex hooks | This PR |
 | Antigravity, Gemini CLI, Cursor | ⬜ not yet | — | [Research](../design.md#harness-research) | — |
-| Live measurement | ⏸ waits on the developer | — | Needs `deveggs install` on their machine, and the Codex hook trusted in `/hooks` | — |
+| Live measurement, and the Codex `hooks.json` + `/hooks` trust path end to end | ⏸ waits on the developer | — | Needs `deveggs install` on their machine, and the Codex hook trusted in `/hooks` (the hook itself was verified passed inline with `-c`) | — |
 
 ## Dry runs (real basket, 27 eggs and chickens, 2026-10-29)
 

@@ -461,7 +461,7 @@ test("install adds the Codex scout hook to hooks.json, says to trust it, and uni
     r.stdout,
     /codex: .*\.codex\/hooks\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness codex 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\. Codex runs it once you trust it: start codex and review it in \/hooks/,
   );
-  assert.match(r.stdout, /in codex, the scout hook names the ones that fit each prompt/);
+  assert.match(r.stdout, /in Codex, the scout hook names the ones that fit each prompt/);
   const command = `${join(box.checkout, "bin", "deveggs")} scout --hook --harness codex 2>/dev/null || true`;
   const text = read(codexHooks(box));
   assert.deepEqual(JSON.parse(text), {
@@ -506,6 +506,19 @@ test("a Codex hooks.json that isn't a JSON object, or has an odd shape, is left 
     assert.match(r.stdout, /installed: copies/, "the AGENTS.md block still installs");
     assert.equal(read(codexHooks(box)), odd);
   }
+});
+
+test("install upgrades a scout hook from before --harness in place, leaving one entry", () => {
+  const { box } = wired();
+  const old = `${join(box.checkout, "bin", "deveggs")} scout --hook 2>/dev/null || true`;
+  writeFileSync(settingsJson(box), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "rtk hook" }] }, { hooks: [{ type: "command", command: old, timeout: 15 }] }] } }));
+  const r = cli(box, "install", "--harness", "claude-code");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /installed: scout hook .*; updated the scout hook/);
+  const text = read(settingsJson(box));
+  assert.equal(text.split("deveggs scout --hook").length, 2, "exactly one deveggs entry");
+  assert.match(text, /scout --hook --harness claude-code/);
+  assert.match(text, /rtk hook/);
 });
 
 test("install without --harness wires both hooks, each naming its own harness", () => {

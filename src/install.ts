@@ -22,6 +22,12 @@ import { HOOK_ARGS, type ScoutHarness } from "./scout.ts";
 export const HARNESSES = ["claude-code", "codex", "gemini"] as const;
 export type Harness = (typeof HARNESSES)[number];
 
+/** How messages name a harness. */
+export const HARNESS_NAMES: Record<Harness, string> = { "claude-code": "Claude Code", codex: "Codex", gemini: "Gemini" };
+
+/** Seconds Claude Code and Codex wait for the scout hook (both read `timeout` in seconds); the scout itself gives up after 12 s by default. */
+export const SCOUT_HOOK_TIMEOUT = 15;
+
 interface HarnessSpec {
   /** Folder whose presence means the harness is installed, relative to HOME. */
   home: string;
@@ -50,7 +56,7 @@ const SPECS: Record<Harness, HarnessSpec> = {
     home: ".claude",
     file: join(".claude", "CLAUDE.md"),
     mode: "import",
-    hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", timeout: 15 },
+    hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", timeout: SCOUT_HOOK_TIMEOUT },
   },
   codex: {
     home: ".codex",
@@ -61,7 +67,7 @@ const SPECS: Record<Harness, HarnessSpec> = {
       harness: "codex",
       file: join(".codex", "hooks.json"),
       event: "UserPromptSubmit",
-      timeout: 15,
+      timeout: SCOUT_HOOK_TIMEOUT,
       after: "Codex runs it once you trust it: start codex and review it in /hooks",
     },
   },
@@ -249,17 +255,6 @@ export function withoutBlock(text: string): { text: string; removed?: string; st
 // that fit a prompt get noticed. JSON has no comments to hold markers, so the entry is
 // found by its command containing `deveggs scout --hook`, and every other key and hook is
 // left as it was.
-
-/** Seconds Claude Code and Codex wait for the hook; the scout itself gives up after 12 s by default. */
-export const SCOUT_HOOK_TIMEOUT = 15;
-
-export const settingsFile = (home: string): string => join(home, ".claude", "settings.json");
-
-/** The file a harness's scout hook lives in, or undefined when it has none. */
-export const hookFile = (home: string, harness: Harness): string | undefined => {
-  const hook = SPECS[harness].hook;
-  return hook && join(home, hook.file);
-};
 
 /**
  * The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook --harness <h>`,
