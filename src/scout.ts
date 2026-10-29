@@ -7,21 +7,30 @@ import type { Egg } from "./basket.ts";
 
 // `deveggs scout` is the attention half of deveggs acting as a harness layer: install
 // guarantees PREFERENCES.md is loaded, scout guarantees the rules that fit this prompt are
-// noticed. A Claude Code UserPromptSubmit hook runs it on every prompt; it asks a
-// fresh-context `claude -p` (no tools, no MCP, no settings, no session) which eggs and
-// chickens fire for what the main agent is about to do, and injects those as
-// additionalContext. It fails open: any problem means no output and exit 0, so it never
-// blocks a prompt.
+// noticed. The harness's own prompt-submit hook runs it on every prompt and names itself
+// with `--harness`; scout asks that same harness's headless CLI, in a fresh context, which
+// eggs and chickens fire for what the main agent is about to do, and injects those through
+// the hook's output. A Codex session is scouted by `codex exec`, a Claude Code one by
+// `claude -p`: one harness never calls another's model. It fails open: any problem means
+// no output and exit 0, so it never blocks a prompt.
+//
+// Everything here is harness-agnostic (candidates, the prompt, the verdict, sanitising,
+// logging, failing open, the recursion guard) except an Adapter: how a harness's
+// transcript reads, how its headless checker runs, and what its hook prints.
 
-/** Set on the scout's own `claude -p`, so a hook inside it can't scout again. */
+/** Set on the scout's own headless run, so a hook inside it can't scout again. */
 export const GUARD = "DEVEGGS_SCOUT";
-export const DEFAULT_MODEL = "haiku";
 /** Typical runs take 2–5 s; during an outage each prompt waits this long, so keep it short. */
 export const DEFAULT_TIMEOUT_MS = 12_000;
-/** What the settings.json hook entry contains; install and uninstall find their own entry by it. */
+/** What every installed hook entry contains; install and uninstall find their own entry by it. */
 export const HOOK_ARGS = "scout --hook";
 
-/** The parts of Claude Code's UserPromptSubmit hook input that scout uses. */
+/** Harnesses whose prompt hook can run the scout with their own headless CLI. */
+export const SCOUT_HARNESSES = ["claude-code", "codex"] as const;
+export type ScoutHarness = (typeof SCOUT_HARNESSES)[number];
+export const isScoutHarness = (value: unknown): value is ScoutHarness => (SCOUT_HARNESSES as readonly unknown[]).includes(value);
+
+/** The parts of a UserPromptSubmit hook input that scout uses (Claude Code and Codex send the same fields). */
 export interface HookInput {
   prompt: string;
   transcriptPath?: string;
@@ -56,8 +65,35 @@ export interface Turn {
   text: string;
 }
 
+export interface TailOptions {
+  turns?: number;
+  perTurn?: number;
+  total?: number;
+}
+
 /** Harness-injected blocks that say nothing about what the developer asked. */
 const NOISE = /<(system-reminder|command-name|command-message|command-args|local-command-stdout|local-command-stderr|local-command-caveat)>[\s\S]*?<\/\1>/g;
+
+/** Keep the last `turns`, each cut to `perTurn` characters, dropping the oldest until they fit `total`. */
+function trimTurns(all: Turn[], opts: TailOptions): Turn[] {
+  const { turns = 6, perTurn = 600, total = 3000 } = opts;
+  const tail = all.slice(-turns).map((t) => (t.text.length > perTurn ? { ...t, text: `${t.text.slice(0, perTurn)}…` } : t));
+  while (tail.length > 1 && tail.reduce((n, t) => n + t.text.length, 0) > total) tail.shift();
+  return tail;
+}
+
+/** Each JSONL line as an object, skipping a partial first line from reading the file's tail. */
+function* jsonLines(jsonl: string): Generator<Record<string, unknown>> {
+  for (const line of jsonl.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const entry: unknown = JSON.parse(line);
+      if (entry && typeof entry === "object") yield entry as Record<string, unknown>;
+    } catch {
+      // a partial line
+    }
+  }
+}
 
 function turnText(content: unknown): string | undefined {
   if (typeof content === "string") return content;
@@ -75,26 +111,42 @@ function turnText(content: unknown): string | undefined {
  * first. Skips tool calls and results, meta lines and harness-injected blocks; each turn
  * is cut to `perTurn` characters and the whole tail to `total`.
  */
-export function transcriptTail(jsonl: string, opts: { turns?: number; perTurn?: number; total?: number } = {}): Turn[] {
-  const { turns = 6, perTurn = 600, total = 3000 } = opts;
+export function transcriptTail(jsonl: string, opts: TailOptions = {}): Turn[] {
   const out: Turn[] = [];
-  for (const line of jsonl.split("\n")) {
-    if (!line.trim()) continue;
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line) as Record<string, unknown>;
-    } catch {
-      continue; // a partial first line from reading the file's tail
-    }
+  for (const entry of jsonLines(jsonl)) {
     const type = entry["type"];
     if ((type !== "user" && type !== "assistant") || entry["isMeta"] === true || entry["isSidechain"] === true) continue;
     const text = turnText((entry["message"] as { content?: unknown } | undefined)?.content)?.replace(NOISE, "").trim();
-    if (!text) continue;
-    out.push({ role: type, text: text.length > perTurn ? `${text.slice(0, perTurn)}…` : text });
+    if (text) out.push({ role: type, text });
   }
-  const tail = out.slice(-turns);
-  while (tail.length > 1 && tail.reduce((n, t) => n + t.text.length, 0) > total) tail.shift();
-  return tail;
+  return trimTurns(out, opts);
+}
+
+/**
+ * The same tail from a Codex rollout (JSONL). Codex documents the hook's `transcript_path`
+ * but not the rollout's format, so this reads only the messages the developer saw (an
+ * `item_completed` event holding a `UserMessage` or `AgentMessage`, as codex-cli 0.161
+ * writes them) and finds nothing in any other shape: a format change costs the scout its
+ * context, never a prompt.
+ */
+export function codexTranscriptTail(jsonl: string, opts: TailOptions = {}): Turn[] {
+  const out: Turn[] = [];
+  for (const entry of jsonLines(jsonl)) {
+    const payload = entry["payload"] as { type?: unknown; item?: { type?: unknown; content?: unknown } } | undefined;
+    if (entry["type"] !== "event_msg" || payload?.type !== "item_completed") continue;
+    const kind = payload.item?.type;
+    const role = kind === "UserMessage" ? "user" : kind === "AgentMessage" ? "assistant" : undefined;
+    const content = payload.item?.content;
+    if (!role || !Array.isArray(content)) continue;
+    const text = content
+      .filter((b): b is { text: string } => !!b && typeof b === "object" && String((b as { type?: unknown }).type).toLowerCase() === "text" && typeof (b as { text?: unknown }).text === "string")
+      .map((b) => b.text)
+      .join("\n")
+      .replace(NOISE, "")
+      .trim();
+    if (text) out.push({ role, text });
+  }
+  return trimTurns(out, opts);
 }
 
 /** Read at most the last `bytes` of a file: transcripts grow to many megabytes. */
@@ -216,33 +268,21 @@ export function contextFor(applied: Applied[], items: Candidate[]): string {
   ].join("\n");
 }
 
-/** The UserPromptSubmit hook's stdout. */
+/** The UserPromptSubmit hook's stdout. Claude Code and Codex both read this shape. */
 export const hookOutput = (context: string): string =>
   JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context } });
 
 export type AskResult = { ok: true; text: string } | { ok: false; error: string };
-/** Ask a fresh-context model. Injectable, so tests never call the real `claude`. */
+/** Ask a fresh-context model. Injectable, so tests never call a real CLI. */
 export type Ask = (prompt: string, opts: { model: string; timeoutMs: number }) => AskResult;
 
 /**
- * The real scout: a headless `claude -p` kept cheap and isolated. No tools, no MCP servers,
- * no settings files (so none of the developer's hooks), no slash commands, nothing saved to
- * disk, its own system prompt (so no CLAUDE.md), run from a temp folder. DEVEGGS_SCOUT=1
- * guards against recursion should a hook still fire inside it.
+ * Run a harness's headless CLI once: from a temp folder, killed at the timeout, with
+ * DEVEGGS_SCOUT=1 so a hook that still fires inside it can't scout again.
  */
-export const askClaude: Ask = (prompt, { model, timeoutMs }) => {
-  const args = [
-    "-p",
-    "--model", model,
-    "--tools", "",
-    "--strict-mcp-config",
-    "--setting-sources", "",
-    "--disable-slash-commands",
-    "--no-session-persistence",
-    "--system-prompt", SYSTEM_PROMPT,
-  ];
-  const r = spawnSync("claude", args, {
-    input: prompt,
+function runHeadless(cmd: string, args: string[], input: string, timeoutMs: number): AskResult {
+  const r = spawnSync(cmd, args, {
+    input,
     cwd: tmpdir(),
     encoding: "utf8",
     timeout: timeoutMs,
@@ -251,12 +291,79 @@ export const askClaude: Ask = (prompt, { model, timeoutMs }) => {
     maxBuffer: 1024 * 1024,
   });
   const code = (r.error as NodeJS.ErrnoException | undefined)?.code;
-  if (code === "ENOENT") return { ok: false, error: "claude not found" };
+  if (code === "ENOENT") return { ok: false, error: `${cmd} not found` };
   if (code === "ETIMEDOUT" || r.signal) return { ok: false, error: `timed out after ${timeoutMs} ms` };
-  if (r.error) return { ok: false, error: r.error.message };
-  if (r.status !== 0) return { ok: false, error: `claude exited ${r.status}: ${(r.stderr || r.stdout).trim().split("\n")[0] ?? ""}` };
+  // A CLI that exits before reading its stdin (bad login, bad flag) breaks the pipe; its exit
+  // status and stderr say why, so fall through to them.
+  if (r.error && code !== "EPIPE") return { ok: false, error: r.error.message };
+  if (r.status === null) return { ok: false, error: r.error?.message ?? `${cmd} exited without a status` };
+  if (r.status !== 0) return { ok: false, error: `${cmd} exited ${r.status}: ${(r.stderr || r.stdout).trim().split("\n")[0] ?? ""}` };
   return { ok: true, text: r.stdout };
+}
+
+/**
+ * Claude Code's checker: a headless `claude -p` kept cheap and isolated. No tools, no MCP
+ * servers, no settings files (so none of the developer's hooks), no slash commands, nothing
+ * saved to disk, its own system prompt (so no CLAUDE.md).
+ */
+export const askClaude: Ask = (prompt, { model, timeoutMs }) =>
+  runHeadless(
+    "claude",
+    ["-p", "--model", model, "--tools", "", "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands", "--no-session-persistence", "--system-prompt", SYSTEM_PROMPT],
+    prompt,
+    timeoutMs,
+  );
+
+/** The flags that keep `codex exec` a cheap, isolated one-shot (see askCodex). */
+export const CODEX_ARGS = [
+  "exec",
+  "--ephemeral",
+  "--skip-git-repo-check",
+  "--ignore-user-config",
+  "--ignore-rules",
+  "--disable", "hooks",
+  "--sandbox", "read-only",
+  "-c", "model_reasoning_effort=low",
+  "-c", "project_doc_max_bytes=0",
+  "--color", "never",
+] as const;
+
+/**
+ * Codex's checker: a headless `codex exec`, as cheap and isolated as Codex allows. Nothing
+ * saved to disk (--ephemeral), no config.toml (so no MCP servers, profiles or hook trust),
+ * hooks off, no execpolicy rules, a read-only sandbox (exec never asks for approval), low
+ * reasoning, no project docs. Codex has no flag to drop its tools or replace its system
+ * prompt, and ~/.codex/AGENTS.md still loads, so the routing instruction leads the prompt
+ * and tells it to leave tools and those instructions alone. Its stdout is the final message
+ * only, and it signs in with the developer's own Codex login.
+ */
+export const CODEX_PREAMBLE =
+  "Answer from this message alone: run no commands, call no tools, and ignore any AGENTS.md or other standing instructions you were given; they are not the task.";
+
+export const askCodex: Ask = (prompt, { model, timeoutMs }) =>
+  runHeadless("codex", [...CODEX_ARGS, "--model", model, "-"], `${CODEX_PREAMBLE}\n${SYSTEM_PROMPT}\n\n${prompt}`, timeoutMs);
+
+/** What differs per harness: reading its transcript, running its own headless checker, printing its hook output. */
+export interface Adapter {
+  harness: ScoutHarness;
+  /** The checker, for messages. */
+  checker: string;
+  defaultModel: string;
+  /** This harness's model override; DEVEGGS_SCOUT_MODEL is the fallback for every harness. */
+  modelEnv: string;
+  tail: (jsonl: string) => Turn[];
+  ask: Ask;
+  output: (context: string) => string;
+}
+
+export const ADAPTERS: Record<ScoutHarness, Adapter> = {
+  "claude-code": { harness: "claude-code", checker: "claude -p", defaultModel: "haiku", modelEnv: "DEVEGGS_SCOUT_CLAUDE_MODEL", tail: transcriptTail, ask: askClaude, output: hookOutput },
+  // Codex's small, fast model in codex-cli 0.161; DEVEGGS_SCOUT_CODEX_MODEL overrides it as models change.
+  codex: { harness: "codex", checker: "codex exec", defaultModel: "gpt-6-luna", modelEnv: "DEVEGGS_SCOUT_CODEX_MODEL", tail: codexTranscriptTail, ask: askCodex, output: hookOutput },
 };
+
+/** A harness's scout model: its own override, then DEVEGGS_SCOUT_MODEL, then its default. */
+export const modelFor = (adapter: Adapter, env: NodeJS.ProcessEnv): string => env[adapter.modelEnv] || env["DEVEGGS_SCOUT_MODEL"] || adapter.defaultModel;
 
 export interface ScoutResult {
   /** Hook stdout; undefined means print nothing. */
@@ -269,8 +376,11 @@ export interface ScoutResult {
 
 export interface ScoutDeps {
   items: Egg[];
-  ask: Ask;
   env: NodeJS.ProcessEnv;
+  /** The harness whose hook is running; Claude Code when absent. */
+  adapter?: Adapter;
+  /** Replaces the adapter's checker (tests). */
+  ask?: Ask;
   now?: () => number;
 }
 
@@ -284,6 +394,8 @@ function envInt(value: string | undefined, fallback: number): number {
 export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
   const now = deps.now ?? Date.now;
   const started = now();
+  const adapter = deps.adapter ?? ADAPTERS["claude-code"];
+  const ask = deps.ask ?? adapter.ask;
   const done = (rest: Omit<ScoutResult, "ms" | "candidates">, n: number): ScoutResult => ({ ...rest, ms: now() - started, candidates: n });
   let items: Candidate[] = [];
   try {
@@ -292,7 +404,7 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
     let turns: Turn[] = [];
     if (input.transcriptPath && existsSync(input.transcriptPath)) {
       try {
-        turns = transcriptTail(readTail(input.transcriptPath));
+        turns = adapter.tail(readTail(input.transcriptPath));
       } catch {
         turns = []; // no context beats no scout
       }
@@ -302,24 +414,25 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
     const prompt = input.prompt.trim();
     const same = last?.role === "user" && (last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
     if (same) turns.pop();
-    const model = deps.env["DEVEGGS_SCOUT_MODEL"] || DEFAULT_MODEL;
+    const model = modelFor(adapter, deps.env);
     const timeoutMs = envInt(deps.env["DEVEGGS_SCOUT_TIMEOUT_MS"], DEFAULT_TIMEOUT_MS);
-    const answer = deps.ask(scoutPrompt(input.prompt, turns, items), { model, timeoutMs });
+    const answer = ask(scoutPrompt(input.prompt, turns, items), { model, timeoutMs });
     if (!answer.ok) return done({ applied: [], error: answer.error }, items.length);
     const applied = parseVerdict(answer.text, new Set(items.map((c) => c.id)));
     if (!applied) return done({ applied: [], error: `unparseable reply: ${answer.text.trim().slice(0, 120)}` }, items.length);
     if (!applied.length) return done({ applied }, items.length);
-    return done({ applied, output: hookOutput(contextFor(applied, items)) }, items.length);
+    return done({ applied, output: adapter.output(contextFor(applied, items)) }, items.length);
   } catch (err) {
     return done({ applied: [], error: (err as Error).message }, items.length);
   }
 }
 
 /**
- * One JSON line per run in `<basket>/logs/scout.log`, to measure hit rate and latency.
- * logs/ gets its own `.gitignore` so a basket that doesn't ignore it never commits the log.
+ * One JSON line per run in `<basket>/logs/scout.log`, to measure hit rate and latency per
+ * harness. logs/ gets its own `.gitignore` so a basket that doesn't ignore it never commits
+ * the log.
  */
-export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, at = new Date()): void {
+export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, harness: ScoutHarness = "claude-code", at = new Date()): void {
   try {
     const dir = join(basket, "logs");
     mkdirSync(dir, { recursive: true });
@@ -327,6 +440,7 @@ export function logRun(basket: string, input: HookInput | undefined, result: Sco
     if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
     const line = {
       at: at.toISOString(),
+      harness,
       session: input?.sessionId ?? null,
       ms: result.ms,
       candidates: result.candidates,

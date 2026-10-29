@@ -8,10 +8,10 @@ import { formatArchitecture } from "./architecture.ts";
 import { Basket, BasketError, type Egg, type EventInput, isKind, isReady, KINDS, READY_AFTER, TIERS } from "./basket.ts";
 import { cloneBaskets, type FetchBaskets, findShared, formatBaskets, formatItems, isGitHubUser, matches, parseRef, sharedBasket, sharedBaskets, withBaskets } from "./borrow.ts";
 import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type LoggedMove, movesFromLog } from "./history.ts";
-import { CURSOR_HINT, type Change, install, parseHarness, scoutCommand as scoutHookCommand, sync, uninstall } from "./install.ts";
+import { CURSOR_HINT, type Change, HARNESS_NAMES, install, parseHarness, SCOUT_NOTES, sync, uninstall } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, setAutopush, webUrl } from "./store.ts";
-import { GUARD, askClaude, logRun, parseHookInput, scout, type HookInput } from "./scout.ts";
+import { ADAPTERS, GUARD, isScoutHarness, logRun, modelFor, parseHookInput, scout, SCOUT_HARNESSES, type HookInput } from "./scout.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, formatTimeline, mark, terminalOptions, trialCounts } from "./view.ts";
 
@@ -64,16 +64,21 @@ usage:
                                      managed block to each harness's global instructions
                                      (Claude Code: an @import; Codex, and Gemini CLI and
                                      Antigravity via ~/.gemini/GEMINI.md: the preferences
-                                     inline, re-synced on render). Idempotent. Cursor
-                                     keeps global rules in its settings: paste the
-                                     deveggs prompt there
+                                     inline, re-synced on render), and in Claude Code and
+                                     Codex the scout hook. Idempotent. Cursor keeps
+                                     global rules in its settings: paste the deveggs
+                                     prompt there
   deveggs uninstall [--harness claude-code|codex|gemini|all] [--dry-run]
-                                     remove that block again
-  deveggs scout --hook                 Claude Code UserPromptSubmit hook (deveggs install adds
-                                     it): a fresh-context claude -p picks the eggs and
-                                     chickens that fit the prompt and injects them as
-                                     context. Fails open; logs to <basket>/logs/scout.log
-  deveggs scout --dry-run "<prompt>"   show what the scout picks for a prompt, and its latency
+                                     remove that block and hook again
+  deveggs scout --hook [--harness claude-code|codex]
+                                     that harness's UserPromptSubmit hook (deveggs install
+                                     adds it): its own fresh-context headless CLI (claude
+                                     -p, codex exec) picks the eggs and chickens that fit
+                                     the prompt and injects them as context. Fails open;
+                                     logs to <basket>/logs/scout.log. --harness defaults
+                                     to claude-code
+  deveggs scout --dry-run [--harness claude-code|codex] "<prompt>"
+                                     show what the scout picks for a prompt, and its latency
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
@@ -104,7 +109,9 @@ Every change re-renders PREFERENCES.md and is committed in the basket's own git 
 env:
   DEVEGGS_BASKET  your basket, a git repo of its own (default: ~/.deveggs)
   DEVEGGS_HOME    deveggs checkout holding skills/ and templates/ (default: this one)
-  DEVEGGS_SCOUT_MODEL       the scout's model (default: haiku)
+  DEVEGGS_SCOUT_CLAUDE_MODEL  the Claude Code scout's model (default: haiku)
+  DEVEGGS_SCOUT_CODEX_MODEL   the Codex scout's model (default: gpt-6-luna)
+  DEVEGGS_SCOUT_MODEL       either scout's model, when its own isn't set
   DEVEGGS_SCOUT_TIMEOUT_MS  how long the scout waits before giving up (default: 12000)`;
 
 const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
@@ -353,29 +360,35 @@ function share(values: ShareFlags): void {
 }
 
 /**
- * `deveggs scout --hook` (Claude Code's UserPromptSubmit hook) or `deveggs scout --dry-run
- * "<prompt>"`. The hook fails open: whatever goes wrong, it prints nothing and exits 0.
+ * `deveggs scout --hook --harness <h>` (that harness's UserPromptSubmit hook) or `deveggs
+ * scout --dry-run [--harness <h>] "<prompt>"`. The harness picks its own headless checker;
+ * a hook without --harness is Claude Code's (installed before there were others). The hook
+ * fails open: whatever goes wrong, it prints nothing and exits 0.
  */
-function scoutCommand(hook: boolean, positionals: string[]): void {
-  if (process.env[GUARD]) return; // the scout's own claude -p: never scout recursively
+function scoutCommand(hook: boolean, positionals: string[], harness: string | undefined): void {
+  if (process.env[GUARD]) return; // the scout's own headless run: never scout recursively
   const items = () => (existsSync(basketRoot) ? basket.all() : []);
+  const name = harness ?? "claude-code";
   if (hook) {
     let input: HookInput | undefined;
     try {
+      if (!isScoutHarness(name)) return;
       input = parseHookInput(readFileSync(0, "utf8"));
       if (!input || !existsSync(basketRoot)) return;
-      const result = scout(input, { items: items(), ask: askClaude, env: process.env });
-      logRun(basketRoot, input, result);
+      const result = scout(input, { items: items(), adapter: ADAPTERS[name], env: process.env });
+      logRun(basketRoot, input, result, name);
       if (result.output) process.stdout.write(`${result.output}\n`);
     } catch {
       // fail open
     }
     return;
   }
+  if (!isScoutHarness(name)) throw new BasketError(`invalid --harness ${JSON.stringify(name)} for scout; expected one of ${SCOUT_HARNESSES.join(", ")}`);
   const prompt = positionals.join(" ").trim();
-  if (!prompt) throw new BasketError('usage: deveggs scout --dry-run "<prompt>"  (or --hook, reading the hook JSON on stdin)');
-  const result = scout({ prompt }, { items: items(), ask: askClaude, env: process.env });
-  console.log(`🔭 scout: ${result.ms} ms, ${result.candidates} candidates, model ${process.env["DEVEGGS_SCOUT_MODEL"] || "haiku"}`);
+  if (!prompt) throw new BasketError('usage: deveggs scout --dry-run [--harness claude-code|codex] "<prompt>"  (or --hook, reading the hook JSON on stdin)');
+  const adapter = ADAPTERS[name];
+  const result = scout({ prompt }, { items: items(), adapter, env: process.env });
+  console.log(`🔭 scout (${name}, ${adapter.checker}): ${result.ms} ms, ${result.candidates} candidates, model ${modelFor(adapter, process.env)}`);
   if (result.error) console.log(`   error (the hook would print nothing): ${result.error}`);
   else if (!result.applied.length) console.log("   nothing applies (the hook would print nothing)");
   for (const a of result.applied) console.log(`   ✅ ${a.id}: ${a.why}`);
@@ -670,19 +683,26 @@ function main(argv: string[]): void {
         dryRun,
         explicit: values.harness !== undefined && values.harness !== "all",
         rendered,
-        scout: scoutHookCommand(repoRoot),
+        repo: repoRoot,
       };
       const changes = command === "install" ? install(harnesses, opts) : uninstall(harnesses, opts);
       printChanges(changes, command === "install" ? "+" : "-");
+      if (command === "install") {
+        // Harnesses that got their block but have no scout hook say why, in one line.
+        for (const h of harnesses) {
+          const note = SCOUT_NOTES[h];
+          if (note && changes.some((c) => c.harness === h && !c.hook && !c.action.startsWith("skipped"))) console.log(note);
+        }
+      }
       if (command === "install" && !opts.explicit && existsSync(join(homedir(), ".cursor"))) console.log(CURSOR_HINT);
+      const hooked = changes.filter((c) => c.changed && c.hook).map((c) => HARNESS_NAMES[c.harness]);
       // A worktree's .git is a file. A hook pinned to a worktree goes quiet once it's deleted.
-      if (command === "install" && changes.some((c) => c.changed && c.file.endsWith("settings.json")) && existsSync(join(repoRoot, ".git")) && !statSync(join(repoRoot, ".git")).isDirectory()) {
+      if (command === "install" && hooked.length && existsSync(join(repoRoot, ".git")) && !statSync(join(repoRoot, ".git")).isDirectory()) {
         warn(`the scout hook points into a git worktree (${repoRoot}); once it's removed the hook does nothing. Run deveggs install from your main deveggs checkout.`);
       }
       if (dryRun) console.log("--dry-run: nothing written.");
       else if (changes.some((c) => c.changed)) {
-        const hooked = changes.some((c) => c.changed && c.file.endsWith("settings.json"));
-        const scouting = hooked ? "; in Claude Code, the scout hook names the ones that fit each prompt" : "";
+        const scouting = hooked.length ? `; in ${hooked.join(" and ")}, the scout hook names the ones that fit each prompt` : "";
         console.log(command === "install" ? `new sessions load your preferences without being asked to read them${scouting}.` : "new sessions no longer load your preferences on their own.");
       }
       return;
@@ -702,7 +722,7 @@ function main(argv: string[]): void {
       return;
     }
     case "scout":
-      scoutCommand(values.hook, positionals);
+      scoutCommand(values.hook, positionals, values.harness);
       return;
     case "where":
       console.log(basketRoot);
