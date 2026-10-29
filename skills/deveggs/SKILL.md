@@ -288,16 +288,18 @@ them into history files, recovering hatches and cracks from the basket's git log
 
 ## At session start
 
-Your preferences are already in your context: `deveggs install` loads
+deveggs is a harness: it loads the developer's preferences with code, not by asking
+you to remember them. So they're already in your context: `deveggs install` loads
 `~/.deveggs/PREFERENCES.md` into every session through the harness's global
 instructions file (an `@` import in Claude Code, a copy that `deveggs render` keeps in
-sync in Codex), so you don't read it yourself. It lists the chickens, then the eggs
+sync in Codex and Gemini CLI/Antigravity), so you don't read it yourself. It lists the chickens, then the eggs
 with their ids. Skills from both tiers are already installed. Egg skills have
 descriptions that start with `[egg: on trial]`.
 
 If the preferences aren't in your context (a harness `deveggs install` doesn't cover
 yet, or it hasn't been run), read `PREFERENCES.md` in the folder `deveggs where`
 prints, and offer to run `deveggs install` so later sessions get it without asking.
+Reading it yourself is the fallback, not the mechanism.
 
 ### Subagents
 
@@ -325,7 +327,9 @@ the result, or pushed back), record it with `deveggs feedback` (see "Trying eggs
 
 ## Enforce what text can't
 
-A rule in text is the weakest form of a rule. When an item is broken twice despite its
+A rule in text is the weakest form of a rule: it gets dropped once context gets complex.
+deveggs applies this to itself (it loads preferences with code, not instructions), and
+you apply it to the developer's items. When an item is broken twice despite its
 text, or can be checked mechanically (a hook that blocks `git push` to `main`, a lint, a
 CI check, a script), propose an enforcer as a 🛡 table row: what it checks, where it
 runs, what it blocks. Then:

@@ -60,13 +60,19 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | Moving a legacy `my-basket/` | `src/migrate.ts` |
 | `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
 | `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
-| Harness wiring (Claude Code, Codex, Cursor, …) | `INSTALL.md`, as instructions, not code. Add a harness by adding a row to its table. |
-| `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, and re-syncing inline copies on render | `src/install.ts` |
+| Per-harness setup (skill links, the deveggs prompt; Claude Code, Codex, Cursor, …) | `INSTALL.md`, as agent-native instructions. Add a harness by adding a row to its table. |
+| `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, and re-syncing inline copies on render | `src/install.ts` (add a harness to `SPECS`) |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |
 
 If you change a command's behavior, update the README, `SKILL.md` and `INSTALL.md`
 wherever they describe it, in the same PR.
+
+**Core principle: deveggs is a harness.** Getting the developer's preferences loaded
+and attended to must never depend on an agent remembering to read them. When a change
+touches how preferences reach a session, enforce it in code wherever the harness
+allows (a managed block, a hook) and keep instruction text as the fallback. See
+[the README](README.md#core-principle-deveggs-is-a-harness).
 
 ## Sharing your basket
 

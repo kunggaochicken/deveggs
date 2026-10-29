@@ -14,12 +14,19 @@ repo. `deveggs where` prints the path.
 - No runtime dependencies. Dev dependencies: `typescript` and `@types/node`.
 - Run `npm run check` (`tsc --noEmit` + `node --test`) before committing.
 - PR process, commit style and where each kind of change goes: `CONTRIBUTING.md`.
-- Model changes go in `src/basket.ts`. Harness wiring is agent-native: it lives in
-  `INSTALL.md` as instructions, not code. Add a new harness by adding a row to its table.
-  The one exception is loading `PREFERENCES.md` into every session, which must not
-  depend on an agent remembering to read it: `deveggs install` (`src/install.ts`) writes
-  a managed block into each harness's global instructions, and `render` keeps inline
-  copies in sync. Add a harness there by adding it to `SPECS`.
+- Model changes go in `src/basket.ts`.
+- **Core principle: deveggs is a harness.** It's built to guarantee the developer's
+  preferences are loaded and attended to at any point in a session, so that must never
+  depend on an agent remembering to read them: instructions get dropped once context
+  gets complex. Today the install block loads them at session start; hooks that keep
+  them in view mid-session are coming.
+  Wherever a harness allows it, guarantee loading and attention in code (managed blocks
+  in global instructions, hooks); instruction text is the fallback, not the mechanism.
+
+  | Layer | Lives in | Add a harness by |
+  |---|---|---|
+  | Code-enforced loading | `deveggs install` (`src/install.ts`): a managed block in each harness's global instructions; `render` keeps inline copies in sync. Hooks that re-surface applicable preferences are coming | adding it to `SPECS` |
+  | Per-harness setup (skill links, the deveggs prompt, anything that needs the developer's yes) | `INSTALL.md`, as agent-native instructions | adding a row to its table |
 
 ## Personal basket vs shared baskets
 

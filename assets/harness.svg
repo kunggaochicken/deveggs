@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933" role="img" aria-labelledby="title desc">
+  <title id="title">deveggs is a harness: code, not memory, loads your preferences</title>
+  <desc id="desc">Four layers left to right. Your basket of eggs and chickens in ~/.deveggs is rendered into PREFERENCES.md. Code-enforced loading then puts it in front of agents: the managed block deveggs install writes into each harness's global instructions loads them at session start, and hooks that keep the ones that apply in view mid-session are coming. The result reaches every session and every agent: Claude Code, Codex, Gemini CLI and Antigravity. Below, a grey dashed fallback: an instruction to read PREFERENCES.md, used only where deveggs install can't load them.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa3ab"/>
+    </marker>
+    <style>
+      .t { font-size: 14px; font-weight: 700; }
+      .s { font-size: 12px; fill: #4b5563; }
+      .h { font-size: 11px; font-weight: 700; fill: #ffffff; text-anchor: middle; letter-spacing: 0.04em; }
+      .ln { stroke: #4a5560; stroke-width: 1.5; fill: none; }
+      .gl { stroke: #9aa3ab; stroke-width: 1.3; fill: none; stroke-dasharray: 5 4; }
+      .egg { fill: #fbf0d0; stroke: #c49a2c; stroke-width: 1.5; }
+      .you { fill: #e8f0fe; stroke: #3b6fd4; stroke-width: 1.5; }
+      .code { fill: #e3f4ea; stroke: #2f8f5b; stroke-width: 2; }
+      .agent { fill: #f1ebfb; stroke: #7c5cc4; stroke-width: 1.5; }
+      .gone { fill: #f8f9fa; stroke: #9aa3ab; stroke-width: 1.3; stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="879" height="299" rx="14" fill="#ffffff" stroke="#d8dce1"/>
+  <text x="30" y="36" font-size="18" font-weight="700">deveggs is a harness: code, not memory, loads your preferences</text>
+
+  <!-- layer headers -->
+  <rect x="24" y="56" width="180" height="22" rx="6" fill="#b8862a"/><text class="h" x="114" y="71">1 · BASKET</text>
+  <rect x="236" y="56" width="180" height="22" rx="6" fill="#3b6fd4"/><text class="h" x="326" y="71">2 · RENDER</text>
+  <rect x="448" y="56" width="200" height="22" rx="6" fill="#2f8f5b"/><text class="h" x="548" y="71">3 · LOADED BY CODE</text>
+  <rect x="680" y="56" width="176" height="22" rx="6" fill="#7c5cc4"/><text class="h" x="768" y="71">4 · EVERY SESSION</text>
+
+  <!-- 1 basket -->
+  <rect class="egg" x="24" y="90" width="180" height="120" rx="10"/>
+  <text class="t" x="38" y="116">🥚 🐔 ~/.deveggs</text>
+  <text class="s" x="38" y="140">eggs on trial,</text>
+  <text class="s" x="38" y="157">chickens for good,</text>
+  <text class="s" x="38" y="174">skills, scripts</text>
+  <text class="s" x="38" y="196">one git repo, yours</text>
+  <path class="ln" d="M204,150 H234" marker-end="url(#a)"/>
+
+  <!-- 2 render -->
+  <rect class="you" x="236" y="90" width="180" height="120" rx="10"/>
+  <text class="t" x="250" y="116">deveggs render</text>
+  <text class="s" x="250" y="140">PREFERENCES.md:</text>
+  <text class="s" x="250" y="157">every rule, when it</text>
+  <text class="s" x="250" y="174">fires, its id</text>
+  <text class="s" x="250" y="196">runs on every change</text>
+  <path class="ln" d="M416,150 H446" marker-end="url(#a)"/>
+
+  <!-- 3 code-enforced loading -->
+  <rect class="code" x="448" y="90" width="200" height="56" rx="10"/>
+  <text class="t" x="462" y="113">🛡 install block (today)</text>
+  <text class="s" x="462" y="132">loads at session start</text>
+  <rect class="code" x="448" y="154" width="200" height="56" rx="10"/>
+  <text class="t" x="462" y="177">🪝 hooks (coming)</text>
+  <text class="s" x="462" y="196">keep in view mid-session</text>
+  <path class="ln" d="M648,118 H664 V150 H678" marker-end="url(#a)"/>
+  <path class="ln" d="M648,182 H664 V150"/>
+
+  <!-- 4 every session -->
+  <rect class="agent" x="680" y="90" width="176" height="120" rx="10"/>
+  <text class="t" x="694" y="116">🤖 every session</text>
+  <text class="s" x="694" y="140">Claude Code, Codex,</text>
+  <text class="s" x="694" y="157">Gemini CLI,</text>
+  <text class="s" x="694" y="174">Antigravity</text>
+  <text class="s" x="694" y="196">no reminder needed</text>
+
+  <!-- fallback -->
+  <rect class="gone" x="448" y="232" width="408" height="44" rx="10"/>
+  <text class="s" x="462" y="251">fallback only: an instruction to read PREFERENCES.md,</text>
+  <text class="s" x="462" y="267">where deveggs install can't load them</text>
+</svg>
