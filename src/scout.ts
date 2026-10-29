@@ -293,7 +293,10 @@ function runHeadless(cmd: string, args: string[], input: string, timeoutMs: numb
   const code = (r.error as NodeJS.ErrnoException | undefined)?.code;
   if (code === "ENOENT") return { ok: false, error: `${cmd} not found` };
   if (code === "ETIMEDOUT" || r.signal) return { ok: false, error: `timed out after ${timeoutMs} ms` };
-  if (r.error) return { ok: false, error: r.error.message };
+  // A CLI that exits before reading its stdin (bad login, bad flag) breaks the pipe; its exit
+  // status and stderr say why, so fall through to them.
+  if (r.error && code !== "EPIPE") return { ok: false, error: r.error.message };
+  if (r.status === null) return { ok: false, error: r.error?.message ?? `${cmd} exited without a status` };
   if (r.status !== 0) return { ok: false, error: `${cmd} exited ${r.status}: ${(r.stderr || r.stdout).trim().split("\n")[0] ?? ""}` };
   return { ok: true, text: r.stdout };
 }
