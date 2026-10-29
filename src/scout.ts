@@ -16,7 +16,8 @@ import type { Egg } from "./basket.ts";
 /** Set on the scout's own `claude -p`, so a hook inside it can't scout again. */
 export const GUARD = "DEVEGGS_SCOUT";
 export const DEFAULT_MODEL = "haiku";
-export const DEFAULT_TIMEOUT_MS = 25_000;
+/** Typical runs take 2–5 s; during an outage each prompt waits this long, so keep it short. */
+export const DEFAULT_TIMEOUT_MS = 12_000;
 /** What the settings.json hook entry contains; install and uninstall find their own entry by it. */
 export const HOOK_ARGS = "scout --hook";
 
@@ -164,6 +165,15 @@ export interface Applied {
 }
 
 /**
+ * `why` is model text, and the model read transcript turns that may quote untrusted
+ * content, so it reaches the main session only as one short plain clause.
+ */
+export function cleanWhy(why: string): string {
+  const flat = why.replace(/[`<>]/g, "").replace(/\s+/g, " ").trim();
+  return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
+}
+
+/**
  * The scout's verdict, kept to ids the basket knows (each once). Undefined when the reply
  * holds no `{"apply": [...]}` object.
  */
@@ -186,7 +196,7 @@ export function parseVerdict(text: string, known: Set<string>): Applied[] | unde
     const why = (a as { why?: unknown } | null)?.why;
     if (typeof id !== "string" || !known.has(id) || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, why: typeof why === "string" ? why.trim() : "" });
+    out.push({ id, why: typeof why === "string" ? cleanWhy(why) : "" });
   }
   return out;
 }
@@ -289,7 +299,9 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
     }
     // The new prompt may already be the transcript's last line; don't show it twice.
     const last = turns[turns.length - 1];
-    if (last?.role === "user" && input.prompt.trim().startsWith(last.text.replace(/…$/, ""))) turns.pop();
+    const prompt = input.prompt.trim();
+    const same = last?.role === "user" && (last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
+    if (same) turns.pop();
     const model = deps.env["DEVEGGS_SCOUT_MODEL"] || DEFAULT_MODEL;
     const timeoutMs = envInt(deps.env["DEVEGGS_SCOUT_TIMEOUT_MS"], DEFAULT_TIMEOUT_MS);
     const answer = deps.ask(scoutPrompt(input.prompt, turns, items), { model, timeoutMs });

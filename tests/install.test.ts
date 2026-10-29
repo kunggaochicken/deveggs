@@ -302,11 +302,11 @@ test("install adds one scout hook to settings.json and leaves every other key an
   writeFileSync(settingsJson(box), `${JSON.stringify(OTHERS, null, 4)}\n`);
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook\); added a UserPromptSubmit hook/);
+  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook/);
   const text = read(settingsJson(box));
   assert.ok(text.startsWith('{\n    "model"'), "keeps the file's indent");
   const after = JSON.parse(text);
-  const command = `${join(box.checkout, "bin", "deveggs")} scout --hook`;
+  const command = `${join(box.checkout, "bin", "deveggs")} scout --hook 2>/dev/null || true`;
   assert.deepEqual(after, {
     ...OTHERS,
     hooks: { ...OTHERS.hooks, UserPromptSubmit: [...OTHERS.hooks.UserPromptSubmit, { hooks: [{ type: "command", command, timeout: SCOUT_HOOK_TIMEOUT }] }] },
@@ -334,7 +334,7 @@ test("--dry-run shows the scout hook and writes no settings", () => {
   writeFileSync(settingsJson(box), JSON.stringify(OTHERS));
   const r = cli(box, "install", "--harness", "claude-code", "--dry-run");
   assert.match(r.stdout, /would install: scout hook/);
-  assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook","timeout":30\}/);
+  assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook 2>\/dev\/null \|\| true","timeout":15\}/);
   assert.equal(read(settingsJson(box)), JSON.stringify(OTHERS));
   cli(box, "install", "--harness", "claude-code");
   const dry = cli(box, "uninstall", "--harness", "claude-code", "--dry-run");
@@ -363,6 +363,7 @@ test("Codex and Gemini get no hook; a skipped Claude Code gets none either", () 
 test("withScoutHook repoints a moved checkout in place; withoutScoutHook keeps groups shared with other hooks", () => {
   const shared = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "rtk hook" }, { type: "command", command: "/old/deveggs/bin/deveggs scout --hook", timeout: 5 }] }] } };
   const moved = withScoutHook(shared, "/new/bin/deveggs scout --hook");
+  assert.ok(moved);
   assert.equal(moved.where, "updated the scout hook");
   assert.deepEqual(moved.settings["hooks"], { UserPromptSubmit: [{ hooks: [{ type: "command", command: "rtk hook" }, { type: "command", command: "/new/bin/deveggs scout --hook", timeout: SCOUT_HOOK_TIMEOUT }] }] });
   assert.equal(shared.hooks.UserPromptSubmit[0]?.hooks[1]?.command, "/old/deveggs/bin/deveggs scout --hook", "the input isn't mutated");
@@ -373,8 +374,45 @@ test("withScoutHook repoints a moved checkout in place; withoutScoutHook keeps g
 });
 
 test("scoutCommand quotes a checkout path with spaces, and uninstall still finds it", () => {
-  assert.equal(scoutCommand("/opt/deveggs"), "/opt/deveggs/bin/deveggs scout --hook");
+  assert.equal(scoutCommand("/opt/deveggs"), "/opt/deveggs/bin/deveggs scout --hook 2>/dev/null || true");
   const quoted = scoutCommand("/Users/me/My Tools/deveggs");
-  assert.equal(quoted, "'/Users/me/My Tools/deveggs/bin/deveggs' scout --hook");
-  assert.equal(withoutScoutHook(withScoutHook({}, quoted).settings).removed.length, 1);
+  assert.equal(quoted, "'/Users/me/My Tools/deveggs/bin/deveggs' scout --hook 2>/dev/null || true");
+  assert.equal(withoutScoutHook(withScoutHook({}, quoted)?.settings ?? {}).removed.length, 1);
+});
+
+test("settings of an unexpected shape are never overwritten", () => {
+  for (const settings of [{ hooks: "x" }, { hooks: [] }, { hooks: { UserPromptSubmit: {} } }, { hooks: { UserPromptSubmit: "x" } }]) {
+    assert.equal(withScoutHook(settings, "/d/bin/deveggs scout --hook"), undefined, JSON.stringify(settings));
+  }
+  const { box } = wired();
+  const odd = JSON.stringify({ hooks: { UserPromptSubmit: { weird: true } } });
+  writeFileSync(settingsJson(box), odd);
+  const r = cli(box, "install", "--harness", "claude-code");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /skipped the scout hook: settings\.json hooks or hooks\.UserPromptSubmit has an unexpected shape/);
+  assert.match(r.stdout, /installed: imports/, "the CLAUDE.md block still installs");
+  assert.equal(read(settingsJson(box)), odd);
+});
+
+test("a group without a hooks array is kept, and a look-alike command isn't taken for the scout", () => {
+  const settings = {
+    hooks: {
+      UserPromptSubmit: [
+        { matcher: "x" },
+        { hooks: [{ type: "command", command: "/x/my-deveggs scout --hook-wrapper" }, { type: "command", command: "/x/notdeveggs scout --hook" }] },
+      ],
+    },
+  };
+  assert.deepEqual(withoutScoutHook(settings), { settings, removed: [] });
+  const added = withScoutHook(settings, scoutCommand("/d"));
+  assert.ok(added);
+  assert.equal(added.where, "added a UserPromptSubmit hook");
+  assert.deepEqual(withoutScoutHook(added.settings).settings, settings);
+});
+
+test("install from a git worktree warns that the hook is pinned to it", () => {
+  const { box } = wired();
+  writeFileSync(join(box.checkout, ".git"), "gitdir: /somewhere/.git/worktrees/x\n");
+  const r = cli(box, "install", "--harness", "claude-code");
+  assert.match(r.stderr, /the scout hook points into a git worktree/);
 });

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readSync } from "node:fs";
+import { existsSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -105,7 +105,7 @@ env:
   DEVEGGS_BASKET  your basket, a git repo of its own (default: ~/.deveggs)
   DEVEGGS_HOME    deveggs checkout holding skills/ and templates/ (default: this one)
   DEVEGGS_SCOUT_MODEL       the scout's model (default: haiku)
-  DEVEGGS_SCOUT_TIMEOUT_MS  how long the scout waits before giving up (default: 25000)`;
+  DEVEGGS_SCOUT_TIMEOUT_MS  how long the scout waits before giving up (default: 12000)`;
 
 const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
 const basketRoot = basketPath();
@@ -675,6 +675,10 @@ function main(argv: string[]): void {
       const changes = command === "install" ? install(harnesses, opts) : uninstall(harnesses, opts);
       printChanges(changes, command === "install" ? "+" : "-");
       if (command === "install" && !opts.explicit && existsSync(join(homedir(), ".cursor"))) console.log(CURSOR_HINT);
+      // A worktree's .git is a file. A hook pinned to a worktree goes quiet once it's deleted.
+      if (command === "install" && changes.some((c) => c.changed && c.file.endsWith("settings.json")) && existsSync(join(repoRoot, ".git")) && !statSync(join(repoRoot, ".git")).isDirectory()) {
+        warn(`the scout hook points into a git worktree (${repoRoot}); once it's removed the hook does nothing. Run deveggs install from your main deveggs checkout.`);
+      }
       if (dryRun) console.log("--dry-run: nothing written.");
       else if (changes.some((c) => c.changed)) {
         const hooked = changes.some((c) => c.changed && c.file.endsWith("settings.json"));

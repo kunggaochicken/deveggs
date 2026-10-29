@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { BasketError } from "./basket.ts";
 import { HOOK_ARGS } from "./scout.ts";
@@ -204,19 +204,24 @@ export function withoutBlock(text: string): { text: string; removed?: string; st
 // hold markers, so the entry is found by its command containing `deveggs scout --hook`, and
 // every other key and hook is left as it was.
 
-/** Seconds Claude Code waits for the hook; the scout itself gives up after 25 s by default. */
-export const SCOUT_HOOK_TIMEOUT = 30;
+/** Seconds Claude Code waits for the hook; the scout itself gives up after 12 s by default. */
+export const SCOUT_HOOK_TIMEOUT = 15;
 
 export const settingsFile = (home: string): string => join(home, ".claude", "settings.json");
 
-/** The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook`, quoted if needed. */
+/**
+ * The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook`, quoted if
+ * needed. Its stderr is dropped and it always exits 0, so even a checkout that's gone (or
+ * no node on the hook's PATH) never shows the developer a hook error: fail open outside
+ * the process too.
+ */
 export function scoutCommand(repo: string): string {
   const bin = join(repo, "bin", "deveggs");
-  return `${/^[\w@%+=:,./-]+$/.test(bin) ? bin : `'${bin.replace(/'/g, `'\\''`)}'`} ${HOOK_ARGS}`;
+  return `${/^[\w@%+=:,./-]+$/.test(bin) ? bin : `'${bin.replace(/'/g, `'\\''`)}'`} ${HOOK_ARGS} 2>/dev/null || true`;
 }
 
 const isScout = (h: unknown): boolean =>
-  !!h && typeof h === "object" && typeof (h as { command?: unknown }).command === "string" && /\bdeveggs'? scout --hook\b/.test((h as { command: string }).command);
+  !!h && typeof h === "object" && typeof (h as { command?: unknown }).command === "string" && /(^|[/\s'])deveggs'? scout --hook(\s|$)/.test((h as { command: string }).command);
 
 type Json = Record<string, unknown>;
 const isObject = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
@@ -228,11 +233,15 @@ const indentOf = (text: string): string | number => /^\{\n([ \t]+)"/.exec(text)?
  * Settings with the scout hook in `hooks.UserPromptSubmit`: an existing entry is updated in
  * place (a moved checkout), otherwise one group is appended after the others.
  */
-export function withScoutHook(settings: Json, command: string): { settings: Json; where: string } {
+export function withScoutHook(settings: Json, command: string): { settings: Json; where: string } | undefined {
   const out = structuredClone(settings);
-  const hooks = isObject(out["hooks"]) ? out["hooks"] : (out["hooks"] = {});
-  if (!isObject(hooks)) throw new BasketError("settings.json hooks isn't an object");
-  const groups = Array.isArray(hooks["UserPromptSubmit"]) ? (hooks["UserPromptSubmit"] as unknown[]) : (hooks["UserPromptSubmit"] = []);
+  // Create what's missing, but never replace a value of the wrong shape: that's the developer's.
+  if (out["hooks"] === undefined) out["hooks"] = {};
+  const hooks = out["hooks"];
+  if (!isObject(hooks)) return undefined;
+  if (hooks["UserPromptSubmit"] === undefined) hooks["UserPromptSubmit"] = [];
+  const groups = hooks["UserPromptSubmit"];
+  if (!Array.isArray(groups)) return undefined;
   const entry = { type: "command", command, timeout: SCOUT_HOOK_TIMEOUT };
   for (const g of groups) {
     const list = isObject(g) && Array.isArray(g["hooks"]) ? (g["hooks"] as unknown[]) : [];
@@ -282,18 +291,27 @@ function readSettings(file: string): { text: string; settings?: Json } {
 
 const writeJson = (settings: Json, before: string): string => `${JSON.stringify(settings, null, indentOf(before))}\n`;
 
+/** Write through a temp file and rename, so Claude Code never reads a half-written settings.json. */
+function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.deveggs-${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, file);
+}
+
 function installHook(opts: Options, command: string): Change {
   const harness: Harness = "claude-code";
   const file = settingsFile(opts.home);
   const { text: before, settings } = readSettings(file);
   if (!settings) return { harness, file, action: "skipped the scout hook: settings.json isn't a JSON object; add it by hand (INSTALL.md)", changed: false };
-  const { settings: next, where } = withScoutHook(settings, command);
+  const hooked = withScoutHook(settings, command);
+  if (!hooked) return { harness, file, action: "skipped the scout hook: settings.json hooks or hooks.UserPromptSubmit has an unexpected shape; add it by hand (INSTALL.md)", changed: false };
+  const { settings: next, where } = hooked;
   const text = writeJson(next, before);
   const shown = JSON.stringify({ type: "command", command, timeout: SCOUT_HOOK_TIMEOUT });
   if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: "scout hook already installed; nothing changed", changed: false, block: shown };
   if (!opts.dryRun) {
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, text);
+    writeAtomic(file, text);
   }
   return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: scout hook (hooks.UserPromptSubmit runs ${command}); ${where}`, changed: true, block: shown };
 }
@@ -308,7 +326,7 @@ function uninstallHook(opts: Options): Change {
   const empty = !Object.keys(next).length;
   if (!opts.dryRun) {
     if (empty) rmSync(file);
-    else writeFileSync(file, writeJson(next, before));
+    else writeAtomic(file, writeJson(next, before));
   }
   return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the scout hook${empty ? "; deleted the settings file it left empty" : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n") };
 }

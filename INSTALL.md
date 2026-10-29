@@ -93,7 +93,9 @@ file, or not yet run).
      injects them into the session so they get noticed even when the context is busy.
      It leaves every other setting and hook alone, fails open (a slow or failed scout
      never blocks the prompt), adds a few seconds per prompt, and `deveggs uninstall`
-     removes exactly that entry. Codex and Gemini keep the instruction-only path.
+     removes exactly that entry. Rewriting `settings.json` keeps its indent but
+     normalises its formatting. Run install from the main deveggs checkout, not a
+     worktree: the hook points at the checkout it ran from. Codex and Gemini keep the instruction-only path.
 
    Show the developer the whole plan as one list: every harness, every link, every
    file. **Confirm**, then make the changes, then run `<repo>/bin/deveggs install`
