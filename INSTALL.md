@@ -10,7 +10,8 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
 deveggs is a harness: it guarantees the developer's preferences are loaded at any
 point in a session, in code rather than by asking agents to remember them. So the one
 step code does for you is loading them (`deveggs install`, step 5). The instruction to
-read them is only the fallback for a harness it can't load into.
+read them is only the fallback, where `deveggs install` can't load them (no global
+file, or not yet run).
 
 1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
    PATH. If not, tell the developer what's missing and stop.

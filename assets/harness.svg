@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#1f2933" role="img" aria-labelledby="title desc">
   <title id="title">deveggs is a harness: code, not memory, loads your preferences</title>
-  <desc id="desc">Four layers left to right. Your basket of eggs and chickens in ~/.deveggs is rendered into PREFERENCES.md. Code-enforced loading then puts it in front of agents: the managed block deveggs install writes into each harness's global instructions, and hooks that re-surface the preferences that apply (coming). The result reaches every session and every agent: Claude Code, Codex, Gemini CLI, Antigravity and subagents. Below, a grey dashed fallback: an instruction to read PREFERENCES.md, used only where a harness gives code no hook.</desc>
+  <desc id="desc">Four layers left to right. Your basket of eggs and chickens in ~/.deveggs is rendered into PREFERENCES.md. Code-enforced loading then puts it in front of agents: the managed block deveggs install writes into each harness's global instructions loads them at session start, and hooks that keep the ones that apply in view mid-session are coming. The result reaches every session and every agent: Claude Code, Codex, Gemini CLI and Antigravity. Below, a grey dashed fallback: an instruction to read PREFERENCES.md, used only where deveggs install can't load them.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#4a5560"/>
@@ -28,7 +28,7 @@
   <!-- layer headers -->
   <rect x="24" y="56" width="180" height="22" rx="6" fill="#b8862a"/><text class="h" x="114" y="71">1 · BASKET</text>
   <rect x="236" y="56" width="180" height="22" rx="6" fill="#3b6fd4"/><text class="h" x="326" y="71">2 · RENDER</text>
-  <rect x="448" y="56" width="200" height="22" rx="6" fill="#2f8f5b"/><text class="h" x="548" y="71">3 · CODE-ENFORCED LOADING</text>
+  <rect x="448" y="56" width="200" height="22" rx="6" fill="#2f8f5b"/><text class="h" x="548" y="71">3 · LOADED BY CODE</text>
   <rect x="680" y="56" width="176" height="22" rx="6" fill="#7c5cc4"/><text class="h" x="768" y="71">4 · EVERY SESSION</text>
 
   <!-- 1 basket -->
@@ -51,24 +51,24 @@
 
   <!-- 3 code-enforced loading -->
   <rect class="code" x="448" y="90" width="200" height="56" rx="10"/>
-  <text class="t" x="462" y="113">🛡 install block</text>
-  <text class="s" x="462" y="132">@ import or synced copy</text>
+  <text class="t" x="462" y="113">🛡 install block (today)</text>
+  <text class="s" x="462" y="132">loads at session start</text>
   <rect class="code" x="448" y="154" width="200" height="56" rx="10"/>
   <text class="t" x="462" y="177">🪝 hooks (coming)</text>
-  <text class="s" x="462" y="196">re-surface what applies</text>
+  <text class="s" x="462" y="196">keep in view mid-session</text>
   <path class="ln" d="M648,118 H664 V150 H678" marker-end="url(#a)"/>
   <path class="ln" d="M648,182 H664 V150"/>
 
   <!-- 4 every session -->
   <rect class="agent" x="680" y="90" width="176" height="120" rx="10"/>
-  <text class="t" x="694" y="116">🤖 every agent</text>
+  <text class="t" x="694" y="116">🤖 every session</text>
   <text class="s" x="694" y="140">Claude Code, Codex,</text>
-  <text class="s" x="694" y="157">Gemini CLI, Antigravity</text>
-  <text class="s" x="694" y="174">and their subagents</text>
-  <text class="s" x="694" y="196">however long the session</text>
+  <text class="s" x="694" y="157">Gemini CLI,</text>
+  <text class="s" x="694" y="174">Antigravity</text>
+  <text class="s" x="694" y="196">no reminder needed</text>
 
   <!-- fallback -->
   <rect class="gone" x="448" y="232" width="408" height="44" rx="10"/>
-  <text class="s" x="462" y="251">fallback, not the mechanism: an instruction to read</text>
-  <text class="s" x="462" y="267">PREFERENCES.md, only where a harness offers no file or hook</text>
+  <text class="s" x="462" y="251">fallback only: an instruction to read PREFERENCES.md,</text>
+  <text class="s" x="462" y="267">where deveggs install can't load them</text>
 </svg>

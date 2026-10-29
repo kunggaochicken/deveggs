@@ -20,10 +20,9 @@ helps, but each harness keeps its own copy and puts its own slant on it.
 
 deveggs captures **your developer eggsperience**, the way you like to work with
 agents, so any agent can reproduce it just the way you want. It lives in one personal
-basket of preferences, workflows and skills that deveggs loads into every coding agent
-you use. You
-get there by trial and error: new ideas go in as eggs on trial, and the ones that
-prove themselves hatch into chickens, permanent rules every agent follows.
+basket of preferences, workflows and skills that deveggs wires into every coding agent
+you use. You get there by trial and error: new ideas go in as eggs on trial, and the
+ones that prove themselves hatch into chickens, permanent rules every agent follows.
 
 <p align="center">
   <img src="assets/workflow.svg" width="880" alt="Workflow in three color-coded columns (You, your agent, your basket). 1: you just work. 2: your agent spots a preference on its own, drafts an egg and asks to lay it. 3: you say yes; saying no saves nothing. The egg goes on trial in your basket. 4: your agent follows it every session and logs whether it helped. After 3 helped and none didn't, it's ready to hatch and your agent suggests it. 5: only you hatch it, and it becomes a permanent chicken every agent follows. You can crack an egg or a chicken anytime, and it's never suggested again.">
@@ -32,14 +31,15 @@ prove themselves hatch into chickens, permanent rules every agent follows.
 ## Core principle: deveggs is a harness
 
 <p align="center">
-  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Code-enforced loading: the managed block deveggs install writes into each harness's global instructions, plus hooks that re-surface the preferences that apply (coming). 4 Every session: Claude Code, Codex, Gemini CLI, Antigravity and their subagents. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where a harness offers no file or hook.">
+  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Loaded by code: the managed block deveggs install writes into each harness's global instructions loads them at session start (today); hooks that keep them in view mid-session are coming. 4 Every session: Claude Code, Codex, Gemini CLI and Antigravity. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where deveggs install can't load them.">
 </p>
 
 Preferences written as plain instructions get ignored once a session's context gets
-complex. So deveggs doesn't ask agents to remember them: it **guarantees they're
-loaded, at any point, with code.** Today that's a managed block in each harness's
-global instructions; hooks that re-surface the ones that apply are coming. An
-instruction to read them is only the fallback where a harness offers neither.
+complex. So deveggs doesn't ask agents to remember them: it's built to **guarantee
+they're loaded, at any point, with code.** Today a managed block in each harness's
+global instructions loads them at session start; hooks that keep the ones that apply in
+view mid-session are coming. An instruction to read them is only the fallback, where
+`deveggs install` can't load them (no global file, or not yet run).
 
 ## How it works
 
@@ -257,7 +257,7 @@ deveggs import <username>/<id>                                          # borrow
 - **One basket, every harness.** Plain Markdown under git, not locked to any one
   harness.
 - **Loaded by code, not memory.** deveggs wires your preferences into each harness, so
-  they're there however long or busy the session gets.
+  no agent has to remember to read them.
 - **Never explain yourself twice.** Tell one agent once, and every agent knows.
 
 ## Contributing

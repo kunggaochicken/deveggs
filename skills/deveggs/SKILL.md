@@ -288,11 +288,11 @@ them into history files, recovering hatches and cracks from the basket's git log
 
 ## At session start
 
-deveggs is a harness: it guarantees the developer's preferences are loaded at any point
-in a session with code, not by asking you to remember them. So they're already in your
-context: `deveggs install` loads `~/.deveggs/PREFERENCES.md` into every session through
-the harness's global instructions file (an `@` import in Claude Code, a copy that
-`deveggs render` keeps in sync in Codex and Gemini), so you don't read it yourself. It lists the chickens, then the eggs
+deveggs is a harness: it loads the developer's preferences with code, not by asking
+you to remember them. So they're already in your context: `deveggs install` loads
+`~/.deveggs/PREFERENCES.md` into every session through the harness's global
+instructions file (an `@` import in Claude Code, a copy that `deveggs render` keeps in
+sync in Codex and Gemini CLI/Antigravity), so you don't read it yourself. It lists the chickens, then the eggs
 with their ids. Skills from both tiers are already installed. Egg skills have
 descriptions that start with `[egg: on trial]`.
 

@@ -1,9 +1,10 @@
 # My deveggs basket
 
 My agentic-dev preferences, workflows, scripts and skills, kept harness-agnostic by
-[deveggs](https://github.com/kunggaochicken/deveggs). deveggs loads this basket into
-every coding agent I use with code (a managed block in each harness's global
-instructions), not by asking agents to remember it, so I only teach a habit once.
+[deveggs](https://github.com/kunggaochicken/deveggs). deveggs loads my preferences
+into each coding agent I use with code where the harness allows (a managed block in
+its global instructions), not by asking agents to remember them, so I only teach a
+habit once.
 
 | | Tier | Meaning |
 | --- | --- | --- |
