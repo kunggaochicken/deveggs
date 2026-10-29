@@ -31,14 +31,15 @@ ones that prove themselves hatch into chickens, permanent rules every agent foll
 ## Core principle: deveggs is a harness
 
 <p align="center">
-  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Loaded by code: the managed block deveggs install writes into each harness's global instructions loads them at session start, and in Claude Code and Codex the scout hook keeps the ones that fit each prompt in view mid-session. 4 Every session: Claude Code, Codex, Gemini CLI and Antigravity. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where deveggs install can't load them.">
+  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Loaded by code: the managed block deveggs install writes into each harness's global instructions loads them at session start, and in Claude Code, Codex and Antigravity the scout hook keeps the ones that fit each prompt in view mid-session. 4 Every session: Claude Code, Codex, Gemini CLI and Antigravity. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where deveggs install can't load them.">
 </p>
 
 Preferences written as plain instructions get ignored once a session's context gets
 complex. So deveggs doesn't ask agents to remember them: it's built to **guarantee
 they're loaded, at any point, with code.** Today a managed block in each harness's
-global instructions loads them at session start, and in Claude Code and Codex the scout
-hook (`deveggs scout --hook`) keeps the ones that fit each prompt in view mid-session. An
+global instructions loads them at session start, and in Claude Code, Codex and
+Antigravity the scout hook (`deveggs scout --hook`) keeps the ones that fit each prompt in
+view mid-session. An
 instruction to read them is only the fallback, where
 `deveggs install` can't load them (no global file, or not yet run).
 
@@ -204,18 +205,22 @@ start" line (uninstall puts it back).
 
 Loaded isn't the same as noticed: in a long, busy session agents stop spotting which
 egg applies. So `deveggs install` also adds a scout hook, `deveggs scout --hook`, to
-each harness that has a prompt hook able to add context. It runs inside that harness:
-on every prompt, the harness's own headless CLI picks the eggs and chickens whose
-"fires when" matches, in a fresh context, and the hook injects them into the session.
+each harness that has a prompt hook able to add context. The hook is always the
+harness's own: on every prompt, a headless CLI picks the eggs and chickens whose "fires
+when" matches, in a fresh context, and the hook injects them into the session. Where the
+harness has an isolated headless mode, that checker is its own; where it doesn't, it
+borrows your **default scout agent**, which `deveggs install` asks you to pick once per
+machine (or takes from `--scout-default claude-code|codex|none`).
 
 | Harness | Hook | Fresh-context checker |
 |---|---|---|
-| Claude Code | `UserPromptSubmit` in `~/.claude/settings.json` | `claude -p` (Haiku, no tools) |
-| Codex | `UserPromptSubmit` in `~/.codex/hooks.json` (trust it once in `/hooks`) | `codex exec` (`gpt-6-luna`, ephemeral, read-only) |
-| Gemini CLI / Antigravity, Cursor | not yet ([why](docs/design-docs/egg-scout/design.md#harness-research)) | — |
+| Claude Code | `UserPromptSubmit` in `~/.claude/settings.json` | its own: `claude -p` (Haiku, no tools) |
+| Codex | `UserPromptSubmit` in `~/.codex/hooks.json` (trust it once in `/hooks`) | its own: `codex exec` (`gpt-6-luna`, ephemeral, read-only) |
+| Antigravity | `PreInvocation` in `~/.gemini/config/hooks.json` | the default scout agent's (`agy -p` can't run isolated) |
+| Gemini CLI, Cursor | not yet ([why](docs/design-docs/egg-scout/design.md#harness-research)) | — |
 
 It fails open, logs each run to `<basket>/logs/scout.log`, and
-`deveggs scout --dry-run [--harness codex] "<prompt>"` shows what it would pick
+`deveggs scout --dry-run [--harness codex|antigravity] "<prompt>"` shows what it would pick
 ([design](docs/design-docs/egg-scout/design.md)). It's the attention half of the
 [core principle](#core-principle-deveggs-is-a-harness): loaded and noticed by code, not memory.
 
@@ -245,7 +250,8 @@ deveggs push                                                            # save y
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
 deveggs install [--harness claude-code|codex|gemini|all] [--dry-run]    # load your preferences into every session
-deveggs scout --dry-run [--harness codex] "<prompt>"                    # 🔭 which eggs the scout hook would inject
+deveggs install --scout-default claude-code|codex|none                  # 🔭 the agent that scouts for harnesses without their own
+deveggs scout --dry-run [--harness codex|antigravity] "<prompt>"        # 🔭 which eggs the scout hook would inject
 deveggs share --dry-run --as <you>                                      # preview sharing your basket
 deveggs browse [<username>]                                             # browse shared baskets
 deveggs import <username>/<id>                                          # borrow one as an egg

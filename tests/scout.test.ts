@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type Egg } from "../src/basket.ts";
-import { ADAPTERS, type Ask, CODEX_PREAMBLE, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseHookInput, parseVerdict, scout, scoutPrompt, transcriptTail } from "../src/scout.ts";
-import { cli, fakePath, type Sandbox, sandbox } from "./sandbox.ts";
+import { ADAPTERS, antigravityOutput, antigravityTranscriptTail, type Ask, CHECKERS, CODEX_PREAMBLE, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseAntigravityInput, parseHookInput, parseVerdict, resolveChecker, scout, scoutPrompt, transcriptTail } from "../src/scout.ts";
+import { cli, fakePath, git, type Sandbox, sandbox } from "./sandbox.ts";
 
 const egg = (id: string, tier: Egg["tier"], summary: string, when?: string): Egg => ({
   id,
@@ -289,11 +289,11 @@ test("codexTranscriptTail reads the messages the developer saw from a Codex roll
 });
 
 test("each harness's scout uses its own model: its own override, then DEVEGGS_SCOUT_MODEL, then its default", () => {
-  assert.equal(modelFor(ADAPTERS["claude-code"], {}), "haiku");
-  assert.equal(modelFor(ADAPTERS.codex, {}), "gpt-6-luna");
-  assert.equal(modelFor(ADAPTERS.codex, { DEVEGGS_SCOUT_MODEL: "m" }), "m");
-  assert.equal(modelFor(ADAPTERS.codex, { DEVEGGS_SCOUT_MODEL: "m", DEVEGGS_SCOUT_CODEX_MODEL: "c" }), "c");
-  assert.equal(modelFor(ADAPTERS["claude-code"], { DEVEGGS_SCOUT_CODEX_MODEL: "c" }), "haiku", "one harness's override never reaches another");
+  assert.equal(modelFor(CHECKERS["claude-code"], {}), "haiku");
+  assert.equal(modelFor(CHECKERS.codex, {}), "gpt-6-luna");
+  assert.equal(modelFor(CHECKERS.codex, { DEVEGGS_SCOUT_MODEL: "m" }), "m");
+  assert.equal(modelFor(CHECKERS.codex, { DEVEGGS_SCOUT_MODEL: "m", DEVEGGS_SCOUT_CODEX_MODEL: "c" }), "c");
+  assert.equal(modelFor(CHECKERS["claude-code"], { DEVEGGS_SCOUT_CODEX_MODEL: "c" }), "haiku", "one harness's override never reaches another");
   const models: string[] = [];
   const ask: Ask = (_p, o) => (models.push(o.model), { ok: true, text: '{"apply":[{"id":"land-via-pr","why":"shipping"}]}' });
   const r = scout({ prompt: "ship it" }, { items: ITEMS, adapter: ADAPTERS.codex, ask, env: { DEVEGGS_SCOUT_CODEX_MODEL: "small" } });
@@ -372,4 +372,191 @@ test("deveggs scout --dry-run --harness codex shows the Codex checker and model"
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /🔭 scout \(codex, codex exec\): \d+ ms, 1 candidates, model tiny/);
   assert.match(r.stdout, /✅ decision-tables: choosing a db/);
+});
+
+// ── Antigravity: its own PreInvocation hook, the default scout agent's checker ──────────
+
+/** What agy 1.4.10 sends PreInvocation (its docs list the common fields; it also sends lastUserInput). */
+const agyInput = (o: Record<string, unknown> = {}): string =>
+  line({
+    invocationNum: 0,
+    initialNumSteps: 4,
+    conversationId: "ec33ebf9-0cba-4100-8142-c61503f6c587",
+    workspacePaths: ["/workspace/project"],
+    transcriptPath: "/nope/transcript.jsonl",
+    modelName: "gemini-3.8-flash-low",
+    lastUserInput: "<USER_REQUEST>\npostgres or sqlite?\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nThe current local time is: 2026-10-29T10:00:00-07:00.\n</ADDITIONAL_METADATA>",
+    ...o,
+  });
+
+test("parseAntigravityInput reads PreInvocation's payload, unwrapping the request, and refuses anything else", () => {
+  assert.deepEqual(parseAntigravityInput(agyInput()), {
+    prompt: "postgres or sqlite?",
+    invocation: 0,
+    transcriptPath: "/nope/transcript.jsonl",
+    cwd: "/workspace/project",
+    sessionId: "ec33ebf9-0cba-4100-8142-c61503f6c587",
+  });
+  assert.equal(parseAntigravityInput(agyInput({ invocationNum: 3 }))?.invocation, 3);
+  assert.equal(parseAntigravityInput(agyInput({ lastUserInput: undefined }))?.prompt, "", "no lastUserInput: the transcript supplies the prompt");
+  assert.equal(parseAntigravityInput(agyInput({ lastUserInput: "plain words" }))?.prompt, "plain words");
+  for (const bad of ["", "[]", line({ prompt: "a Claude Code payload" }), agyInput({ invocationNum: "0" }), agyInput({ invocationNum: -1 }), agyInput({ lastUserInput: undefined, transcriptPath: undefined })]) {
+    assert.equal(parseAntigravityInput(bad), undefined, bad);
+  }
+});
+
+test("antigravityTranscriptTail reads the developer's requests and the model's replies, nothing else", () => {
+  const jsonl = [
+    line({ step_index: 0, source: "USER_EXPLICIT", type: "USER_INPUT", status: "DONE", content: "<USER_REQUEST>\nwe were talking about databases\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\ntime\n</ADDITIONAL_METADATA>" }),
+    line({ step_index: 1, source: "SYSTEM", type: "CHECKPOINT", content: "# Resuming from a compaction" }),
+    line({ step_index: 2, source: "MODEL", type: "PLANNER_RESPONSE", thinking: "hmm", tool_calls: [{ name: "run_command" }] }),
+    line({ step_index: 3, source: "MODEL", type: "GENERIC", content: "The command exited with code 0." }),
+    line({ step_index: 4, source: "MODEL", type: "PLANNER_RESPONSE", content: "Postgres, for concurrent writes." }),
+  ].join("\n");
+  assert.deepEqual(antigravityTranscriptTail(jsonl), [
+    { role: "user", text: "we were talking about databases" },
+    { role: "assistant", text: "Postgres, for concurrent writes." },
+  ]);
+  assert.deepEqual(antigravityTranscriptTail(line({ type: "user", message: { content: "a Claude transcript" } })), [], "another harness's format reads as no context");
+});
+
+test("resolveChecker: a harness's own checker always wins; Antigravity borrows the default, env over saved", () => {
+  const agy = ADAPTERS.antigravity;
+  assert.deepEqual(resolveChecker(ADAPTERS.codex, { DEVEGGS_SCOUT_DEFAULT: "claude-code" }, "claude-code"), { checker: CHECKERS.codex, via: "native" });
+  assert.deepEqual(resolveChecker(ADAPTERS["claude-code"], { DEVEGGS_SCOUT_DEFAULT: "codex" }, "codex"), { checker: CHECKERS["claude-code"], via: "native" });
+  assert.deepEqual(resolveChecker(agy, {}, "codex"), { checker: CHECKERS.codex, via: "fallback:codex" });
+  assert.deepEqual(resolveChecker(agy, { DEVEGGS_SCOUT_DEFAULT: "claude-code" }, "codex"), { checker: CHECKERS["claude-code"], via: "fallback:claude-code" });
+  assert.deepEqual(resolveChecker(agy, {}, "none"), { error: "the default scout agent is none", via: "fallback:none" });
+  assert.match(String((resolveChecker(agy, {}, undefined) as { error: string }).error), /no default scout agent: run deveggs install/);
+  assert.match(String((resolveChecker(agy, {}, "agy") as { error: string }).error), /unknown default scout agent "agy"/);
+});
+
+test("scout with the Antigravity adapter injects an ephemeral step, and takes the prompt from the transcript when the input has none", () => {
+  const box = sandbox();
+  const transcript = join(box.dir, "transcript.jsonl");
+  writeFileSync(transcript, [line({ type: "USER_INPUT", content: "<USER_REQUEST>\nearlier\n</USER_REQUEST>" }), line({ type: "USER_INPUT", content: "<USER_REQUEST>\nship it\n</USER_REQUEST>" })].join("\n"));
+  let seen = "";
+  const ask: Ask = (p) => ((seen = p), { ok: true, text: '{"apply":[{"id":"land-via-pr","why":"shipping"}]}' });
+  const r = scout({ prompt: "", invocation: 0, transcriptPath: transcript }, { items: ITEMS, adapter: ADAPTERS.antigravity, checker: CHECKERS.codex, ask, env: {} });
+  assert.equal(r.prompt, "ship it");
+  assert.match(seen, /<new-request>\nship it/);
+  assert.match(seen, /\[user\] earlier/);
+  assert.doesNotMatch(seen, /\[user\] ship it/, "the prompt isn't repeated as context");
+  const out = JSON.parse(r.output ?? "{}");
+  assert.deepEqual(Object.keys(out), ["injectSteps"]);
+  assert.equal(out.injectSteps.length, 1);
+  assert.match(out.injectSteps[0].ephemeralMessage, /`land-via-pr` \(chicken\)/);
+  assert.equal(out.injectSteps[0].ephemeralMessage, r.context);
+  assert.deepEqual(JSON.parse(antigravityOutput("x")), { injectSteps: [{ ephemeralMessage: "x" }] });
+  const none = scout({ prompt: "x", invocation: 0 }, { items: ITEMS, adapter: ADAPTERS.antigravity, env: {} });
+  assert.deepEqual([none.output, none.error], [undefined, "no checker for antigravity"]);
+});
+
+/** A basket with one egg, fake claude and codex that record their runs, the default saved as `saved`, and its own temp folder. */
+function wiredAgy(saved?: string): Sandbox {
+  const box = sandbox();
+  assert.equal(cli(box, "lay", "Present options as a table", "--id", "decision-tables").status, 0);
+  const reply = '{"apply":[{"id":"decision-tables","why":"choosing a db"}]}';
+  const bin = fakePath(box, {
+    codex: `printf '%s\\n' "$@" > "${box.dir}/codex-args"; cat > /dev/null; printf '%s' '${reply}'`,
+    claude: `printf '%s\\n' "$@" > "${box.dir}/claude-args"; cat > /dev/null; printf '%s' '${reply}'`,
+  });
+  box.env["PATH"] = `${bin}:${process.env["PATH"]}`;
+  box.env["TMPDIR"] = box.dir;
+  if (saved) git(box, box.basket, "config", "--local", "deveggs.scoutDefault", saved);
+  return box;
+}
+
+const logLines = (box: Sandbox): Record<string, unknown>[] =>
+  readFileSync(join(box.basket, "logs", "scout.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>);
+
+test("deveggs scout --hook --harness antigravity checks with the saved default agent and logs it as a fallback", () => {
+  const box = wiredAgy("codex");
+  const r = hookRun(box, agyInput(), "--harness", "antigravity");
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.match(out.injectSteps[0].ephemeralMessage, /`decision-tables` \(egg\): Present options as a table \(why: choosing a db\)/);
+  assert.equal(readFileSync(join(box.dir, "codex-args"), "utf8").split("\n")[0], "exec");
+  assert.equal(existsSync(join(box.dir, "claude-args")), false);
+  const [log] = logLines(box);
+  assert.deepEqual([log?.["harness"], log?.["checker"], log?.["session"], log?.["apply"]], ["antigravity", "fallback:codex", "ec33ebf9-0cba-4100-8142-c61503f6c587", ["decision-tables"]]);
+
+  box.env["DEVEGGS_SCOUT_DEFAULT"] = "claude-code";
+  hookRun(box, agyInput({ conversationId: "other" }), "--harness", "antigravity");
+  assert.ok(existsSync(join(box.dir, "claude-args")), "DEVEGGS_SCOUT_DEFAULT overrides the saved default");
+  assert.equal(logLines(box)[1]?.["checker"], "fallback:claude-code");
+});
+
+test("later model calls of the same Antigravity turn re-send the context without checking again", () => {
+  const box = wiredAgy("codex");
+  const first = hookRun(box, agyInput(), "--harness", "antigravity");
+  rmSync(join(box.dir, "codex-args"));
+  const later = hookRun(box, agyInput({ invocationNum: 2 }), "--harness", "antigravity");
+  assert.equal(later.status, 0, later.stderr);
+  assert.equal(later.stdout, first.stdout, "the same ephemeral step, re-sent");
+  assert.equal(existsSync(join(box.dir, "codex-args")), false, "no second check");
+  assert.equal(logLines(box).length, 1, "re-sends aren't logged as runs");
+  const changed = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: "something else" }), "--harness", "antigravity");
+  assert.deepEqual([changed.status, changed.stdout], [0, ""], "a cache for another prompt is never re-sent");
+  const elsewhere = hookRun(box, agyInput({ invocationNum: 1, conversationId: "../../etc/passwd" }), "--harness", "antigravity");
+  assert.deepEqual([elsewhere.status, elsewhere.stdout], [0, ""], "an unsafe conversation id reads no cache");
+});
+
+test("deveggs scout --hook --harness antigravity fails open with no default, a none default, or a missing agent", () => {
+  const unset = wiredAgy();
+  const u = hookRun(unset, agyInput(), "--harness", "antigravity");
+  assert.deepEqual([u.status, u.stdout], [0, ""]);
+  assert.equal(existsSync(join(unset.dir, "codex-args")) || existsSync(join(unset.dir, "claude-args")), false, "nothing ran");
+  assert.match(String(logLines(unset)[0]?.["error"]), /no default scout agent/);
+  assert.equal(logLines(unset)[0]?.["checker"], "fallback");
+
+  const none = wiredAgy("none");
+  const n = hookRun(none, agyInput(), "--harness", "antigravity");
+  assert.deepEqual([n.status, n.stdout], [0, ""]);
+  assert.equal(logLines(none)[0]?.["checker"], "fallback:none");
+
+  const missing = wiredAgy("codex");
+  missing.env["PATH"] = fakePath(sandbox(), {});
+  const m = hookRun(missing, agyInput(), "--harness", "antigravity");
+  assert.deepEqual([m.status, m.stdout], [0, ""]);
+  assert.match(String(logLines(missing)[0]?.["error"]), /codex not found/);
+});
+
+test("a native harness logs its own checker even when a default agent is set", () => {
+  const box = wiredAgy("codex");
+  box.env["DEVEGGS_SCOUT_DEFAULT"] = "codex";
+  const r = hookRun(box, line({ prompt: "postgres or sqlite?" }));
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(box.dir, "claude-args")));
+  assert.equal(existsSync(join(box.dir, "codex-args")), false, "Claude Code never borrows the default");
+  assert.equal(logLines(box)[0]?.["checker"], "native");
+});
+
+test("deveggs scout --dry-run --harness antigravity names the default agent, and needs one", () => {
+  const box = wiredAgy("codex");
+  const r = cli(box, "scout", "--dry-run", "--harness", "antigravity", "postgres or sqlite?");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /🔭 scout \(antigravity, codex exec, the default scout agent\): \d+ ms, 1 candidates, model gpt-6-luna/);
+  assert.match(r.stdout, /hook output:\n\{"injectSteps":\[\{"ephemeralMessage"/);
+  const unset = wiredAgy();
+  const u = cli(unset, "scout", "--dry-run", "--harness", "antigravity", "x");
+  assert.equal(u.status, 1);
+  assert.match(u.stderr, /Antigravity has no headless checker of its own and no default scout agent: run deveggs install, or set DEVEGGS_SCOUT_DEFAULT/);
+});
+
+test("the re-send cache lives in the basket's ignored logs/, works without lastUserInput, and a new turn clears it before checking", () => {
+  const box = wiredAgy("codex");
+  const transcript = join(box.dir, "transcript.jsonl");
+  writeFileSync(transcript, line({ type: "USER_INPUT", content: "<USER_REQUEST>\npostgres or sqlite?\n</USER_REQUEST>" }));
+  const first = hookRun(box, agyInput({ lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.match(first.stdout, /injectSteps/);
+  assert.ok(existsSync(join(box.basket, "logs", "scout-cache", "ec33ebf9-0cba-4100-8142-c61503f6c587.json")));
+  assert.equal(git(box, box.basket, "status", "--porcelain"), "", "the cache is never committed");
+  const later = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.equal(later.stdout, first.stdout, "re-sent with no prompt to compare");
+  // The next turn's check dies: the last turn's context must not be re-sent after it.
+  writeFileSync(join(box.dir, "bin", "codex"), "#!/bin/sh\nexit 1\n");
+  hookRun(box, agyInput({ lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  const stale = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.equal(stale.stdout, "", "a failed check leaves nothing to re-send");
 });

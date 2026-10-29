@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="title desc">
-<title id="title">deveggs scout: native to each harness</title>
-<desc id="desc">Each harness runs the scout through its own prompt hook and its own headless CLI. Claude Code: a UserPromptSubmit hook in ~/.claude/settings.json runs deveggs scout --hook --harness claude-code, which asks claude -p on Haiku and injects additionalContext. Codex: a UserPromptSubmit hook in ~/.codex/hooks.json runs deveggs scout --hook --harness codex, which asks codex exec on gpt-6-luna and injects additionalContext. The shared core in the middle builds the candidates, prompt and verdict and fails open. Gemini CLI, Antigravity and Cursor are not yet wired and keep the instruction-only path.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="640" viewBox="0 0 980 640" role="img" aria-labelledby="title desc">
+<title id="title">deveggs scout: native hook, native or default-agent checker</title>
+<desc id="desc">Each harness runs the scout through its own prompt hook. Claude Code: a UserPromptSubmit hook in ~/.claude/settings.json runs deveggs scout --hook --harness claude-code, which asks its own claude -p on Haiku and injects additionalContext. Codex: a UserPromptSubmit hook in ~/.codex/hooks.json runs deveggs scout --hook --harness codex, which asks its own codex exec on gpt-6-luna and injects additionalContext. Antigravity: a PreInvocation hook named deveggs-scout in ~/.gemini/config/hooks.json runs deveggs scout --hook --harness antigravity; agy -p can't run isolated, so on invocation 0 it asks the default scout agent picked at deveggs install (claude -p or codex exec) and injects an ephemeral step, re-sent on later model calls of the same turn. The shared core in the middle builds the candidates, prompt and verdict and fails open. Gemini CLI and Cursor are not yet wired and keep the instruction-only path.</desc>
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#567086"/></marker></defs>
-<rect width="980" height="520" fill="#f5f8fc"/>
-<text x="24" y="36" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#15344d">deveggs scout: each harness scouts itself</text>
+<rect width="980" height="640" fill="#f5f8fc"/>
+<text x="24" y="36" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#15344d">deveggs scout: the hook is always native; the checker can be borrowed</text>
 <g font-family="Arial,sans-serif" font-size="12" fill="#567086" font-weight="bold">
   <text x="99" y="66" text-anchor="middle">1 HARNESS</text>
   <text x="284" y="66" text-anchor="middle">2 ITS OWN HOOK</text>
   <text x="489" y="66" text-anchor="middle">3 SHARED CORE</text>
-  <text x="694" y="66" text-anchor="middle">4 ITS OWN HEADLESS CLI</text>
+  <text x="694" y="66" text-anchor="middle">4 HEADLESS CHECKER</text>
   <text x="884" y="66" text-anchor="middle">5 INJECTION</text>
 </g>
 <g font-family="Arial,sans-serif" font-size="13" fill="#15344d">
@@ -21,7 +21,7 @@
   <text x="284" y="128" text-anchor="middle">~/.claude/settings.json</text>
   <text x="284" y="148" text-anchor="middle">--harness claude-code</text>
   <rect x="604" y="80" width="180" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
-  <text x="694" y="106" text-anchor="middle" font-weight="bold">🤖 claude -p</text>
+  <text x="694" y="106" text-anchor="middle" font-weight="bold">🤖 native: claude -p</text>
   <text x="694" y="128" text-anchor="middle">haiku · no tools · no MCP</text>
   <text x="694" y="148" text-anchor="middle">no settings · no session</text>
   <rect x="804" y="80" width="160" height="90" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
@@ -30,52 +30,81 @@
   <text x="884" y="148" text-anchor="middle">id · fact · why</text>
 
   <!-- Codex row -->
-  <rect x="24" y="200" width="150" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
-  <text x="99" y="232" text-anchor="middle" font-weight="bold">⚫ Codex</text>
-  <text x="99" y="254" text-anchor="middle">developer's prompt</text>
-  <rect x="194" y="200" width="180" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
-  <text x="284" y="226" text-anchor="middle" font-weight="bold">🪝 UserPromptSubmit</text>
-  <text x="284" y="248" text-anchor="middle">~/.codex/hooks.json</text>
-  <text x="284" y="268" text-anchor="middle">--harness codex</text>
-  <rect x="604" y="200" width="180" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
-  <text x="694" y="226" text-anchor="middle" font-weight="bold">🤖 codex exec</text>
-  <text x="694" y="248" text-anchor="middle">gpt-6-luna · ephemeral</text>
-  <text x="694" y="268" text-anchor="middle">read-only · hooks off</text>
-  <rect x="804" y="200" width="160" height="90" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
-  <text x="884" y="226" text-anchor="middle" font-weight="bold">🧠 same session</text>
-  <text x="884" y="248" text-anchor="middle">additionalContext</text>
-  <text x="884" y="268" text-anchor="middle">id · fact · why</text>
+  <rect x="24" y="190" width="150" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="99" y="222" text-anchor="middle" font-weight="bold">⚫ Codex</text>
+  <text x="99" y="244" text-anchor="middle">developer's prompt</text>
+  <rect x="194" y="190" width="180" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="284" y="216" text-anchor="middle" font-weight="bold">🪝 UserPromptSubmit</text>
+  <text x="284" y="238" text-anchor="middle">~/.codex/hooks.json</text>
+  <text x="284" y="258" text-anchor="middle">--harness codex</text>
+  <rect x="604" y="190" width="180" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="694" y="216" text-anchor="middle" font-weight="bold">🤖 native: codex exec</text>
+  <text x="694" y="238" text-anchor="middle">gpt-6-luna · ephemeral</text>
+  <text x="694" y="258" text-anchor="middle">read-only · hooks off</text>
+  <rect x="804" y="190" width="160" height="90" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
+  <text x="884" y="216" text-anchor="middle" font-weight="bold">🧠 same session</text>
+  <text x="884" y="238" text-anchor="middle">additionalContext</text>
+  <text x="884" y="258" text-anchor="middle">id · fact · why</text>
 
-  <!-- Shared core spanning both rows -->
-  <rect x="394" y="80" width="190" height="210" rx="10" fill="#e7f1fb" stroke="#3d7ab8" stroke-width="2"/>
-  <text x="489" y="108" text-anchor="middle" font-weight="bold">🔭 deveggs scout --hook</text>
-  <text x="489" y="134" text-anchor="middle">prompt + transcript tail</text>
-  <text x="489" y="154" text-anchor="middle">(its harness's reader)</text>
-  <text x="489" y="180" text-anchor="middle">eggs + chickens:</text>
-  <text x="489" y="200" text-anchor="middle">id · fires when · fact</text>
-  <text x="489" y="226" text-anchor="middle">ids validated · why cleaned</text>
-  <text x="489" y="252" text-anchor="middle">DEVEGGS_SCOUT=1 guard</text>
-  <text x="489" y="272" text-anchor="middle">fails open · logs/scout.log</text>
+  <!-- Antigravity row -->
+  <rect x="24" y="300" width="150" height="110" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="99" y="336" text-anchor="middle" font-weight="bold">🔵 Antigravity</text>
+  <text x="99" y="358" text-anchor="middle">developer's prompt</text>
+  <text x="99" y="378" text-anchor="middle">(agy -p can't run</text>
+  <text x="99" y="396" text-anchor="middle">isolated)</text>
+  <rect x="194" y="300" width="180" height="110" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="284" y="326" text-anchor="middle" font-weight="bold">🪝 PreInvocation</text>
+  <text x="284" y="348" text-anchor="middle">~/.gemini/config/hooks.json</text>
+  <text x="284" y="368" text-anchor="middle">deveggs-scout</text>
+  <text x="284" y="388" text-anchor="middle">--harness antigravity</text>
+  <rect x="604" y="300" width="180" height="110" rx="10" fill="#fff6e5" stroke="#c98a1b" stroke-width="2"/>
+  <text x="694" y="326" text-anchor="middle" font-weight="bold">🔁 default scout agent</text>
+  <text x="694" y="348" text-anchor="middle">claude -p or codex exec</text>
+  <text x="694" y="368" text-anchor="middle">picked at deveggs install</text>
+  <text x="694" y="388" text-anchor="middle">only on invocation 0</text>
+  <rect x="804" y="300" width="160" height="110" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
+  <text x="884" y="326" text-anchor="middle" font-weight="bold">🧠 same session</text>
+  <text x="884" y="348" text-anchor="middle">injectSteps:</text>
+  <text x="884" y="368" text-anchor="middle">ephemeralMessage</text>
+  <text x="884" y="388" text-anchor="middle">re-sent each call</text>
+
+  <!-- Shared core spanning all rows -->
+  <rect x="394" y="80" width="190" height="330" rx="10" fill="#e7f1fb" stroke="#3d7ab8" stroke-width="2"/>
+  <text x="489" y="110" text-anchor="middle" font-weight="bold">🔭 deveggs scout --hook</text>
+  <text x="489" y="140" text-anchor="middle">prompt + transcript tail</text>
+  <text x="489" y="160" text-anchor="middle">(its harness's reader)</text>
+  <text x="489" y="194" text-anchor="middle">eggs + chickens:</text>
+  <text x="489" y="214" text-anchor="middle">id · fires when · fact</text>
+  <text x="489" y="248" text-anchor="middle">checker: native, else</text>
+  <text x="489" y="268" text-anchor="middle" font-size="12">DEVEGGS_SCOUT_DEFAULT,</text>
+  <text x="489" y="288" text-anchor="middle" font-size="12">else deveggs.scoutDefault</text>
+  <text x="489" y="322" text-anchor="middle">ids validated · why cleaned</text>
+  <text x="489" y="346" text-anchor="middle">DEVEGGS_SCOUT=1 guard</text>
+  <text x="489" y="370" text-anchor="middle">fails open · logs/scout.log</text>
+  <text x="489" y="390" text-anchor="middle">(checker: native | fallback:…)</text>
 
   <!-- Not yet row -->
-  <rect x="24" y="330" width="940" height="76" rx="10" fill="#f0f0f0" stroke="#9a9a9a" stroke-dasharray="5 4"/>
-  <text x="44" y="358" font-weight="bold" fill="#555555">⬜ not yet: instruction-only path</text>
-  <text x="44" y="382" fill="#555555">Antigravity: PreInvocation hook injects, but agy -p saves every run and runs hooks · Gemini CLI: superseded, untested</text>
-  <text x="44" y="400" fill="#555555">Cursor: beforeSubmitPrompt can't add context</text>
+  <rect x="24" y="440" width="940" height="70" rx="10" fill="#f0f0f0" stroke="#9a9a9a" stroke-dasharray="5 4"/>
+  <text x="44" y="468" font-weight="bold" fill="#555555">⬜ not yet: instruction-only path (a default agent can't help these)</text>
+  <text x="44" y="492" fill="#555555">Gemini CLI: BeforeAgent documented but untested here, superseded by Antigravity CLI · Cursor: beforeSubmitPrompt can't add context</text>
 </g>
 <g stroke="#567086" stroke-width="2" fill="none">
   <path d="M174 125 L190 125" marker-end="url(#arrow)"/>
   <path d="M374 125 L390 125" marker-end="url(#arrow)"/>
   <path d="M584 125 L600 125" marker-end="url(#arrow)"/>
   <path d="M784 125 L800 125" marker-end="url(#arrow)"/>
-  <path d="M174 245 L190 245" marker-end="url(#arrow)"/>
-  <path d="M374 245 L390 245" marker-end="url(#arrow)"/>
-  <path d="M584 245 L600 245" marker-end="url(#arrow)"/>
-  <path d="M784 245 L800 245" marker-end="url(#arrow)"/>
+  <path d="M174 235 L190 235" marker-end="url(#arrow)"/>
+  <path d="M374 235 L390 235" marker-end="url(#arrow)"/>
+  <path d="M584 235 L600 235" marker-end="url(#arrow)"/>
+  <path d="M784 235 L800 235" marker-end="url(#arrow)"/>
+  <path d="M174 355 L190 355" marker-end="url(#arrow)"/>
+  <path d="M374 355 L390 355" marker-end="url(#arrow)"/>
+  <path d="M584 355 L600 355" marker-end="url(#arrow)" stroke="#c98a1b"/>
+  <path d="M784 355 L800 355" marker-end="url(#arrow)"/>
 </g>
 <g font-family="Arial,sans-serif" font-size="12" fill="#567086">
-  <text x="24" y="446">Each row stays inside its harness: a Codex session is scouted by codex exec and never calls Claude, and the reverse.</text>
-  <text x="24" y="468">The prompt is never blocked: on a timeout, an error or no match the hook prints nothing and exits 0.</text>
-  <text x="24" y="490">deveggs install writes each hook (Codex runs it once you trust it in /hooks); deveggs uninstall removes exactly it.</text>
+  <text x="24" y="548">A harness with an isolated headless mode always checks with it: Codex never calls Claude, and the reverse. Only Antigravity borrows.</text>
+  <text x="24" y="570">The prompt is never blocked: on a timeout, an error, no default or no match the hook prints nothing and exits 0.</text>
+  <text x="24" y="592">deveggs install writes each hook and asks for the default once per machine (or takes --scout-default); deveggs uninstall removes exactly them.</text>
 </g>
 </svg>

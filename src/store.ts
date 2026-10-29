@@ -129,6 +129,31 @@ export function setAutopush(root: string, on: boolean): void {
   }
 }
 
+/**
+ * The default scout agent `deveggs install` saved: the headless CLI that checks prompts for
+ * harnesses without an isolated headless mode of their own (Antigravity). Like autopush it
+ * lives in the basket repo's own git config (`deveggs.scoutDefault`): machine-local, since
+ * which agents are installed differs per machine, and never committed or pushed with the basket.
+ */
+export function scoutDefault(root: string): string | undefined {
+  if (!existsSync(join(root, ".git"))) return undefined;
+  return run("git", ["config", "--local", "--get", "deveggs.scoutDefault"], root).stdout.trim() || undefined;
+}
+
+/** Save (or, with undefined, remove) the default scout agent. Returns false when there was nothing to remove. */
+export function setScoutDefault(root: string, value: string | undefined): boolean {
+  if (!existsSync(join(root, ".git"))) {
+    if (value === undefined) return false;
+    throw new BasketError(`can't save the default scout agent: ${root} isn't a git repo yet`);
+  }
+  const set = value !== undefined
+    ? run("git", ["config", "--local", "deveggs.scoutDefault", value], root)
+    : run("git", ["config", "--local", "--unset-all", "deveggs.scoutDefault"], root);
+  if (set.status === 5 && value === undefined) return false;
+  if (set.status !== 0) throw new BasketError(`git config failed: ${firstLine(set.stderr) || "unknown error"}`);
+  return true;
+}
+
 /** How long an autopush may take before it gives up, so a slow network never stalls a command. */
 export const AUTOPUSH_TIMEOUT_MS = 15_000;
 

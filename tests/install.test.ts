@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { END, block, parseHarness, readLine, scoutCommand, SCOUT_HOOK_TIMEOUT, withBlock, withoutBlock, withoutScoutHook, withScoutHook } from "../src/install.ts";
-import { cli, type Sandbox, sandbox } from "./sandbox.ts";
+import { type AgentCandidate, END, block, parseHarness, promptScoutDefault, readLine, recommendedAgent, scoutCandidates, scoutCommand, SCOUT_HOOK_TIMEOUT, withBlock, withNamedScoutHook, withoutBlock, withoutNamedScoutHook, withoutScoutHook, withScoutHook } from "../src/install.ts";
+import { cli, fakePath, git, type Sandbox, sandbox } from "./sandbox.ts";
 
 const BEGIN = "<!-- deveggs:preferences:begin";
 
@@ -353,7 +353,7 @@ test("settings.json that isn't a JSON object is left alone", () => {
   assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /scout hook not installed; nothing changed/);
 });
 
-test("Gemini gets no hook and a note saying why; a skipped Claude Code or Codex gets no hook either", () => {
+test("Gemini CLI without Antigravity gets no hook and a note saying why; a skipped Claude Code or Codex gets no hook either", () => {
   const { box } = wired();
   rmSync(join(box.home, ".claude"), { recursive: true });
   rmSync(join(box.home, ".codex"), { recursive: true });
@@ -361,7 +361,9 @@ test("Gemini gets no hook and a note saying why; a skipped Claude Code or Codex 
   const r = cli(box, "install");
   assert.equal(r.status, 0, r.stderr);
   assert.doesNotMatch(r.stdout, /scout hook \(/);
-  assert.match(r.stdout, /· gemini: no scout hook yet: Antigravity's PreInvocation hook can add context, but agy -p has no isolated one-shot mode/);
+  assert.match(r.stdout, /· gemini: Gemini CLI has no scout hook yet/);
+  assert.doesNotMatch(r.stdout, /default scout agent/, "nothing borrows it, so install never asks");
+  assert.equal(existsSync(join(box.home, ".gemini", "config", "hooks.json")), false);
   assert.equal(existsSync(settingsJson(box)), false);
   assert.equal(existsSync(codexHooks(box)), false);
   assert.equal(existsSync(join(box.home, ".gemini", "settings.json")), false);
@@ -527,4 +529,244 @@ test("install without --harness wires both hooks, each naming its own harness", 
   assert.match(read(settingsJson(box)), /scout --hook --harness claude-code/);
   assert.match(read(codexHooks(box)), /scout --hook --harness codex/);
   assert.doesNotMatch(read(settingsJson(box)), /--harness codex/);
+});
+
+// ── Antigravity: its own PreInvocation hook, checked by the default scout agent ─────────
+
+const agyHooks = (box: Sandbox): string => join(box.home, ".gemini", "config", "hooks.json");
+
+/** Antigravity's hooks.json like a real developer's: other tools' named hooks, PreInvocation included. */
+const AGY_OTHERS = {
+  herdr: { PreInvocation: [{ command: "bash ~/.gemini/config/hooks/herdr.sh session", timeout: 10, type: "command" }] },
+  "orca-status": {
+    PreInvocation: [{ type: "command", command: "/bin/sh ~/.orca/agent-hooks/antigravity-hook.sh", timeout: 10 }],
+    PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "/bin/sh ~/.orca/x.sh" }] }],
+  },
+};
+
+/** A sandbox with Antigravity installed, its hooks.json holding others' hooks, and fake claude/codex CLIs on PATH (or none). */
+function wiredAgy(agents: ("claude" | "codex")[] = ["claude", "codex"]): Sandbox {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".gemini", "antigravity-cli"), { recursive: true });
+  mkdirSync(join(box.home, ".gemini", "config"), { recursive: true });
+  writeFileSync(agyHooks(box), `${JSON.stringify(AGY_OTHERS, null, 2)}\n`);
+  box.env["PATH"] = fakePath(box, Object.fromEntries(agents.map((a) => [a, "exit 0"])));
+  assert.equal(cli(box, "lay", "Use tabs").status, 0);
+  return box;
+}
+
+const savedDefault = (box: Sandbox): string => {
+  try {
+    return git(box, box.basket, "config", "--local", "--get", "deveggs.scoutDefault");
+  } catch {
+    return "";
+  }
+};
+
+test("install --scout-default adds Antigravity's scout hook under its own name, saves the default per machine, and uninstall takes out exactly both", () => {
+  const box = wiredAgy();
+  const r = cli(box, "install", "--scout-default", "codex");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /gemini: .*config\/hooks\.json\n\s+installed: Antigravity scout hook \(deveggs-scout\.PreInvocation runs .*bin\/deveggs scout --hook --harness antigravity 2>\/dev\/null \|\| true\); checks with the default scout agent, codex \(codex exec\); added a PreInvocation hook named deveggs-scout/);
+  assert.match(r.stdout, /🔭 default scout agent: codex \(codex exec\), saved for this machine in .*\.git\/config \(deveggs\.scoutDefault\)/);
+  assert.match(r.stdout, /in Antigravity, the scout hook names the ones that fit each prompt/);
+  const hooks = JSON.parse(read(agyHooks(box)));
+  assert.deepEqual({ ...hooks, "deveggs-scout": undefined }, { ...AGY_OTHERS, "deveggs-scout": undefined }, "every other named hook is untouched");
+  assert.deepEqual(Object.keys(hooks), ["herdr", "orca-status", "deveggs-scout"]);
+  assert.equal(hooks["deveggs-scout"].PreInvocation.length, 1);
+  assert.equal(hooks["deveggs-scout"].PreInvocation[0].timeout, 15);
+  assert.equal(hooks["deveggs-scout"].PreInvocation[0].type, "command");
+  assert.equal(savedDefault(box), "codex");
+  assert.equal(git(box, box.basket, "status", "--porcelain"), "", "the default is git config, never a committed basket file");
+
+  const again = cli(box, "install");
+  assert.equal(again.status, 0, again.stderr);
+  assert.match(again.stdout, /Antigravity scout hook already installed; checks with the default scout agent, codex \(codex exec\); nothing changed/);
+  assert.match(again.stdout, /🔭 default scout agent: codex \(codex exec\), saved for this machine/, "a rerun shows the saved default without asking");
+  assert.equal(JSON.parse(read(agyHooks(box)))["deveggs-scout"].PreInvocation.length, 1, "idempotent");
+
+  const keep = cli(box, "uninstall", "--harness", "claude-code");
+  assert.doesNotMatch(keep.stdout, /default scout agent/);
+  assert.equal(savedDefault(box), "codex", "the default stays while Antigravity's hook borrows it");
+
+  const dry = cli(box, "uninstall", "--dry-run");
+  assert.match(dry.stdout, /would remove the Antigravity scout hook/);
+  assert.match(dry.stdout, /- would remove the default scout agent \(codex; deveggs\.scoutDefault/);
+  assert.equal(savedDefault(box), "codex");
+  const u = cli(box, "uninstall");
+  assert.equal(u.status, 0, u.stderr);
+  assert.match(u.stdout, /removed the Antigravity scout hook/);
+  assert.match(u.stdout, /- removed the default scout agent/);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS, "uninstall takes out exactly the deveggs-scout name");
+  assert.equal(savedDefault(box), "");
+});
+
+test("install creates Antigravity's hooks.json when there is none, and uninstall deletes it again", () => {
+  const box = wiredAgy();
+  rmSync(agyHooks(box));
+  assert.equal(cli(box, "install", "--scout-default", "claude-code").status, 0);
+  assert.deepEqual(Object.keys(JSON.parse(read(agyHooks(box)))), ["deveggs-scout"]);
+  assert.match(cli(box, "uninstall").stdout, /removed the Antigravity scout hook; deleted the hooks\.json it left empty/);
+  assert.equal(existsSync(agyHooks(box)), false);
+});
+
+test("install without a terminal asks the caller to ask the developer, and writes nothing", () => {
+  const box = wiredAgy();
+  const before = git(box, box.basket, "log", "--format=%H");
+  const r = cli(box, "install");
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
+  assert.equal(r.stderr.trim().split("\n").length, 1, "one line");
+  assert.match(r.stderr, /^deveggs: needs input: Antigravity has no isolated headless mode, so its scout hook borrows a default scout agent\. Ask the developer which to use \(found: claude-code \(claude -p, recommended\), codex \(codex exec\); or none\), then rerun: deveggs install --scout-default <claude-code\|codex\|none>$/m);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
+  assert.equal(existsSync(geminiMd(box)), false);
+  assert.equal(git(box, box.basket, "log", "--format=%H"), before, "not even a render commit");
+  assert.equal(savedDefault(box), "");
+});
+
+test("the recommended default is the first signed-in agent", () => {
+  const box = wiredAgy();
+  mkdirSync(join(box.home, ".codex"));
+  writeFileSync(join(box.home, ".codex", "auth.json"), "{}");
+  assert.match(cli(box, "install").stderr, /found: claude-code \(claude -p\), codex \(codex exec, signed in, recommended\)/);
+  writeFileSync(join(box.home, ".claude.json"), JSON.stringify({ oauthAccount: { emailAddress: "x" } }));
+  assert.match(cli(box, "install").stderr, /found: claude-code \(claude -p, signed in, recommended\), codex \(codex exec, signed in\)/);
+});
+
+test("with no claude or codex on PATH, install explains and skips Antigravity's hook; --scout-default none opts out", () => {
+  const box = wiredAgy([]);
+  const r = cli(box, "install");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /🔭 Default scout agent: neither claude nor codex is on your PATH, so Antigravity gets no scout hook/);
+  assert.match(r.stdout, /skipped the Antigravity scout hook: no default scout agent \(claude or codex\) to check with; it has no isolated headless mode of its own/);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
+
+  const none = wiredAgy();
+  const n = cli(none, "install", "--scout-default", "none");
+  assert.equal(n.status, 0, n.stderr);
+  assert.match(n.stdout, /skipped the Antigravity scout hook: the default scout agent is none/);
+  assert.match(n.stdout, /🔭 default scout agent: none \(harnesses without their own headless mode get no scout\)/);
+  assert.equal(savedDefault(none), "none");
+  assert.equal(cli(none, "install").status, 0, "a saved none is an answer: no more asking");
+  assert.deepEqual(JSON.parse(read(agyHooks(none))), AGY_OTHERS);
+
+  const bad = cli(none, "install", "--scout-default", "gemini");
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /invalid --scout-default "gemini"; expected one of claude-code, codex, none/);
+});
+
+test("--dry-run shows the default it would ask for, or would save, and writes nothing", () => {
+  const box = wiredAgy();
+  const r = cli(box, "install", "--dry-run");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /would install: Antigravity scout hook \(deveggs-scout\.PreInvocation runs .*\); checks with the default scout agent you pick/);
+  assert.match(r.stdout, /🔭 default scout agent: not set; install will ask, for Antigravity \(found: claude-code \(claude -p, recommended\), codex \(codex exec\); or none\)/);
+  assert.match(r.stdout, /--dry-run: nothing written\./);
+  const flagged = cli(box, "install", "--dry-run", "--scout-default", "codex");
+  assert.match(flagged.stdout, /🔭 default scout agent: codex \(codex exec\), would save for this machine/);
+  assert.match(flagged.stdout, /checks with the default scout agent, codex \(codex exec\)/);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
+  assert.equal(savedDefault(box), "");
+});
+
+test("an Antigravity hooks.json of an unexpected shape is never overwritten", () => {
+  const box = wiredAgy();
+  for (const text of ["[]", '{"deveggs-scout": []}', '{"deveggs-scout": {"PreInvocation": {}}}']) {
+    writeFileSync(agyHooks(box), text);
+    const r = cli(box, "install", "--scout-default", "codex");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /skipped the Antigravity scout hook: hooks\.json (isn't a JSON object|deveggs-scout or deveggs-scout\.PreInvocation has an unexpected shape)/, text);
+    assert.equal(read(agyHooks(box)), text);
+  }
+});
+
+test("withNamedScoutHook repoints a moved checkout in place; withoutNamedScoutHook keeps others' entries under the name", () => {
+  const moved = { "deveggs-scout": { enabled: true, PreInvocation: [{ type: "command", command: "/old/deveggs/bin/deveggs scout --hook --harness antigravity", timeout: 5 }] } };
+  const next = withNamedScoutHook(moved, scoutCommand("/new", "antigravity"));
+  assert.equal(next?.where, "updated the scout hook");
+  assert.deepEqual(next?.settings, { "deveggs-scout": { enabled: true, PreInvocation: [{ type: "command", command: "/new/bin/deveggs scout --hook --harness antigravity 2>/dev/null || true", timeout: SCOUT_HOOK_TIMEOUT }] } });
+  assert.deepEqual(withoutNamedScoutHook(next?.settings ?? {}).settings, {}, "a name left with only enabled goes");
+  const shared = { "deveggs-scout": { PreInvocation: [{ type: "command", command: "echo mine" }, { type: "command", command: "/x/bin/deveggs scout --hook --harness antigravity" }] } };
+  const out = withoutNamedScoutHook(shared);
+  assert.equal(out.removed.length, 1);
+  assert.deepEqual(out.settings, { "deveggs-scout": { PreInvocation: [{ type: "command", command: "echo mine" }] } });
+  const untouched = { herdr: { PreInvocation: [{ command: "deveggs scout --hook" }] } };
+  assert.deepEqual(withoutNamedScoutHook(untouched), { settings: untouched, removed: [] }, "only its own name is ever touched");
+});
+
+test("promptScoutDefault lists the agents, marks the recommended one, and reads the choice", () => {
+  const both: AgentCandidate[] = [
+    { agent: "claude-code", checker: "claude -p", signedIn: false },
+    { agent: "codex", checker: "codex exec", signedIn: true },
+  ];
+  const run = (answers: string[], candidates = both): { pick: ReturnType<typeof promptScoutDefault>; said: string[]; asked: string[] } => {
+    const said: string[] = [];
+    const asked: string[] = [];
+    const pick = promptScoutDefault(["Antigravity"], candidates, (q) => (asked.push(q), answers.shift() ?? ""), (l) => said.push(l));
+    return { pick, said, asked };
+  };
+  const enter = run([""]);
+  assert.equal(enter.pick, "codex", "Enter takes the recommended (signed-in) one");
+  assert.deepEqual(enter.said, [
+    "🔭 Default scout agent: Antigravity has no isolated headless mode, so its scout hook borrows one of these to check each prompt in a fresh context:",
+    "   1) claude-code claude -p  sign-in not detected",
+    "   2) codex       codex exec signed in   ← recommended",
+    "   3) none        no scout in Antigravity; your preferences still load at session start",
+  ]);
+  assert.deepEqual(enter.asked, ["   Pick 1-3 [2]: "]);
+  assert.equal(run(["1"]).pick, "claude-code");
+  assert.equal(run(["claude"]).pick, "claude-code");
+  assert.equal(run(["3"]).pick, "none");
+  const retry = run(["9", "none"]);
+  assert.equal(retry.pick, "none");
+  assert.match(retry.said.join("\n"), /"9" isn't one of them/);
+  assert.throws(() => run(["x", "y", "z"]), /no default scout agent picked; rerun deveggs install, or pass --scout-default/);
+  const one = run([""], [{ agent: "claude-code", checker: "claude -p", signedIn: false }]);
+  assert.equal(one.pick, "claude-code", "a single candidate is still shown and confirmed");
+  assert.deepEqual(one.asked, ["   Pick 1-2 [1]: "]);
+  const none = run([], []);
+  assert.equal(none.pick, undefined);
+  assert.equal(none.asked.length, 0, "nothing to ask");
+  assert.match(none.said[0] ?? "", /neither claude nor codex is on your PATH, so Antigravity gets no scout hook/);
+});
+
+test("scoutCandidates finds claude and codex on PATH, with cheap sign-in hints", () => {
+  const box = sandbox();
+  const bin = fakePath(box, { codex: "exit 0" }, false);
+  assert.deepEqual(scoutCandidates({ PATH: bin }, box.home), [{ agent: "codex", checker: "codex exec", signedIn: false }]);
+  assert.deepEqual(scoutCandidates({ PATH: bin, OPENAI_API_KEY: "k" }, box.home), [{ agent: "codex", checker: "codex exec", signedIn: true }]);
+  assert.deepEqual(scoutCandidates({ PATH: "" }, box.home), []);
+  assert.equal(recommendedAgent([]), undefined);
+});
+
+test("switching the default to none takes away an Antigravity hook an earlier install added", () => {
+  const box = wiredAgy();
+  assert.equal(cli(box, "install", "--scout-default", "codex").status, 0);
+  const r = cli(box, "install", "--scout-default", "none");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /removed the Antigravity scout hook: the default scout agent is now none/);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
+  assert.equal(savedDefault(box), "none");
+});
+
+test("DEVEGGS_SCOUT_DEFAULT answers install's question without being saved", () => {
+  const box = wiredAgy();
+  box.env["DEVEGGS_SCOUT_DEFAULT"] = "claude-code";
+  const r = cli(box, "install");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /checks with the default scout agent, claude-code \(claude -p\)/);
+  assert.match(r.stdout, /🔭 default scout agent: claude-code \(claude -p\), from DEVEGGS_SCOUT_DEFAULT, not saved/);
+  assert.equal(savedDefault(box), "");
+});
+
+test("a default that can't be saved (no git) warns and skips the borrowing hook instead of failing midway", () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".gemini", "antigravity-cli"), { recursive: true });
+  box.env["PATH"] = fakePath(box, { claude: "exit 0", codex: "exit 0" }, false);
+  const r = cli(box, "install", "--scout-default", "codex");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /couldn't save the default scout agent .*; set DEVEGGS_SCOUT_DEFAULT=codex instead/);
+  assert.match(r.stdout, /skipped the Antigravity scout hook: no default scout agent/);
+  assert.match(r.stdout, /installed: copies .* inline/, "the rest of install still ran");
+  assert.equal(existsSync(agyHooks(box)), false);
 });
