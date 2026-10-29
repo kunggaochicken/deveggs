@@ -18,15 +18,15 @@ repo. `deveggs where` prints the path.
 - **Core principle: deveggs is a harness.** It's built to guarantee the developer's
   preferences are loaded and attended to at any point in a session, so that must never
   depend on an agent remembering to read them: instructions get dropped once context
-  gets complex. The install block loads them at session start; in Claude Code, the scout
-  hook keeps the ones that fit each prompt in view mid-session.
+  gets complex. The install block loads them at session start; in Claude Code and Codex,
+  the scout hook keeps the ones that fit each prompt in view mid-session.
   Wherever a harness allows it, guarantee loading and attention in code (managed blocks
   in global instructions, hooks); instruction text is the fallback, not the mechanism.
 
   | Layer | Lives in | Add a harness by |
   |---|---|---|
   | Code-enforced loading | `deveggs install` (`src/install.ts`): a managed block in each harness's global instructions; `render` keeps inline copies in sync | adding it to `SPECS` |
-  | Code-enforced attention | `deveggs scout --hook` (`src/scout.ts`): a Claude Code `UserPromptSubmit` hook that `deveggs install` adds to `~/.claude/settings.json`; a fresh-context `claude -p` names the eggs that fit each prompt ([design](docs/design-docs/egg-scout/design.md)) | wiring a prompt-submit hook that can inject context, in `src/install.ts` |
+  | Code-enforced attention | `deveggs scout --hook --harness <h>` (`src/scout.ts`): each harness's own `UserPromptSubmit` hook, added by `deveggs install` (`~/.claude/settings.json`, `~/.codex/hooks.json`), where that harness's own headless CLI (`claude -p`, `codex exec`) names the eggs that fit each prompt in a fresh context. A harness never calls another's model ([design](docs/design-docs/egg-scout/design.md)) | an `Adapter` in `src/scout.ts` (transcript reader, headless checker, hook output) and a `hook` in its `SPECS` entry in `src/install.ts`; only where its hook can inject context and its headless mode can run isolated |
   | Per-harness setup (skill links, the deveggs prompt, anything that needs the developer's yes) | `INSTALL.md`, as agent-native instructions | adding a row to its table |
 
 ## Personal basket vs shared baskets

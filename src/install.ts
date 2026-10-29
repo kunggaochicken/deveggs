@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { BasketError } from "./basket.ts";
-import { HOOK_ARGS } from "./scout.ts";
+import { HOOK_ARGS, type ScoutHarness } from "./scout.ts";
 
 // `deveggs install` loads PREFERENCES.md into every session of a harness through its
 // global instructions file, so no agent has to remember to read it. A harness that
@@ -29,18 +29,60 @@ interface HarnessSpec {
   file: string;
   /** "import": an `@path` line the harness resolves itself; "inline": the preferences' text. */
   mode: "import" | "inline";
+  /** The harness's own prompt-submit hook that runs the scout, when it has one that can inject context. */
+  hook?: HookSpec;
+}
+
+/** Where a harness keeps its prompt-submit hooks. Both shapes are `{hooks: {<event>: [{hooks: [entry]}]}}`. */
+interface HookSpec {
+  harness: ScoutHarness;
+  /** Hooks file, relative to HOME. */
+  file: string;
+  event: "UserPromptSubmit";
+  /** Seconds the harness waits for the hook; the scout itself gives up after 12 s by default. */
+  timeout: number;
+  /** Said after a hook is installed or changed, when the harness needs the developer to act. */
+  after?: string;
 }
 
 const SPECS: Record<Harness, HarnessSpec> = {
-  "claude-code": { home: ".claude", file: join(".claude", "CLAUDE.md"), mode: "import" },
-  codex: { home: ".codex", file: join(".codex", "AGENTS.md"), mode: "inline" },
-  // Gemini CLI and Antigravity both read ~/.gemini/GEMINI.md.
+  "claude-code": {
+    home: ".claude",
+    file: join(".claude", "CLAUDE.md"),
+    mode: "import",
+    hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", timeout: 15 },
+  },
+  codex: {
+    home: ".codex",
+    file: join(".codex", "AGENTS.md"),
+    mode: "inline",
+    // Codex skips a new or changed hook until the developer trusts it (its hash, kept in config.toml).
+    hook: {
+      harness: "codex",
+      file: join(".codex", "hooks.json"),
+      event: "UserPromptSubmit",
+      timeout: 15,
+      after: "Codex runs it once you trust it: start codex and review it in /hooks",
+    },
+  },
+  // Gemini CLI and Antigravity both read ~/.gemini/GEMINI.md. No scout hook: see SCOUT_NOTES.
   gemini: { home: ".gemini", file: join(".gemini", "GEMINI.md"), mode: "inline" },
+};
+
+/**
+ * Why a harness has no scout hook, said by install. Antigravity's PreInvocation hook can
+ * inject steps, but `agy -p` can't run isolated: every run is saved as a conversation and
+ * runs hooks, with no flag to turn them off. Gemini CLI's BeforeAgent hook is documented but
+ * Antigravity CLI replaced it, and it isn't tested here.
+ */
+export const SCOUT_NOTES: Partial<Record<Harness, string>> = {
+  gemini:
+    "· gemini: no scout hook yet: Antigravity's PreInvocation hook can add context, but agy -p has no isolated one-shot mode (each run is saved as a conversation and runs your hooks); preferences still load from GEMINI.md",
 };
 
 /** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
 export const CURSOR_HINT =
-  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules";
+  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook: Cursor's beforeSubmitPrompt hook can't add context";
 
 const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
@@ -143,6 +185,8 @@ export interface Change {
   changed: boolean;
   /** The block written (install) or removed (uninstall). */
   block?: string;
+  /** Set on a scout hook change (rather than an instructions block). */
+  hook?: true;
 }
 
 /** Is a position inside the deveggs prompt section (deveggs:begin … deveggs:end)? */
@@ -197,27 +241,36 @@ export function withoutBlock(text: string): { text: string; removed?: string; st
   return { text: out, removed: found[0], ...(state && { state }) };
 }
 
-// The scout hook: Claude Code also gets one managed UserPromptSubmit entry in
-// ~/.claude/settings.json that runs `deveggs scout --hook` on every prompt (src/scout.ts).
-// It is the second code-enforced piece: the block above guarantees the preferences load,
-// the hook guarantees the ones that fit a prompt get noticed. Settings has no comments to
-// hold markers, so the entry is found by its command containing `deveggs scout --hook`, and
-// every other key and hook is left as it was.
+// The scout hook: each harness with a prompt-submit hook that can inject context (SPECS'
+// `hook`) also gets one managed UserPromptSubmit entry that runs `deveggs scout --hook
+// --harness <it>` on every prompt (src/scout.ts): Claude Code in ~/.claude/settings.json,
+// Codex in ~/.codex/hooks.json, both the same JSON shape. It is the second code-enforced
+// piece: the block above guarantees the preferences load, the hook guarantees the ones
+// that fit a prompt get noticed. JSON has no comments to hold markers, so the entry is
+// found by its command containing `deveggs scout --hook`, and every other key and hook is
+// left as it was.
 
-/** Seconds Claude Code waits for the hook; the scout itself gives up after 12 s by default. */
+/** Seconds Claude Code and Codex wait for the hook; the scout itself gives up after 12 s by default. */
 export const SCOUT_HOOK_TIMEOUT = 15;
 
 export const settingsFile = (home: string): string => join(home, ".claude", "settings.json");
 
+/** The file a harness's scout hook lives in, or undefined when it has none. */
+export const hookFile = (home: string, harness: Harness): string | undefined => {
+  const hook = SPECS[harness].hook;
+  return hook && join(home, hook.file);
+};
+
 /**
- * The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook`, quoted if
- * needed. Its stderr is dropped and it always exits 0, so even a checkout that's gone (or
+ * The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook --harness <h>`,
+ * quoted if needed. The harness is named explicitly, so the scout never guesses which CLI
+ * to ask. Its stderr is dropped and it always exits 0, so even a checkout that's gone (or
  * no node on the hook's PATH) never shows the developer a hook error: fail open outside
  * the process too.
  */
-export function scoutCommand(repo: string): string {
+export function scoutCommand(repo: string, harness?: ScoutHarness): string {
   const bin = join(repo, "bin", "deveggs");
-  return `${/^[\w@%+=:,./-]+$/.test(bin) ? bin : `'${bin.replace(/'/g, `'\\''`)}'`} ${HOOK_ARGS} 2>/dev/null || true`;
+  return `${/^[\w@%+=:,./-]+$/.test(bin) ? bin : `'${bin.replace(/'/g, `'\\''`)}'`} ${HOOK_ARGS}${harness ? ` --harness ${harness}` : ""} 2>/dev/null || true`;
 }
 
 const isScout = (h: unknown): boolean =>
@@ -231,9 +284,10 @@ const indentOf = (text: string): string | number => /^\{\n([ \t]+)"/.exec(text)?
 
 /**
  * Settings with the scout hook in `hooks.UserPromptSubmit`: an existing entry is updated in
- * place (a moved checkout), otherwise one group is appended after the others.
+ * place (a moved checkout), otherwise one group is appended after the others (so, in
+ * Codex, the trust it keeps per hook position stays with every other hook).
  */
-export function withScoutHook(settings: Json, command: string): { settings: Json; where: string } | undefined {
+export function withScoutHook(settings: Json, command: string, timeout = SCOUT_HOOK_TIMEOUT): { settings: Json; where: string } | undefined {
   const out = structuredClone(settings);
   // Create what's missing, but never replace a value of the wrong shape: that's the developer's.
   if (out["hooks"] === undefined) out["hooks"] = {};
@@ -242,7 +296,7 @@ export function withScoutHook(settings: Json, command: string): { settings: Json
   if (hooks["UserPromptSubmit"] === undefined) hooks["UserPromptSubmit"] = [];
   const groups = hooks["UserPromptSubmit"];
   if (!Array.isArray(groups)) return undefined;
-  const entry = { type: "command", command, timeout: SCOUT_HOOK_TIMEOUT };
+  const entry = { type: "command", command, timeout };
   for (const g of groups) {
     const list = isObject(g) && Array.isArray(g["hooks"]) ? (g["hooks"] as unknown[]) : [];
     const at = list.findIndex(isScout);
@@ -291,50 +345,51 @@ function readSettings(file: string): { text: string; settings?: Json } {
 
 const writeJson = (settings: Json, before: string): string => `${JSON.stringify(settings, null, indentOf(before))}\n`;
 
-/** Write through a temp file and rename, so Claude Code never reads a half-written settings.json. */
+/** Write through a temp file and rename, so a harness never reads a half-written hooks file. */
 function writeAtomic(file: string, text: string): void {
   const tmp = `${file}.deveggs-${process.pid}.tmp`;
   writeFileSync(tmp, text);
   renameSync(tmp, file);
 }
 
-function installHook(opts: Options, command: string): Change {
-  const harness: Harness = "claude-code";
-  const file = settingsFile(opts.home);
+function installHook(harness: Harness, hook: HookSpec, opts: Options, repo: string): Change {
+  const file = join(opts.home, hook.file);
+  const name = basename(file);
+  const command = scoutCommand(repo, hook.harness);
   const { text: before, settings } = readSettings(file);
-  if (!settings) return { harness, file, action: "skipped the scout hook: settings.json isn't a JSON object; add it by hand (INSTALL.md)", changed: false };
-  const hooked = withScoutHook(settings, command);
-  if (!hooked) return { harness, file, action: "skipped the scout hook: settings.json hooks or hooks.UserPromptSubmit has an unexpected shape; add it by hand (INSTALL.md)", changed: false };
+  if (!settings) return { harness, file, action: `skipped the scout hook: ${name} isn't a JSON object; add it by hand (INSTALL.md)`, changed: false, hook: true };
+  const hooked = withScoutHook(settings, command, hook.timeout);
+  if (!hooked) return { harness, file, action: `skipped the scout hook: ${name} hooks or hooks.${hook.event} has an unexpected shape; add it by hand (INSTALL.md)`, changed: false, hook: true };
   const { settings: next, where } = hooked;
   const text = writeJson(next, before);
-  const shown = JSON.stringify({ type: "command", command, timeout: SCOUT_HOOK_TIMEOUT });
-  if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: "scout hook already installed; nothing changed", changed: false, block: shown };
+  const shown = JSON.stringify({ type: "command", command, timeout: hook.timeout });
+  if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: "scout hook already installed; nothing changed", changed: false, block: shown, hook: true };
   if (!opts.dryRun) {
     mkdirSync(dirname(file), { recursive: true });
     writeAtomic(file, text);
   }
-  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: scout hook (hooks.UserPromptSubmit runs ${command}); ${where}`, changed: true, block: shown };
+  const after = hook.after ? `. ${hook.after}` : "";
+  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: scout hook (hooks.${hook.event} runs ${command}); ${where}${after}`, changed: true, block: shown, hook: true };
 }
 
-function uninstallHook(opts: Options): Change {
-  const harness: Harness = "claude-code";
-  const file = settingsFile(opts.home);
+function uninstallHook(harness: Harness, hook: HookSpec, opts: Options): Change {
+  const file = join(opts.home, hook.file);
   const { text: before, settings } = readSettings(file);
   const { settings: next, removed } = settings ? withoutScoutHook(settings) : { settings: {}, removed: [] };
-  if (!settings || !removed.length) return { harness, file, action: "scout hook not installed; nothing changed", changed: false };
+  if (!settings || !removed.length) return { harness, file, action: "scout hook not installed; nothing changed", changed: false, hook: true };
   // Nothing left means install created the file (or it held only {}): take it away again.
   const empty = !Object.keys(next).length;
   if (!opts.dryRun) {
     if (empty) rmSync(file);
     else writeAtomic(file, writeJson(next, before));
   }
-  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the scout hook${empty ? "; deleted the settings file it left empty" : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n") };
+  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the scout hook${empty ? `; deleted the ${basename(file)} it left empty` : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n"), hook: true };
 }
 
 interface Options {
   home: string;
-  /** The scout hook's command (Claude Code only); no hook when absent. */
-  scout?: string | undefined;
+  /** The deveggs checkout the scout hooks run; no hooks when absent. */
+  repo?: string | undefined;
   preferences: string;
   dryRun: boolean;
   /** Harnesses named explicitly are wired even before their home folder exists. */
@@ -351,7 +406,8 @@ export function install(harnesses: Harness[], opts: Options): Change[] {
   const rendered = opts.rendered ?? readRendered(opts.preferences);
   return harnesses.flatMap((harness) => {
     const change = installBlock(harness, opts, rendered);
-    return harness === "claude-code" && opts.scout !== undefined && !change.action.startsWith("skipped") ? [change, installHook(opts, opts.scout)] : [change];
+    const hook = SPECS[harness].hook;
+    return hook && opts.repo !== undefined && !change.action.startsWith("skipped") ? [change, installHook(harness, hook, opts, opts.repo)] : [change];
   });
 }
 
@@ -373,7 +429,10 @@ function installBlock(harness: Harness, opts: Options, rendered: string | undefi
 }
 
 export function uninstall(harnesses: Harness[], opts: Options): Change[] {
-  return harnesses.flatMap((harness) => (harness === "claude-code" ? [uninstallBlock(harness, opts), uninstallHook(opts)] : [uninstallBlock(harness, opts)]));
+  return harnesses.flatMap((harness) => {
+    const hook = SPECS[harness].hook;
+    return hook ? [uninstallBlock(harness, opts), uninstallHook(harness, hook, opts)] : [uninstallBlock(harness, opts)];
+  });
 }
 
 function uninstallBlock(harness: Harness, opts: Options): Change {

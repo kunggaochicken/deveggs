@@ -303,8 +303,9 @@ Reading it yourself is the fallback, not the mechanism.
 
 ### The scout's context block
 
-In Claude Code, the `deveggs scout --hook` hook runs a fresh-context check on every
-prompt and may add a block that starts `deveggs scout (fresh-context check)`. It names
+In Claude Code and Codex, the `deveggs scout --hook` hook runs a fresh-context check
+(that harness's own headless CLI) on every prompt and may add a block that starts
+`deveggs scout (fresh-context check)`. It names
 the eggs and chickens that fit this request, each with its fact and why. Apply them,
 cite their ids, and for an egg record the trial once you see how it went. The scout is a
 cheap model and can be wrong: if a named item clearly doesn't fit, skip it and don't

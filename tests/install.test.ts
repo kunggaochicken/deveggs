@@ -51,7 +51,7 @@ test("install is idempotent", () => {
   const once = [read(claudeMd(box)), read(agentsMd(box))];
   const again = cli(box, "install");
   assert.equal(again.status, 0, again.stderr);
-  assert.equal(again.stdout.match(/already installed; nothing changed/g)?.length, 3, again.stdout);
+  assert.equal(again.stdout.match(/already installed; nothing changed/g)?.length, 4, again.stdout);
   assert.deepEqual([read(claudeMd(box)), read(agentsMd(box))], once);
   assert.equal(read(claudeMd(box)).split(BEGIN).length, 2, "one block, not two");
 });
@@ -120,8 +120,9 @@ test("uninstall restores each file exactly", () => {
   assert.equal(r.stdout.match(/removed the managed block; restored the line it replaced/g)?.length, 2, r.stdout);
   assert.equal(read(claudeMd(box)), claude);
   assert.equal(read(agentsMd(box)), codex);
-  assert.equal(cli(box, "uninstall").stdout.match(/not installed; nothing changed/g)?.length, 4);
+  assert.equal(cli(box, "uninstall").stdout.match(/not installed; nothing changed/g)?.length, 5);
   assert.equal(existsSync(join(box.home, ".claude", "settings.json")), false, "the settings file install created is gone");
+  assert.equal(existsSync(join(box.home, ".codex", "hooks.json")), false, "so is the Codex hooks file");
 });
 
 test("without a deveggs section the block is appended, and uninstall takes it out", () => {
@@ -302,11 +303,11 @@ test("install adds one scout hook to settings.json and leaves every other key an
   writeFileSync(settingsJson(box), `${JSON.stringify(OTHERS, null, 4)}\n`);
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook/);
+  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness claude-code 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\n/);
   const text = read(settingsJson(box));
   assert.ok(text.startsWith('{\n    "model"'), "keeps the file's indent");
   const after = JSON.parse(text);
-  const command = `${join(box.checkout, "bin", "deveggs")} scout --hook 2>/dev/null || true`;
+  const command = `${join(box.checkout, "bin", "deveggs")} scout --hook --harness claude-code 2>/dev/null || true`;
   assert.deepEqual(after, {
     ...OTHERS,
     hooks: { ...OTHERS.hooks, UserPromptSubmit: [...OTHERS.hooks.UserPromptSubmit, { hooks: [{ type: "command", command, timeout: SCOUT_HOOK_TIMEOUT }] }] },
@@ -325,7 +326,7 @@ test("install creates settings.json when there is none, and uninstall deletes it
   cli(box, "install", "--harness", "claude-code");
   assert.deepEqual(Object.keys(JSON.parse(read(settingsJson(box)))), ["hooks"]);
   const r = cli(box, "uninstall", "--harness", "claude-code");
-  assert.match(r.stdout, /removed the scout hook; deleted the settings file it left empty/);
+  assert.match(r.stdout, /removed the scout hook; deleted the settings\.json it left empty/);
   assert.equal(existsSync(settingsJson(box)), false);
 });
 
@@ -334,7 +335,7 @@ test("--dry-run shows the scout hook and writes no settings", () => {
   writeFileSync(settingsJson(box), JSON.stringify(OTHERS));
   const r = cli(box, "install", "--harness", "claude-code", "--dry-run");
   assert.match(r.stdout, /would install: scout hook/);
-  assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook 2>\/dev\/null \|\| true","timeout":15\}/);
+  assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook --harness claude-code 2>\/dev\/null \|\| true","timeout":15\}/);
   assert.equal(read(settingsJson(box)), JSON.stringify(OTHERS));
   cli(box, "install", "--harness", "claude-code");
   const dry = cli(box, "uninstall", "--harness", "claude-code", "--dry-run");
@@ -352,12 +353,19 @@ test("settings.json that isn't a JSON object is left alone", () => {
   assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /scout hook not installed; nothing changed/);
 });
 
-test("Codex and Gemini get no hook; a skipped Claude Code gets none either", () => {
+test("Gemini gets no hook and a note saying why; a skipped Claude Code or Codex gets no hook either", () => {
   const { box } = wired();
   rmSync(join(box.home, ".claude"), { recursive: true });
+  rmSync(join(box.home, ".codex"), { recursive: true });
+  mkdirSync(join(box.home, ".gemini"));
   const r = cli(box, "install");
-  assert.doesNotMatch(r.stdout, /scout hook/);
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /scout hook \(/);
+  assert.match(r.stdout, /· gemini: no scout hook yet: Antigravity's PreInvocation hook can add context, but agy -p has no isolated one-shot mode/);
   assert.equal(existsSync(settingsJson(box)), false);
+  assert.equal(existsSync(codexHooks(box)), false);
+  assert.equal(existsSync(join(box.home, ".gemini", "settings.json")), false);
+  assert.doesNotMatch(cli(box, "uninstall").stdout, /gemini: .*settings\.json/, "uninstall never looks for a Gemini hook");
 });
 
 test("withScoutHook repoints a moved checkout in place; withoutScoutHook keeps groups shared with other hooks", () => {
@@ -373,11 +381,17 @@ test("withScoutHook repoints a moved checkout in place; withoutScoutHook keeps g
   assert.deepEqual(withoutScoutHook({ a: 1 }), { settings: { a: 1 }, removed: [] });
 });
 
-test("scoutCommand quotes a checkout path with spaces, and uninstall still finds it", () => {
+test("scoutCommand names the harness, quotes a checkout path with spaces, and uninstall still finds it", () => {
+  assert.equal(scoutCommand("/opt/deveggs", "codex"), "/opt/deveggs/bin/deveggs scout --hook --harness codex 2>/dev/null || true");
   assert.equal(scoutCommand("/opt/deveggs"), "/opt/deveggs/bin/deveggs scout --hook 2>/dev/null || true");
-  const quoted = scoutCommand("/Users/me/My Tools/deveggs");
-  assert.equal(quoted, "'/Users/me/My Tools/deveggs/bin/deveggs' scout --hook 2>/dev/null || true");
+  const quoted = scoutCommand("/Users/me/My Tools/deveggs", "claude-code");
+  assert.equal(quoted, "'/Users/me/My Tools/deveggs/bin/deveggs' scout --hook --harness claude-code 2>/dev/null || true");
   assert.equal(withoutScoutHook(withScoutHook({}, quoted)?.settings ?? {}).removed.length, 1);
+  // A hook from before --harness existed is found and updated in place.
+  const old = { hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: scoutCommand("/opt/deveggs"), timeout: 15 }] }] } };
+  const moved = withScoutHook(old, scoutCommand("/opt/deveggs", "claude-code"));
+  assert.equal(moved?.where, "updated the scout hook");
+  assert.equal((moved?.settings["hooks"] as { UserPromptSubmit: { hooks: { command: string }[] }[] }).UserPromptSubmit[0]?.hooks[0]?.command, scoutCommand("/opt/deveggs", "claude-code"));
 });
 
 test("settings of an unexpected shape are never overwritten", () => {
@@ -415,4 +429,89 @@ test("install from a git worktree warns that the hook is pinned to it", () => {
   writeFileSync(join(box.checkout, ".git"), "gitdir: /somewhere/.git/worktrees/x\n");
   const r = cli(box, "install", "--harness", "claude-code");
   assert.match(r.stderr, /the scout hook points into a git worktree/);
+  const codex = cli(wiredFromWorktree(), "install", "--harness", "codex");
+  assert.match(codex.stderr, /the scout hook points into a git worktree/, "a Codex hook warns too");
+});
+
+function wiredFromWorktree(): Sandbox {
+  const { box } = wired();
+  writeFileSync(join(box.checkout, ".git"), "gitdir: /somewhere/.git/worktrees/x\n");
+  return box;
+}
+
+// ── the scout hook in ~/.codex/hooks.json ───────────────────────────────────────────
+
+const codexHooks = (box: Sandbox): string => join(box.home, ".codex", "hooks.json");
+
+/** hooks.json like a real developer's: other tools' UserPromptSubmit, SessionStart and Stop hooks. */
+const CODEX_OTHERS = {
+  hooks: {
+    SessionStart: [{ hooks: [{ type: "command", command: "bash ~/.codex/herdr-agent-state.sh session", timeout: 10 }] }],
+    UserPromptSubmit: [{ hooks: [{ type: "command", command: ": orca-agent-hook-form=1; /bin/sh ~/.orca/agent-hooks/codex-hook.sh || :", timeout: 10 }] }],
+    Stop: [{ hooks: [{ type: "command", command: "say done" }] }],
+  },
+};
+
+test("install adds the Codex scout hook to hooks.json, says to trust it, and uninstall takes out exactly it", () => {
+  const { box } = wired();
+  writeFileSync(codexHooks(box), `${JSON.stringify(CODEX_OTHERS, null, 2)}\n`);
+  const r = cli(box, "install", "--harness", "codex");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /codex: .*\.codex\/hooks\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness codex 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\. Codex runs it once you trust it: start codex and review it in \/hooks/,
+  );
+  assert.match(r.stdout, /in codex, the scout hook names the ones that fit each prompt/);
+  const command = `${join(box.checkout, "bin", "deveggs")} scout --hook --harness codex 2>/dev/null || true`;
+  const text = read(codexHooks(box));
+  assert.deepEqual(JSON.parse(text), {
+    hooks: { ...CODEX_OTHERS.hooks, UserPromptSubmit: [...CODEX_OTHERS.hooks.UserPromptSubmit, { hooks: [{ type: "command", command, timeout: 15 }] }] },
+  });
+  assert.equal(existsSync(settingsJson(box)), false, "--harness codex leaves Claude Code's settings alone");
+  const again = cli(box, "install", "--harness", "codex");
+  assert.match(again.stdout, /scout hook already installed; nothing changed/);
+  assert.doesNotMatch(again.stdout, /trust it/, "nothing changed, so nothing to re-trust");
+  assert.equal(read(codexHooks(box)), text, "idempotent");
+  const removed = cli(box, "uninstall", "--harness", "codex");
+  assert.match(removed.stdout, /codex: .*hooks\.json\n\s+removed the scout hook\n/);
+  assert.deepEqual(JSON.parse(read(codexHooks(box))), CODEX_OTHERS, "every other hook is kept, in order");
+});
+
+test("install creates ~/.codex/hooks.json when there is none, and uninstall deletes it again", () => {
+  const { box } = wired();
+  cli(box, "install", "--harness", "codex");
+  assert.deepEqual(Object.keys(JSON.parse(read(codexHooks(box)))), ["hooks"]);
+  const r = cli(box, "uninstall", "--harness", "codex");
+  assert.match(r.stdout, /removed the scout hook; deleted the hooks\.json it left empty/);
+  assert.equal(existsSync(codexHooks(box)), false);
+});
+
+test("--dry-run shows the Codex hook line and writes nothing", () => {
+  const { box } = wired();
+  writeFileSync(codexHooks(box), JSON.stringify(CODEX_OTHERS));
+  const r = cli(box, "install", "--dry-run");
+  assert.match(r.stdout, /codex: .*hooks\.json\n\s+would install: scout hook \(hooks\.UserPromptSubmit runs .*--harness codex/);
+  assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook --harness codex 2>\/dev\/null \|\| true","timeout":15\}/);
+  assert.equal(read(codexHooks(box)), JSON.stringify(CODEX_OTHERS));
+  assert.equal(existsSync(settingsJson(box)), false);
+});
+
+test("a Codex hooks.json that isn't a JSON object, or has an odd shape, is left alone", () => {
+  for (const odd of ["not json", JSON.stringify({ hooks: { UserPromptSubmit: { x: 1 } } })]) {
+    const { box } = wired();
+    writeFileSync(codexHooks(box), odd);
+    const r = cli(box, "install", "--harness", "codex");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /skipped the scout hook: hooks\.json (isn't a JSON object|hooks or hooks\.UserPromptSubmit has an unexpected shape)/);
+    assert.match(r.stdout, /installed: copies/, "the AGENTS.md block still installs");
+    assert.equal(read(codexHooks(box)), odd);
+  }
+});
+
+test("install without --harness wires both hooks, each naming its own harness", () => {
+  const { box } = wired();
+  assert.equal(cli(box, "install").status, 0);
+  assert.match(read(settingsJson(box)), /scout --hook --harness claude-code/);
+  assert.match(read(codexHooks(box)), /scout --hook --harness codex/);
+  assert.doesNotMatch(read(settingsJson(box)), /--harness codex/);
 });
