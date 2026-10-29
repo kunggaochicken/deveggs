@@ -7,6 +7,11 @@ paste the prompt again. You do the wiring yourself with ordinary file edits and
 symlinks. There is no install script. **Stop and ask whenever a step says to
 confirm.** deveggs is explicit memory, so nothing changes without the developer's yes.
 
+deveggs is a harness: it guarantees the developer's preferences are loaded at any
+point in a session, in code rather than by asking agents to remember them. So the one
+step code does for you is loading them (`deveggs install`, step 5). The instruction to
+read them is only the fallback for a harness it can't load into.
+
 1. **Check prerequisites.** `node --version` must be >= 22.18 and `git` must be on
    PATH. If not, tell the developer what's missing and stop.
 2. **Get the repo.** Ask where they keep repos (default `~/Projects`).
@@ -79,7 +84,7 @@ confirm.** deveggs is explicit memory, so nothing changes without the developer'
      no imports, and `~/.gemini/GEMINI.md`, whose imports can't reach `~/.deveggs`, the
      preferences inline, re-synced by every `deveggs render`). Include
      the output of `<repo>/bin/deveggs install --dry-run` in the plan. Other harnesses
-     keep the read line.
+     keep the read line as the fallback.
 
    Show the developer the whole plan as one list: every harness, every link, every
    file. **Confirm**, then make the changes, then run `<repo>/bin/deveggs install`
