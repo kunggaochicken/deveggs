@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { BasketError } from "./basket.ts";
-import { HOOK_ARGS, type ScoutHarness } from "./scout.ts";
+import { CHECKERS, HOOK_ARGS, SCOUT_AGENTS, type ScoutAgent, type ScoutDefault, type ScoutHarness } from "./scout.ts";
 
 // `deveggs install` loads PREFERENCES.md into every session of a harness through its
 // global instructions file, so no agent has to remember to read it. A harness that
@@ -39,16 +39,24 @@ interface HarnessSpec {
   hook?: HookSpec;
 }
 
-/** Where a harness keeps its prompt-submit hooks. Both shapes are `{hooks: {<event>: [{hooks: [entry]}]}}`. */
+/**
+ * Where a harness keeps its prompt hooks. "nested" (Claude Code, Codex):
+ * `{hooks: {<event>: [{hooks: [entry]}]}}`. "named" (Antigravity): `{<name>: {<event>: [entry]}}`.
+ */
 interface HookSpec {
   harness: ScoutHarness;
   /** Hooks file, relative to HOME. */
   file: string;
-  event: "UserPromptSubmit";
+  event: "UserPromptSubmit" | "PreInvocation";
+  shape: "nested" | "named";
   /** Seconds the harness waits for the hook; the scout itself gives up after 12 s by default. */
   timeout: number;
   /** Said after a hook is installed or changed, when the harness needs the developer to act. */
   after?: string;
+  /** Paths (relative to HOME) whose presence means this hook's harness is installed; always installed when absent. */
+  present?: string[];
+  /** The harness has no isolated headless mode, so its scout borrows the default scout agent's checker. */
+  borrows?: true;
 }
 
 const SPECS: Record<Harness, HarnessSpec> = {
@@ -56,7 +64,7 @@ const SPECS: Record<Harness, HarnessSpec> = {
     home: ".claude",
     file: join(".claude", "CLAUDE.md"),
     mode: "import",
-    hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", timeout: SCOUT_HOOK_TIMEOUT },
+    hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", shape: "nested", timeout: SCOUT_HOOK_TIMEOUT },
   },
   codex: {
     home: ".codex",
@@ -67,28 +75,45 @@ const SPECS: Record<Harness, HarnessSpec> = {
       harness: "codex",
       file: join(".codex", "hooks.json"),
       event: "UserPromptSubmit",
+      shape: "nested",
       timeout: SCOUT_HOOK_TIMEOUT,
       after: "Codex runs it once you trust it: start codex and review it in /hooks",
     },
   },
-  // Gemini CLI and Antigravity both read ~/.gemini/GEMINI.md. No scout hook: see SCOUT_NOTES.
-  gemini: { home: ".gemini", file: join(".gemini", "GEMINI.md"), mode: "inline" },
+  // Gemini CLI and Antigravity both read ~/.gemini/GEMINI.md. Antigravity's PreInvocation hook
+  // can inject context but `agy -p` can't run isolated (every run is saved as a conversation and
+  // runs hooks), so its scout hook borrows the default scout agent's checker. Gemini CLI: see SCOUT_NOTES.
+  gemini: {
+    home: ".gemini",
+    file: join(".gemini", "GEMINI.md"),
+    mode: "inline",
+    hook: {
+      harness: "antigravity",
+      file: join(".gemini", "config", "hooks.json"),
+      event: "PreInvocation",
+      shape: "named",
+      timeout: SCOUT_HOOK_TIMEOUT,
+      present: [join(".gemini", "antigravity-cli"), join(".gemini", "antigravity"), join(".gemini", "config")],
+      borrows: true,
+    },
+  },
 };
 
+/** How messages name the harness a scout hook runs in. */
+export const SCOUT_HARNESS_NAMES: Record<ScoutHarness, string> = { "claude-code": "Claude Code", codex: "Codex", antigravity: "Antigravity" };
+
 /**
- * Why a harness has no scout hook, said by install. Antigravity's PreInvocation hook can
- * inject steps, but `agy -p` can't run isolated: every run is saved as a conversation and
- * runs hooks, with no flag to turn them off. Gemini CLI's BeforeAgent hook is documented but
- * Antigravity CLI replaced it, and it isn't tested here.
+ * What install says about a harness's scout beyond its hook. Gemini CLI's BeforeAgent hook
+ * is documented, but not whether hooks need enabling or what its transcript looks like, it
+ * isn't installed here to test, and Antigravity CLI replaced it.
  */
 export const SCOUT_NOTES: Partial<Record<Harness, string>> = {
-  gemini:
-    "· gemini: no scout hook yet: Antigravity's PreInvocation hook can add context, but agy -p has no isolated one-shot mode (each run is saved as a conversation and runs your hooks); preferences still load from GEMINI.md",
+  gemini: "· gemini: Gemini CLI has no scout hook yet (its BeforeAgent hook is untested here); preferences still load from GEMINI.md",
 };
 
 /** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
 export const CURSOR_HINT =
-  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook: Cursor's beforeSubmitPrompt hook can't add context";
+  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook: Cursor's beforeSubmitPrompt hook can't add context, so not even the default scout agent can help it";
 
 const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
@@ -326,6 +351,46 @@ export function withoutScoutHook(settings: Json): { settings: Json; removed: unk
   return { settings: out, removed };
 }
 
+/** The key deveggs owns in Antigravity's hooks.json, which maps hook names to their events. */
+export const NAMED_HOOK = "deveggs-scout";
+
+/**
+ * Antigravity hooks with the scout hook in `deveggs-scout.<event>` (its own name, so every
+ * other named hook stays as it was); an existing entry is updated in place.
+ */
+export function withNamedScoutHook(settings: Json, command: string, timeout = SCOUT_HOOK_TIMEOUT, event = "PreInvocation"): { settings: Json; where: string } | undefined {
+  const out = structuredClone(settings);
+  if (out[NAMED_HOOK] === undefined) out[NAMED_HOOK] = {};
+  const named = out[NAMED_HOOK];
+  if (!isObject(named)) return undefined;
+  if (named[event] === undefined) named[event] = [];
+  const list = named[event];
+  if (!Array.isArray(list)) return undefined;
+  const entry = { type: "command", command, timeout };
+  const at = list.findIndex(isScout);
+  if (at !== -1) {
+    list[at] = { ...(list[at] as Json), ...entry };
+    return { settings: out, where: "updated the scout hook" };
+  }
+  list.push(entry);
+  return { settings: out, where: `added a ${event} hook named ${NAMED_HOOK}` };
+}
+
+/** Antigravity hooks without the scout hook, dropping the `deveggs-scout` name once it holds nothing else. */
+export function withoutNamedScoutHook(settings: Json, event = "PreInvocation"): { settings: Json; removed: unknown[] } {
+  const out = structuredClone(settings);
+  const named = out[NAMED_HOOK];
+  if (!isObject(named) || !Array.isArray(named[event])) return { settings, removed: [] };
+  const list = named[event] as unknown[];
+  const removed = list.filter(isScout);
+  if (!removed.length) return { settings, removed };
+  const kept = list.filter((h) => !isScout(h));
+  if (kept.length) named[event] = kept;
+  else delete named[event];
+  if (Object.keys(named).every((k) => k === "enabled")) delete out[NAMED_HOOK];
+  return { settings: out, removed };
+}
+
 function readSettings(file: string): { text: string; settings?: Json } {
   if (!existsSync(file)) return { text: "", settings: {} };
   const text = readFileSync(file, "utf8");
@@ -347,38 +412,60 @@ function writeAtomic(file: string, text: string): void {
   renameSync(tmp, file);
 }
 
-function installHook(harness: Harness, hook: HookSpec, opts: Options, repo: string): Change {
+/** "scout hook", naming the harness where the file alone doesn't (Antigravity shares ~/.gemini with Gemini CLI). */
+const hookLabel = (hook: HookSpec): string => (hook.borrows ? `${SCOUT_HARNESS_NAMES[hook.harness]} scout hook` : "scout hook");
+
+/** Is this hook's harness installed? A hook with `present` paths (Antigravity, which shares ~/.gemini with Gemini CLI) needs one of them, even when its harness is named. */
+const hookPresent = (hook: HookSpec, home: string): boolean =>
+  !hook.present || hook.present.some((p) => existsSync(join(home, p)));
+
+/** The checker a borrowing hook runs, for messages. */
+const borrowedChecker = (choice: Options["scoutDefault"]): string =>
+  choice === "ask" ? "the default scout agent you pick" : choice && choice !== "none" ? `the default scout agent, ${choice} (${CHECKERS[choice].name})` : "no default scout agent";
+
+function installHook(harness: Harness, hook: HookSpec, opts: Options, repo: string): Change | undefined {
   const file = join(opts.home, hook.file);
   const name = basename(file);
+  const label = hookLabel(hook);
+  if (!hookPresent(hook, opts.home)) return undefined;
+  if (hook.borrows && (opts.scoutDefault === undefined || opts.scoutDefault === "none")) {
+    const why = opts.scoutDefault === "none" ? "the default scout agent is none" : "no default scout agent (claude or codex) to check with";
+    return { harness, file, action: `skipped the ${label}: ${why}; it has no isolated headless mode of its own`, changed: false, hook: true };
+  }
   const command = scoutCommand(repo, hook.harness);
   const { text: before, settings } = readSettings(file);
-  if (!settings) return { harness, file, action: `skipped the scout hook: ${name} isn't a JSON object; add it by hand (INSTALL.md)`, changed: false, hook: true };
-  const hooked = withScoutHook(settings, command, hook.timeout);
-  if (!hooked) return { harness, file, action: `skipped the scout hook: ${name} hooks or hooks.${hook.event} has an unexpected shape; add it by hand (INSTALL.md)`, changed: false, hook: true };
-  const { settings: next, where } = hooked;
+  if (!settings) return { harness, file, action: `skipped the ${label}: ${name} isn't a JSON object; add it by hand (INSTALL.md)`, changed: false, hook: true };
+  const hooked = hook.shape === "named" ? withNamedScoutHook(settings, command, hook.timeout, hook.event) : withScoutHook(settings, command, hook.timeout);
+  const where = hook.shape === "named" ? `${NAMED_HOOK} or ${NAMED_HOOK}.${hook.event}` : `hooks or hooks.${hook.event}`;
+  if (!hooked) return { harness, file, action: `skipped the ${label}: ${name} ${where} has an unexpected shape; add it by hand (INSTALL.md)`, changed: false, hook: true };
+  const { settings: next, where: did } = hooked;
   const text = writeJson(next, before);
   const shown = JSON.stringify({ type: "command", command, timeout: hook.timeout });
-  if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: "scout hook already installed; nothing changed", changed: false, block: shown, hook: true };
+  const checks = hook.borrows ? `; checks with ${borrowedChecker(opts.scoutDefault)}` : "";
+  if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: `${label} already installed${checks}; nothing changed`, changed: false, block: shown, hook: true };
   if (!opts.dryRun) {
     mkdirSync(dirname(file), { recursive: true });
     writeAtomic(file, text);
   }
   const after = hook.after ? `. ${hook.after}` : "";
-  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: scout hook (hooks.${hook.event} runs ${command}); ${where}${after}`, changed: true, block: shown, hook: true };
+  const at = hook.shape === "named" ? `${NAMED_HOOK}.${hook.event}` : `hooks.${hook.event}`;
+  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: ${label} (${at} runs ${command})${checks}; ${did}${after}`, changed: true, block: shown, hook: true };
 }
 
 function uninstallHook(harness: Harness, hook: HookSpec, opts: Options): Change {
   const file = join(opts.home, hook.file);
+  const label = hookLabel(hook);
   const { text: before, settings } = readSettings(file);
-  const { settings: next, removed } = settings ? withoutScoutHook(settings) : { settings: {}, removed: [] };
-  if (!settings || !removed.length) return { harness, file, action: "scout hook not installed; nothing changed", changed: false, hook: true };
+  const without = hook.shape === "named" ? withoutNamedScoutHook : withoutScoutHook;
+  const { settings: next, removed } = settings ? without(settings) : { settings: {}, removed: [] };
+  if (!settings || !removed.length) return { harness, file, action: `${label} not installed; nothing changed`, changed: false, hook: true };
   // Nothing left means install created the file (or it held only {}): take it away again.
   const empty = !Object.keys(next).length;
   if (!opts.dryRun) {
     if (empty) rmSync(file);
     else writeAtomic(file, writeJson(next, before));
   }
-  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the scout hook${empty ? `; deleted the ${basename(file)} it left empty` : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n"), hook: true };
+  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the ${label}${empty ? `; deleted the ${basename(file)} it left empty` : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n"), hook: true };
 }
 
 interface Options {
@@ -391,6 +478,8 @@ interface Options {
   explicit: boolean;
   /** The rendered preferences, when they aren't on disk yet (a dry run). */
   rendered?: string | undefined;
+  /** The default scout agent borrowing hooks check with; "ask" in a dry run that would prompt for it. */
+  scoutDefault?: ScoutDefault | "ask" | undefined;
 }
 
 function readRendered(preferences: string): string | undefined {
@@ -402,7 +491,8 @@ export function install(harnesses: Harness[], opts: Options): Change[] {
   return harnesses.flatMap((harness) => {
     const change = installBlock(harness, opts, rendered);
     const hook = SPECS[harness].hook;
-    return hook && opts.repo !== undefined && !change.action.startsWith("skipped") ? [change, installHook(harness, hook, opts, opts.repo)] : [change];
+    const hooked = hook && opts.repo !== undefined && !change.action.startsWith("skipped") ? installHook(harness, hook, opts, opts.repo) : undefined;
+    return hooked ? [change, hooked] : [change];
   });
 }
 
@@ -426,7 +516,8 @@ function installBlock(harness: Harness, opts: Options, rendered: string | undefi
 export function uninstall(harnesses: Harness[], opts: Options): Change[] {
   return harnesses.flatMap((harness) => {
     const hook = SPECS[harness].hook;
-    return hook ? [uninstallBlock(harness, opts), uninstallHook(harness, hook, opts)] : [uninstallBlock(harness, opts)];
+    const skip = hook && !hookPresent(hook, opts.home) && !existsSync(join(opts.home, hook.file));
+    return hook && !skip ? [uninstallBlock(harness, opts), uninstallHook(harness, hook, opts)] : [uninstallBlock(harness, opts)];
   });
 }
 
@@ -466,4 +557,118 @@ export function sync(home: string, preferences: string): string[] {
     synced.push(file);
   }
   return synced;
+}
+
+// The default scout agent. A harness whose hook can inject context but that has no isolated
+// headless mode (Antigravity) borrows another agent's checker; `deveggs install` asks the
+// developer which, once per machine, and saves it (src/store.ts).
+
+/** The harnesses being installed whose scout hook would borrow the default agent, by name. */
+export function borrowingHarnesses(harnesses: Harness[], home: string, explicit: boolean): string[] {
+  return harnesses.flatMap((h) => {
+    const hook = SPECS[h].hook;
+    const installed = explicit || existsSync(join(home, SPECS[h].home));
+    return hook?.borrows && installed && hookPresent(hook, home) ? [SCOUT_HARNESS_NAMES[hook.harness]] : [];
+  });
+}
+
+/** Does uninstalling these harnesses remove every hook that borrows the default agent? */
+export const uninstallsBorrowers = (harnesses: Harness[]): boolean =>
+  (Object.keys(SPECS) as Harness[]).filter((h) => SPECS[h].hook?.borrows).every((h) => harnesses.includes(h));
+
+export interface AgentCandidate {
+  agent: ScoutAgent;
+  /** The headless command it runs, e.g. `claude -p`. */
+  checker: string;
+  /** Signed in, as far as an API key or its login file cheaply tells (never runs the CLI). */
+  signedIn: boolean;
+}
+
+const BINARIES: Record<ScoutAgent, string> = { "claude-code": "claude", codex: "codex" };
+
+function onPath(bin: string, env: NodeJS.ProcessEnv): boolean {
+  for (const dir of (env["PATH"] ?? "").split(delimiter)) {
+    if (!dir) continue;
+    const file = join(dir, bin);
+    try {
+      if (!statSync(file).isFile()) continue;
+      accessSync(file, constants.X_OK);
+      return true;
+    } catch {
+      // not here
+    }
+  }
+  return false;
+}
+
+/** Cheap sign-in hints: an API key, or the login file each CLI keeps. Never runs the CLI. */
+function signedIn(agent: ScoutAgent, env: NodeJS.ProcessEnv, home: string): boolean {
+  if (agent === "claude-code") {
+    if (env["ANTHROPIC_API_KEY"]) return true;
+    try {
+      return /"oauthAccount"\s*:\s*\{/.test(readFileSync(join(home, ".claude.json"), "utf8"));
+    } catch {
+      return false;
+    }
+  }
+  return !!env["OPENAI_API_KEY"] || !!env["CODEX_API_KEY"] || existsSync(join(env["CODEX_HOME"] || join(home, ".codex"), "auth.json"));
+}
+
+/** The agents whose headless CLI is on PATH, in SCOUT_AGENTS order. */
+export function scoutCandidates(env: NodeJS.ProcessEnv, home: string): AgentCandidate[] {
+  return SCOUT_AGENTS.filter((a) => onPath(BINARIES[a], env)).map((agent) => ({ agent, checker: CHECKERS[agent].name, signedIn: signedIn(agent, env, home) }));
+}
+
+/** The first signed-in candidate, else the first found. */
+export const recommendedAgent = (candidates: AgentCandidate[]): AgentCandidate | undefined => candidates.find((c) => c.signedIn) ?? candidates[0];
+
+const describe = (c: AgentCandidate, rec: AgentCandidate | undefined): string =>
+  `${c.agent} (${c.checker}${c.signedIn ? ", signed in" : ""}${c === rec ? ", recommended" : ""})`;
+
+/** One line for an agent that runs install without a terminal: ask the developer, then rerun with the flag. */
+export function needsInputMessage(borrowers: string[], candidates: AgentCandidate[]): string {
+  const rec = recommendedAgent(candidates);
+  return `needs input: ${borrowers.join(" and ")} has no isolated headless mode, so its scout hook borrows a default scout agent. Ask the developer which to use (found: ${candidates.map((c) => describe(c, rec)).join(", ")}; or none), then rerun: deveggs install --scout-default <${SCOUT_AGENTS.join("|")}|none>`;
+}
+
+/** What a dry run says about a default it would ask for. */
+export const wouldAskLine = (borrowers: string[], candidates: AgentCandidate[]): string => {
+  const rec = recommendedAgent(candidates);
+  return candidates.length
+    ? `🔭 default scout agent: not set; install will ask, for ${borrowers.join(" and ")} (found: ${candidates.map((c) => describe(c, rec)).join(", ")}; or none)`
+    : `🔭 default scout agent: none found (no claude or codex on PATH), so ${borrowers.join(" and ")} would get no scout hook`;
+};
+
+/**
+ * Ask the developer for the default scout agent at a terminal. Lists each candidate, marks
+ * the recommended one, and takes Enter for it; a number or name picks another, "none" opts out.
+ * With no candidates it explains and returns undefined without asking.
+ */
+export function promptScoutDefault(
+  borrowers: string[],
+  candidates: AgentCandidate[],
+  ask: (question: string) => string,
+  say: (line: string) => void,
+): ScoutDefault | undefined {
+  const who = borrowers.join(" and ");
+  if (!candidates.length) {
+    say(`🔭 Default scout agent: neither claude nor codex is on your PATH, so ${who} gets no scout hook (it has no isolated headless mode of its own). Your preferences still load at session start.`);
+    return undefined;
+  }
+  const rec = recommendedAgent(candidates) as AgentCandidate;
+  const options: ScoutDefault[] = [...candidates.map((c) => c.agent), "none"];
+  say(`🔭 Default scout agent: ${who} has no isolated headless mode, so its scout hook borrows one of these to check each prompt in a fresh context:`);
+  candidates.forEach((c, i) => say(`   ${i + 1}) ${c.agent.padEnd(11)} ${c.checker.padEnd(10)} ${c.signedIn ? "signed in" : "sign-in not detected"}${c === rec ? "   ← recommended" : ""}`));
+  say(`   ${options.length}) none        no scout in ${who}; your preferences still load at session start`);
+  const def = options.indexOf(rec.agent) + 1;
+  for (let tries = 0; tries < 3; tries++) {
+    const answer = ask(`   Pick 1-${options.length} [${def}]: `).trim().toLowerCase();
+    if (!answer) return rec.agent;
+    const n = Number(answer);
+    if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1];
+    const named = options.find((o) => o === answer || (o === "claude-code" && answer === "claude"));
+    if (named) return named;
+    say(`   "${answer}" isn't one of them.`);
+  }
+  throw new BasketError(`no default scout agent picked; rerun deveggs install, or pass --scout-default <${SCOUT_AGENTS.join("|")}|none>`);
 }

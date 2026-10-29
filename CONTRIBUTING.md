@@ -61,8 +61,8 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | `deveggs share`: what is shared, redacted or left out, and the PR it opens | `src/share.ts` |
 | `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
 | Per-harness setup (skill links, the deveggs prompt; Claude Code, Codex, Cursor, …) | `INSTALL.md`, as agent-native instructions. Add a harness by adding a row to its table. |
-| `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, re-syncing inline copies on render, and the scout hook entries (`~/.claude/settings.json`, `~/.codex/hooks.json`) | `src/install.ts` (add a harness to `SPECS`; its scout hook is the entry's `hook`) |
-| `deveggs scout`: the per-prompt fresh-context check that injects the eggs that fit, and each harness's `Adapter` (transcript reader, headless checker, hook output) | `src/scout.ts` |
+| `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, re-syncing inline copies on render, and the scout hook entries (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/config/hooks.json`), and asking for the default scout agent | `src/install.ts` (add a harness to `SPECS`; its scout hook is the entry's `hook`) |
+| `deveggs scout`: the per-prompt fresh-context check that injects the eggs that fit, each harness's `Adapter` (input, transcript reader, hook output) and each headless `Checker`, and the fallback to the default scout agent | `src/scout.ts` (the saved default itself: `src/store.ts`) |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |
 

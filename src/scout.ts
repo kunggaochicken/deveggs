@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { firesWhen } from "./architecture.ts";
@@ -8,15 +8,19 @@ import type { Egg } from "./basket.ts";
 // `deveggs scout` is the attention half of deveggs acting as a harness layer: install
 // guarantees PREFERENCES.md is loaded, scout guarantees the rules that fit this prompt are
 // noticed. The harness's own prompt-submit hook runs it on every prompt and names itself
-// with `--harness`; scout asks that same harness's headless CLI, in a fresh context, which
-// eggs and chickens fire for what the main agent is about to do, and injects those through
-// the hook's output. A Codex session is scouted by `codex exec`, a Claude Code one by
-// `claude -p`: one harness never calls another's model. It fails open: any problem means
-// no output and exit 0, so it never blocks a prompt.
+// with `--harness`; scout asks a headless checker, in a fresh context, which eggs and
+// chickens fire for what the main agent is about to do, and injects those through the
+// hook's output. The hook is always the harness's own; only the checker can be borrowed.
+// A harness with its own isolated headless mode checks with it (a Codex session is scouted
+// by `codex exec`, a Claude Code one by `claude -p`, never each other). One without it
+// (Antigravity: `agy -p` saves every run as a conversation and runs hooks) borrows the
+// developer's default scout agent, picked at `deveggs install`. It fails open: any problem
+// means no output and exit 0, so it never blocks a prompt.
 //
 // Everything here is harness-agnostic (candidates, the prompt, the verdict, sanitising,
-// logging, failing open, the recursion guard) except an Adapter: how a harness's
-// transcript reads, how its headless checker runs, and what its hook prints.
+// logging, failing open, the recursion guard) except an Adapter (how a harness's hook
+// input and transcript read, and what its hook prints) and a Checker (how a headless CLI
+// is asked).
 
 /** Set on the scout's own headless run, so a hook inside it can't scout again. */
 export const GUARD = "DEVEGGS_SCOUT";
@@ -25,35 +29,84 @@ export const DEFAULT_TIMEOUT_MS = 12_000;
 /** What every installed hook entry contains; install and uninstall find their own entry by it. */
 export const HOOK_ARGS = "scout --hook";
 
-/** Harnesses whose prompt hook can run the scout with their own headless CLI. */
-export const SCOUT_HARNESSES = ["claude-code", "codex"] as const;
+/** Harnesses whose prompt hook can inject the scout's context. */
+export const SCOUT_HARNESSES = ["claude-code", "codex", "antigravity"] as const;
 export type ScoutHarness = (typeof SCOUT_HARNESSES)[number];
 export const isScoutHarness = (value: unknown): value is ScoutHarness => (SCOUT_HARNESSES as readonly unknown[]).includes(value);
 
-/** The parts of a UserPromptSubmit hook input that scout uses (Claude Code and Codex send the same fields). */
+/** Agents whose headless CLI can run the check isolated, and so can be the default scout agent. */
+export const SCOUT_AGENTS = ["claude-code", "codex"] as const;
+export type ScoutAgent = (typeof SCOUT_AGENTS)[number];
+export const isScoutAgent = (value: unknown): value is ScoutAgent => (SCOUT_AGENTS as readonly unknown[]).includes(value);
+/** A saved or passed default: an agent, or "none" (no scout where a harness has no checker of its own). */
+export type ScoutDefault = ScoutAgent | "none";
+export const isScoutDefault = (value: unknown): value is ScoutDefault => value === "none" || isScoutAgent(value);
+/** Overrides the default scout agent saved by `deveggs install`. */
+export const DEFAULT_ENV = "DEVEGGS_SCOUT_DEFAULT";
+
+/** The parts of a prompt hook's input that scout uses. */
 export interface HookInput {
   prompt: string;
   transcriptPath?: string;
   cwd?: string;
   sessionId?: string;
+  /** Antigravity's PreInvocation: which model call of the turn this is (0 on a new prompt). */
+  invocation?: number;
 }
 
-export function parseHookInput(text: string): HookInput | undefined {
+function parseObject(text: string): Record<string, unknown> | undefined {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     return undefined;
   }
-  if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as Record<string, unknown>;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined;
+}
+
+const strOf = (o: Record<string, unknown>, k: string): string | undefined => (typeof o[k] === "string" && o[k] ? (o[k] as string) : undefined);
+
+/** A UserPromptSubmit hook's input (Claude Code and Codex send the same fields). */
+export function parseHookInput(text: string): HookInput | undefined {
+  const o = parseObject(text);
+  if (!o) return undefined;
   if (typeof o["prompt"] !== "string" || !o["prompt"].trim()) return undefined;
-  const str = (k: string): string | undefined => (typeof o[k] === "string" && o[k] ? (o[k] as string) : undefined);
-  const transcriptPath = str("transcript_path");
-  const cwd = str("cwd");
-  const sessionId = str("session_id");
+  const transcriptPath = strOf(o, "transcript_path");
+  const cwd = strOf(o, "cwd");
+  const sessionId = strOf(o, "session_id");
   return {
     prompt: o["prompt"],
+    ...(transcriptPath && { transcriptPath }),
+    ...(cwd && { cwd }),
+    ...(sessionId && { sessionId }),
+  };
+}
+
+/** Antigravity wraps the developer's words in `<USER_REQUEST>`, with metadata blocks after it. */
+export function userRequest(text: string): string {
+  const inner = /<USER_REQUEST>\n?([\s\S]*?)\n?<\/USER_REQUEST>/.exec(text)?.[1];
+  return (inner ?? text).trim();
+}
+
+/**
+ * Antigravity's PreInvocation input: `lastUserInput` (agy 1.4.10 sends it, though its docs
+ * list only the common fields), `invocationNum`, `conversationId`, `transcriptPath`.
+ * Without `lastUserInput` the prompt is empty and scout takes the transcript's last request.
+ */
+export function parseAntigravityInput(text: string): HookInput | undefined {
+  const o = parseObject(text);
+  if (!o) return undefined;
+  const invocation = o["invocationNum"];
+  if (typeof invocation !== "number" || !Number.isInteger(invocation) || invocation < 0) return undefined;
+  const transcriptPath = strOf(o, "transcriptPath");
+  const sessionId = strOf(o, "conversationId");
+  const workspaces = o["workspacePaths"];
+  const cwd = Array.isArray(workspaces) && typeof workspaces[0] === "string" ? workspaces[0] : undefined;
+  const prompt = typeof o["lastUserInput"] === "string" ? userRequest(o["lastUserInput"]) : "";
+  if (!prompt && !transcriptPath) return undefined;
+  return {
+    prompt,
+    invocation,
     ...(transcriptPath && { transcriptPath }),
     ...(cwd && { cwd }),
     ...(sessionId && { sessionId }),
@@ -144,6 +197,26 @@ export function codexTranscriptTail(jsonl: string, opts: TailOptions = {}): Turn
       .join("\n")
       .replace(NOISE, "")
       .trim();
+    if (text) out.push({ role, text });
+  }
+  return trimTurns(out, opts);
+}
+
+/**
+ * The same tail from an Antigravity transcript (`<brain>/<conversation>/.system_generated/
+ * logs/transcript.jsonl`). Its docs give the path but not the format, so this reads only
+ * what agy 1.4.10 writes for the developer's requests (`USER_INPUT`, the words inside
+ * `<USER_REQUEST>`) and the model's replies (`PLANNER_RESPONSE` with text `content`), and
+ * finds nothing in any other shape.
+ */
+export function antigravityTranscriptTail(jsonl: string, opts: TailOptions = {}): Turn[] {
+  const out: Turn[] = [];
+  for (const entry of jsonLines(jsonl)) {
+    const content = entry["content"];
+    if (typeof content !== "string") continue;
+    const role = entry["type"] === "USER_INPUT" ? "user" : entry["type"] === "PLANNER_RESPONSE" ? "assistant" : undefined;
+    if (!role) continue;
+    const text = (role === "user" ? userRequest(content) : content).replace(NOISE, "").trim();
     if (text) out.push({ role, text });
   }
   return trimTurns(out, opts);
@@ -272,6 +345,9 @@ export function contextFor(applied: Applied[], items: Candidate[]): string {
 export const hookOutput = (context: string): string =>
   JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context } });
 
+/** Antigravity's PreInvocation stdout: one ephemeral step, a transient system message for this model call. */
+export const antigravityOutput = (context: string): string => JSON.stringify({ injectSteps: [{ ephemeralMessage: context }] });
+
 export type AskResult = { ok: true; text: string } | { ok: false; error: string };
 /** Ask a fresh-context model. Injectable, so tests never call a real CLI. */
 export type Ask = (prompt: string, opts: { model: string; timeoutMs: number }) => AskResult;
@@ -343,35 +419,70 @@ export const CODEX_PREAMBLE =
 export const askCodex: Ask = (prompt, { model, timeoutMs }) =>
   runHeadless("codex", [...CODEX_ARGS, "--model", model, "-"], `${CODEX_PREAMBLE}\n${SYSTEM_PROMPT}\n\n${prompt}`, timeoutMs);
 
-/** What differs per harness: reading its transcript, running its own headless checker, printing its hook output. */
+/** A headless CLI that can run the check in a fresh, isolated context. */
+export interface Checker {
+  agent: ScoutAgent;
+  /** The command, for messages. */
+  name: string;
+  defaultModel: string;
+  /** This checker's model override; DEVEGGS_SCOUT_MODEL is the fallback for every checker. */
+  modelEnv: string;
+  ask: Ask;
+}
+
+export const CHECKERS: Record<ScoutAgent, Checker> = {
+  "claude-code": { agent: "claude-code", name: "claude -p", defaultModel: "haiku", modelEnv: "DEVEGGS_SCOUT_CLAUDE_MODEL", ask: askClaude },
+  // Codex's small, fast model in codex-cli 0.161; DEVEGGS_SCOUT_CODEX_MODEL overrides it as models change.
+  codex: { agent: "codex", name: "codex exec", defaultModel: "gpt-6-luna", modelEnv: "DEVEGGS_SCOUT_CODEX_MODEL", ask: askCodex },
+};
+
+/** What differs per harness: reading its hook input and transcript, its own checker if it has one, printing its hook output. */
 export interface Adapter {
   harness: ScoutHarness;
-  /** The checker, for messages. */
-  checker: string;
-  defaultModel: string;
-  /** This harness's model override; DEVEGGS_SCOUT_MODEL is the fallback for every harness. */
-  modelEnv: string;
+  /** Its own isolated headless checker; without one, the scout borrows the default agent's. */
+  native?: Checker;
+  parse: (text: string) => HookInput | undefined;
   tail: (jsonl: string) => Turn[];
-  ask: Ask;
   output: (context: string) => string;
 }
 
 export const ADAPTERS: Record<ScoutHarness, Adapter> = {
-  "claude-code": { harness: "claude-code", checker: "claude -p", defaultModel: "haiku", modelEnv: "DEVEGGS_SCOUT_CLAUDE_MODEL", tail: transcriptTail, ask: askClaude, output: hookOutput },
-  // Codex's small, fast model in codex-cli 0.161; DEVEGGS_SCOUT_CODEX_MODEL overrides it as models change.
-  codex: { harness: "codex", checker: "codex exec", defaultModel: "gpt-6-luna", modelEnv: "DEVEGGS_SCOUT_CODEX_MODEL", tail: codexTranscriptTail, ask: askCodex, output: hookOutput },
+  "claude-code": { harness: "claude-code", native: CHECKERS["claude-code"], parse: parseHookInput, tail: transcriptTail, output: hookOutput },
+  codex: { harness: "codex", native: CHECKERS.codex, parse: parseHookInput, tail: codexTranscriptTail, output: hookOutput },
+  // `agy -p` can't run isolated (every run is saved as a conversation and runs hooks), so it borrows the default agent's checker.
+  antigravity: { harness: "antigravity", parse: parseAntigravityInput, tail: antigravityTranscriptTail, output: antigravityOutput },
 };
 
-/** A harness's scout model: its own override, then DEVEGGS_SCOUT_MODEL, then its default. */
-export const modelFor = (adapter: Adapter, env: NodeJS.ProcessEnv): string => env[adapter.modelEnv] || env["DEVEGGS_SCOUT_MODEL"] || adapter.defaultModel;
+/** A checker's model: its own override, then DEVEGGS_SCOUT_MODEL, then its default. */
+export const modelFor = (checker: Checker, env: NodeJS.ProcessEnv): string => env[checker.modelEnv] || env["DEVEGGS_SCOUT_MODEL"] || checker.defaultModel;
+
+/** Which checker a run uses and how it was chosen (`native` or `fallback:<agent>`), or why there is none. */
+export type Resolved = { checker: Checker; via: string } | { error: string; via: string };
+
+/**
+ * The checker for a harness: its own when it has one (the default never overrides it),
+ * else the default scout agent (DEVEGGS_SCOUT_DEFAULT, then the one `deveggs install` saved).
+ */
+export function resolveChecker(adapter: Adapter, env: NodeJS.ProcessEnv, saved: string | undefined): Resolved {
+  if (adapter.native) return { checker: adapter.native, via: "native" };
+  const choice = env[DEFAULT_ENV] || saved;
+  if (choice === undefined) return { error: "no default scout agent: run deveggs install, or set DEVEGGS_SCOUT_DEFAULT", via: "fallback" };
+  if (choice === "none") return { error: "the default scout agent is none", via: "fallback:none" };
+  if (!isScoutAgent(choice)) return { error: `unknown default scout agent ${JSON.stringify(choice)}; expected ${SCOUT_AGENTS.join(", ")} or none`, via: "fallback" };
+  return { checker: CHECKERS[choice], via: `fallback:${choice}` };
+}
 
 export interface ScoutResult {
   /** Hook stdout; undefined means print nothing. */
   output?: string;
+  /** The injected context (what `output` wraps), to re-send it. */
+  context?: string;
   applied: Applied[];
   error?: string;
   ms: number;
   candidates: number;
+  /** The prompt checked (Antigravity's may come from its transcript). */
+  prompt?: string;
 }
 
 export interface ScoutDeps {
@@ -379,7 +490,9 @@ export interface ScoutDeps {
   env: NodeJS.ProcessEnv;
   /** The harness whose hook is running; Claude Code when absent. */
   adapter?: Adapter;
-  /** Replaces the adapter's checker (tests). */
+  /** The checker to ask; the adapter's own when absent. */
+  checker?: Checker;
+  /** Replaces the checker's ask (tests). */
   ask?: Ask;
   now?: () => number;
 }
@@ -395,12 +508,13 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
   const now = deps.now ?? Date.now;
   const started = now();
   const adapter = deps.adapter ?? ADAPTERS["claude-code"];
-  const ask = deps.ask ?? adapter.ask;
+  const checker = deps.checker ?? adapter.native;
   const done = (rest: Omit<ScoutResult, "ms" | "candidates">, n: number): ScoutResult => ({ ...rest, ms: now() - started, candidates: n });
   let items: Candidate[] = [];
   try {
     items = candidates(deps.items);
     if (!items.length) return done({ applied: [], error: "no eggs or chickens" }, 0);
+    if (!checker) return done({ applied: [], error: `no checker for ${adapter.harness}` }, items.length);
     let turns: Turn[] = [];
     if (input.transcriptPath && existsSync(input.transcriptPath)) {
       try {
@@ -409,19 +523,24 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
         turns = []; // no context beats no scout
       }
     }
-    // The new prompt may already be the transcript's last line; don't show it twice.
+    // The new prompt may already be the transcript's last line; don't show it twice. With no
+    // prompt in the input (Antigravity without lastUserInput), that line is the prompt.
     const last = turns[turns.length - 1];
-    const prompt = input.prompt.trim();
-    const same = last?.role === "user" && (last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
+    let prompt = input.prompt.trim();
+    const same = last?.role === "user" && (!prompt || last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
     if (same) turns.pop();
-    const model = modelFor(adapter, deps.env);
+    if (!prompt && same && last) prompt = last.text;
+    if (!prompt) return done({ applied: [], error: "no prompt" }, items.length);
+    const ask = deps.ask ?? checker.ask;
+    const model = modelFor(checker, deps.env);
     const timeoutMs = envInt(deps.env["DEVEGGS_SCOUT_TIMEOUT_MS"], DEFAULT_TIMEOUT_MS);
-    const answer = ask(scoutPrompt(input.prompt, turns, items), { model, timeoutMs });
-    if (!answer.ok) return done({ applied: [], error: answer.error }, items.length);
+    const answer = ask(scoutPrompt(prompt, turns, items), { model, timeoutMs });
+    if (!answer.ok) return done({ applied: [], error: answer.error, prompt }, items.length);
     const applied = parseVerdict(answer.text, new Set(items.map((c) => c.id)));
-    if (!applied) return done({ applied: [], error: `unparseable reply: ${answer.text.trim().slice(0, 120)}` }, items.length);
-    if (!applied.length) return done({ applied }, items.length);
-    return done({ applied, output: adapter.output(contextFor(applied, items)) }, items.length);
+    if (!applied) return done({ applied: [], error: `unparseable reply: ${answer.text.trim().slice(0, 120)}`, prompt }, items.length);
+    if (!applied.length) return done({ applied, prompt }, items.length);
+    const context = contextFor(applied, items);
+    return done({ applied, context, output: adapter.output(context), prompt }, items.length);
   } catch (err) {
     return done({ applied: [], error: (err as Error).message }, items.length);
   }
@@ -432,7 +551,7 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
  * harness. logs/ gets its own `.gitignore` so a basket that doesn't ignore it never commits
  * the log.
  */
-export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, harness: ScoutHarness = "claude-code", at = new Date()): void {
+export function logRun(basket: string, input: HookInput | undefined, result: ScoutResult, harness: ScoutHarness = "claude-code", at = new Date(), checker?: string): void {
   try {
     const dir = join(basket, "logs");
     mkdirSync(dir, { recursive: true });
@@ -441,6 +560,7 @@ export function logRun(basket: string, input: HookInput | undefined, result: Sco
     const line = {
       at: at.toISOString(),
       harness,
+      ...(checker !== undefined && { checker }),
       session: input?.sessionId ?? null,
       ms: result.ms,
       candidates: result.candidates,
@@ -450,5 +570,46 @@ export function logRun(basket: string, input: HookInput | undefined, result: Sco
     appendFileSync(join(dir, "scout.log"), `${JSON.stringify(line)}\n`);
   } catch {
     // Logging must never fail the hook.
+  }
+}
+
+/**
+ * Antigravity fires PreInvocation before every model call of a turn, and an ephemeral step
+ * is gone after the call it was injected into, so the context is re-sent on each later call
+ * of the same turn. Only invocation 0 (a new prompt) runs the checker; it caches what it
+ * injected per conversation, and later calls re-send it while the prompt is unchanged.
+ */
+export interface Cached {
+  prompt: string;
+  context?: string;
+}
+
+const SAFE_ID = /^[\w-][\w.-]{0,127}$/;
+const cacheFile = (dir: string, conversation: string): string | undefined => (SAFE_ID.test(conversation) ? join(dir, `${conversation}.json`) : undefined);
+
+/** Where re-sent contexts live: per user, in the temp folder, never in the basket. */
+export const cacheDir = (): string => join(tmpdir(), `deveggs-scout-${process.getuid?.() ?? "user"}`);
+
+export function saveCached(dir: string, conversation: string | undefined, cached: Cached): void {
+  const file = conversation ? cacheFile(dir, conversation) : undefined;
+  if (!file) return;
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(cached), { mode: 0o600 });
+    renameSync(tmp, file);
+  } catch {
+    // no cache: later calls of this turn just go without the context
+  }
+}
+
+export function loadCached(dir: string, conversation: string | undefined): Cached | undefined {
+  const file = conversation ? cacheFile(dir, conversation) : undefined;
+  if (!file || !existsSync(file)) return undefined;
+  try {
+    const raw = JSON.parse(readFileSync(file, "utf8")) as Cached;
+    return typeof raw.prompt === "string" && (raw.context === undefined || typeof raw.context === "string") ? raw : undefined;
+  } catch {
+    return undefined;
   }
 }

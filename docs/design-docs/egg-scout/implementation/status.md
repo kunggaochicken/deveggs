@@ -5,9 +5,11 @@
 | `deveggs scout --hook` / `--dry-run` | ✅ done | Yes | `npm run check`; dry runs on the real basket | #54 |
 | Install / uninstall of the Claude Code hook | ✅ done | Yes | Fixture with other tools' `UserPromptSubmit` hooks | #54 |
 | Docs and skill note | ✅ done | Yes | Review | #54, this PR |
-| Per-harness adapters (Claude Code, Codex) | ✅ done | Yes | Fake `codex` CLI tests; dry runs; a real `codex exec` session with the hook inline | This PR |
-| Install / uninstall of the Codex hook (`~/.codex/hooks.json`) | ✅ done | Yes | Fixture with other tools' Codex hooks | This PR |
-| Antigravity, Gemini CLI, Cursor | ⬜ not yet | — | [Research](../design.md#harness-research) | — |
+| Per-harness adapters (Claude Code, Codex) | ✅ done | Yes | Fake `codex` CLI tests; dry runs; a real `codex exec` session with the hook inline | #55 |
+| Install / uninstall of the Codex hook (`~/.codex/hooks.json`) | ✅ done | Yes | Fixture with other tools' Codex hooks | #55 |
+| Default scout agent (prompt, `--scout-default`, `needs input:`, saved per machine, uninstall) | ✅ done | Yes | Fixtures; the prompt under a real PTY in a throwaway HOME | This PR |
+| Antigravity adapter + hook (`~/.gemini/config/hooks.json`), via the default agent | ✅ done | Yes | Fixtures with other tools' named hooks; the hook path with fixture payloads on the real basket, each default agent | This PR |
+| Gemini CLI, Cursor | ⬜ not yet | — | [Research](../design.md#harness-research) | — |
 | Live measurement, and the Codex `hooks.json` + `/hooks` trust path end to end | ⏸ waits on the developer | — | Needs `deveggs install` on their machine, and the Codex hook trusted in `/hooks` (the hook itself was verified passed inline with `-c`) | — |
 
 ## Dry runs (real basket, 27 eggs and chickens, 2026-10-29)
@@ -20,9 +22,20 @@
 
 A real Codex session (`codex exec` with the hook passed inline via `-c`, nothing written to `~/.codex`) ran the hook, the scout picked `land-via-pr` and `auto-merge-small-features` in 4.1 s, and the main session named both ids from the injected context.
 
+## Antigravity hook path (fixture `PreInvocation` payloads, a copy of the real basket, 27 eggs and chickens, 2026-10-29)
+
+| Prompt | Default `claude-code` (`claude -p`, Haiku) | Default `codex` (`codex exec`, gpt-6-luna) |
+|---|---|---|
+| "ship it, open the PR" | 5.0 s: `land-via-pr`, `deveggs-github-account` | 4.3 s: `land-via-pr` |
+| "should we use postgres or sqlite for the cache? give me the options" | 3.1 s: `decision-tables` | 3.5 s: `decision-tables` |
+| "what's the status of the three subagents you launched?" | 2.3 s: `progress-diagrams` | 3.8 s: `progress-diagrams` |
+| "fix the typo in README line 3" | 4.1 s: `delegate-subagents`, `land-via-pr`, `absolute-file-paths` | 4.3 s: nothing (no output) |
+
+Each run printed one `injectSteps` ephemeral step (when something applied) and logged `"checker":"fallback:<agent>"`. The same turn's `invocationNum` 1 re-sent the identical output in ~0.1 s without a second check.
+
 ## Next action
 
 | Item | Owner | Next |
 |---|---|---|
-| Install the hooks on the developer's machine | Developer | `deveggs install --dry-run`, then `deveggs install`, then trust the Codex hook in `/hooks` |
+| Install the hooks on the developer's machine | Developer | `deveggs install --dry-run`, then `deveggs install` (pick the default scout agent), then trust the Codex hook in `/hooks` |
 | Read a week of `logs/scout.log` | Agent | Hit rate and p95 latency per harness; decide on `--stats` |
