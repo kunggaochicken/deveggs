@@ -543,3 +543,20 @@ test("deveggs scout --dry-run --harness antigravity names the default agent, and
   assert.equal(u.status, 1);
   assert.match(u.stderr, /Antigravity has no headless checker of its own and no default scout agent: run deveggs install, or set DEVEGGS_SCOUT_DEFAULT/);
 });
+
+test("the re-send cache lives in the basket's ignored logs/, works without lastUserInput, and a new turn clears it before checking", () => {
+  const box = wiredAgy("codex");
+  const transcript = join(box.dir, "transcript.jsonl");
+  writeFileSync(transcript, line({ type: "USER_INPUT", content: "<USER_REQUEST>\npostgres or sqlite?\n</USER_REQUEST>" }));
+  const first = hookRun(box, agyInput({ lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.match(first.stdout, /injectSteps/);
+  assert.ok(existsSync(join(box.basket, "logs", "scout-cache", "ec33ebf9-0cba-4100-8142-c61503f6c587.json")));
+  assert.equal(git(box, box.basket, "status", "--porcelain"), "", "the cache is never committed");
+  const later = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.equal(later.stdout, first.stdout, "re-sent with no prompt to compare");
+  // The next turn's check dies: the last turn's context must not be re-sent after it.
+  writeFileSync(join(box.dir, "bin", "codex"), "#!/bin/sh\nexit 1\n");
+  hookRun(box, agyInput({ lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  const stale = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
+  assert.equal(stale.stdout, "", "a failed check leaves nothing to re-send");
+});

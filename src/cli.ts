@@ -11,7 +11,7 @@ import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type Logge
 import { borrowingHarnesses, CURSOR_HINT, type Change, HARNESS_NAMES, install, needsInputMessage, parseHarness, promptScoutDefault, SCOUT_HARNESS_NAMES, SCOUT_NOTES, scoutCandidates, sync, uninstall, uninstallsBorrowers, wouldAskLine } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, scoutDefault, setAutopush, setScoutDefault, webUrl } from "./store.ts";
-import { ADAPTERS, cacheDir, CHECKERS, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
+import { ADAPTERS, cacheDir, CHECKERS, clearCached, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, formatTimeline, mark, terminalOptions, trialCounts } from "./view.ts";
 
@@ -387,17 +387,18 @@ function scoutCommand(hook: boolean, positionals: string[], harness: string | un
       // Antigravity runs the hook before every model call of a turn: only the first one
       // checks; later ones re-send what it injected (an ephemeral step lasts one call).
       if (input.invocation !== undefined && input.invocation > 0) {
-        const cached = loadCached(cacheDir(), input.sessionId);
+        const cached = loadCached(cacheDir(basketRoot), input.sessionId);
         if (cached?.context && (!input.prompt || cached.prompt === input.prompt)) process.stdout.write(`${adapter.output(cached.context)}\n`);
         return;
       }
+      if (input.invocation !== undefined) clearCached(cacheDir(basketRoot), input.sessionId);
       const resolved = resolveChecker(adapter, process.env, adapter.native ? undefined : scoutDefault(basketRoot));
       const result: ScoutResult =
         "checker" in resolved
           ? scout(input, { items: items(), adapter, checker: resolved.checker, env: process.env })
           : { applied: [], error: resolved.error, ms: 0, candidates: 0 };
       logRun(basketRoot, input, result, name, new Date(), resolved.via);
-      if (input.invocation !== undefined) saveCached(cacheDir(), input.sessionId, { prompt: result.prompt ?? input.prompt, ...(result.context && { context: result.context }) });
+      if (input.invocation !== undefined) saveCached(cacheDir(basketRoot), input.sessionId, { prompt: result.prompt ?? input.prompt, ...(result.context && { context: result.context }) });
       if (result.output) process.stdout.write(`${result.output}\n`);
     } catch {
       // fail open
@@ -705,7 +706,8 @@ function main(argv: string[]): void {
       const savedChoice = isScoutDefault(saved) ? saved : undefined;
       // The default scout agent: the flag, else the one saved on this machine, else ask the
       // developer (at a terminal) when a harness being installed would borrow it.
-      let choice: ScoutDefault | "ask" | undefined = flag ?? savedChoice;
+      const fromEnv = isScoutDefault(process.env[DEFAULT_ENV]) ? (process.env[DEFAULT_ENV] as ScoutDefault) : undefined;
+      let choice: ScoutDefault | "ask" | undefined = flag ?? savedChoice ?? fromEnv;
       const borrowers = command === "install" ? borrowingHarnesses(harnesses, homedir(), explicit) : [];
       const defaultLines: string[] = [];
       if (command === "install" && choice === undefined && borrowers.length) {
@@ -725,13 +727,23 @@ function main(argv: string[]): void {
         prepare();
         render();
         save("render");
-        if (choice !== undefined && choice !== "ask" && choice !== saved) setScoutDefault(basketRoot, choice);
+        const toSave = flag ?? (choice === savedChoice || choice === fromEnv ? undefined : choice);
+        if (toSave !== undefined && toSave !== saved) {
+          try {
+            setScoutDefault(basketRoot, toSave);
+          } catch (err) {
+            // The basket isn't a git repo (no git?): nothing to save it in, so nothing borrows it.
+            warn(`couldn't save the default scout agent (${(err as Error).message}); set ${DEFAULT_ENV}=${toSave} instead`);
+            if (choice === toSave && !fromEnv) choice = undefined;
+          }
+        }
       }
       if (command === "install" && choice !== undefined && choice !== "ask") {
         const what = choice === "none" ? "none (harnesses without their own headless mode get no scout)" : `${choice} (${CHECKERS[choice].name})`;
-        const state = choice === saved ? "saved" : dryRun ? "would save" : "saved";
-        const env = process.env[DEFAULT_ENV] ? `; ${DEFAULT_ENV}=${process.env[DEFAULT_ENV]} overrides it in this shell` : "";
-        defaultLines.push(`🔭 default scout agent: ${what}, ${state} for this machine in ${join(basketRoot, ".git", "config")} (deveggs.scoutDefault)${env}. Change it: deveggs install --scout-default <${SCOUT_AGENTS.join("|")}|none>`);
+        const where = `for this machine in ${join(basketRoot, ".git", "config")} (deveggs.scoutDefault)`;
+        const state = flag === undefined && choice === fromEnv && choice !== savedChoice ? `from ${DEFAULT_ENV}, not saved` : choice === saved ? `saved ${where}` : `${dryRun ? "would save" : "saved"} ${where}`;
+        const env = process.env[DEFAULT_ENV] && !state.startsWith("from") ? `; ${DEFAULT_ENV}=${process.env[DEFAULT_ENV]} overrides it in this shell` : "";
+        defaultLines.push(`🔭 default scout agent: ${what}, ${state}${env}. Change it: deveggs install --scout-default <${SCOUT_AGENTS.join("|")}|none>`);
       }
       // A dry run previews what install would render, without writing it.
       const rendered = dryRun && command === "install" && existsSync(basketRoot) ? basket.preferences() : undefined;

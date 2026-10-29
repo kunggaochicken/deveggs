@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { firesWhen } from "./architecture.ts";
@@ -587,16 +587,28 @@ export interface Cached {
 const SAFE_ID = /^[\w-][\w.-]{0,127}$/;
 const cacheFile = (dir: string, conversation: string): string | undefined => (SAFE_ID.test(conversation) ? join(dir, `${conversation}.json`) : undefined);
 
-/** Where re-sent contexts live: per user, in the temp folder, never in the basket. */
-export const cacheDir = (): string => join(tmpdir(), `deveggs-scout-${process.getuid?.() ?? "user"}`);
+/**
+ * Where re-sent contexts live: `<basket>/logs/scout-cache/`, owned by the developer and kept
+ * out of the basket's git by logs/.gitignore (a shared temp folder could be pre-created by
+ * another user).
+ */
+export const cacheDir = (basket: string): string => join(basket, "logs", "scout-cache");
+
+/** Forget a conversation's cached context, so a check that dies midway never leaves the last turn's to re-send. */
+export function clearCached(dir: string, conversation: string | undefined): void {
+  const file = conversation ? cacheFile(dir, conversation) : undefined;
+  if (file) rmSync(file, { force: true });
+}
 
 export function saveCached(dir: string, conversation: string | undefined, cached: Cached): void {
   const file = conversation ? cacheFile(dir, conversation) : undefined;
   if (!file) return;
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const ignore = join(dir, "..", ".gitignore");
+    if (!existsSync(ignore)) writeFileSync(ignore, "*\n");
     const tmp = `${file}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify(cached), { mode: 0o600 });
+    writeFileSync(tmp, JSON.stringify(cached), { mode: 0o600, flag: "wx" });
     renameSync(tmp, file);
   } catch {
     // no cache: later calls of this turn just go without the context

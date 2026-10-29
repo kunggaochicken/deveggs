@@ -429,6 +429,9 @@ function installHook(harness: Harness, hook: HookSpec, opts: Options, repo: stri
   const label = hookLabel(hook);
   if (!hookPresent(hook, opts.home)) return undefined;
   if (hook.borrows && (opts.scoutDefault === undefined || opts.scoutDefault === "none")) {
+    // Opting out takes away a hook an earlier install added: with no checker it would only log errors.
+    const removed = opts.scoutDefault === "none" ? uninstallHook(harness, hook, opts) : undefined;
+    if (removed?.changed) return { ...removed, action: `${removed.action}: the default scout agent is now none` };
     const why = opts.scoutDefault === "none" ? "the default scout agent is none" : "no default scout agent (claude or codex) to check with";
     return { harness, file, action: `skipped the ${label}: ${why}; it has no isolated headless mode of its own`, changed: false, hook: true };
   }

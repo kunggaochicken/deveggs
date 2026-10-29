@@ -122,7 +122,8 @@ file, or not yet run).
      still load) and pass nothing. Then run `<repo>/bin/deveggs install --scout-default
      <claude-code|codex|none>`. It's saved per machine, in the basket repo's own git
      config (`deveggs.scoutDefault`, never committed), so later installs just show it;
-     pass the flag again to change it. `DEVEGGS_SCOUT_DEFAULT` overrides it at hook time.
+     pass the flag again to change it; `--scout-default none` also removes an Antigravity
+     hook an earlier install added. `DEVEGGS_SCOUT_DEFAULT` overrides it at hook time.
 
    Show the developer the whole plan as one list: every harness, every link, every
    file. **Confirm**, then make the changes, then run `<repo>/bin/deveggs install`

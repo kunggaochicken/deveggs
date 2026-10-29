@@ -738,3 +738,35 @@ test("scoutCandidates finds claude and codex on PATH, with cheap sign-in hints",
   assert.deepEqual(scoutCandidates({ PATH: "" }, box.home), []);
   assert.equal(recommendedAgent([]), undefined);
 });
+
+test("switching the default to none takes away an Antigravity hook an earlier install added", () => {
+  const box = wiredAgy();
+  assert.equal(cli(box, "install", "--scout-default", "codex").status, 0);
+  const r = cli(box, "install", "--scout-default", "none");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /removed the Antigravity scout hook: the default scout agent is now none/);
+  assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
+  assert.equal(savedDefault(box), "none");
+});
+
+test("DEVEGGS_SCOUT_DEFAULT answers install's question without being saved", () => {
+  const box = wiredAgy();
+  box.env["DEVEGGS_SCOUT_DEFAULT"] = "claude-code";
+  const r = cli(box, "install");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /checks with the default scout agent, claude-code \(claude -p\)/);
+  assert.match(r.stdout, /🔭 default scout agent: claude-code \(claude -p\), from DEVEGGS_SCOUT_DEFAULT, not saved/);
+  assert.equal(savedDefault(box), "");
+});
+
+test("a default that can't be saved (no git) warns and skips the borrowing hook instead of failing midway", () => {
+  const box = sandbox();
+  mkdirSync(join(box.home, ".gemini", "antigravity-cli"), { recursive: true });
+  box.env["PATH"] = fakePath(box, { claude: "exit 0", codex: "exit 0" }, false);
+  const r = cli(box, "install", "--scout-default", "codex");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /couldn't save the default scout agent .*; set DEVEGGS_SCOUT_DEFAULT=codex instead/);
+  assert.match(r.stdout, /skipped the Antigravity scout hook: no default scout agent/);
+  assert.match(r.stdout, /installed: copies .* inline/, "the rest of install still ran");
+  assert.equal(existsSync(agyHooks(box)), false);
+});

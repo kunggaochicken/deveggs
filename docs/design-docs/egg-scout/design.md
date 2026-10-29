@@ -49,7 +49,7 @@ The scout picks the harness from an explicit `--harness` flag the installed hook
 | What is it | The headless CLI (`claude-code` → `claude -p`, `codex` → `codex exec`, or `none`) that checks prompts for a harness without an isolated headless mode of its own. It never overrides a harness's own checker |
 | Who picks it | The developer, at `deveggs install`, only when a harness that borrows it (Antigravity) is installed. At a terminal install lists the agents on PATH, marks the recommended one (the first signed in: `~/.claude.json` has `oauthAccount` or `ANTHROPIC_API_KEY`; `~/.codex/auth.json` or `OPENAI_API_KEY`; else the first found) and takes Enter for it. Without a terminal (an agent following INSTALL.md) install stops before writing anything with one `needs input:` line, and the agent asks the developer and reruns with `--scout-default`. It never picks silently |
 | Where it lives | `deveggs.scoutDefault` in the basket repo's own git config, like `deveggs.autopush`: per machine (which agents are installed differs per machine), never committed or pushed with the basket |
-| At hook time | `DEVEGGS_SCOUT_DEFAULT`, else the saved value; no default or `none` means no output (fails open). `scout.log` records `checker`: `native`, `fallback:<agent>`, or `fallback` / `fallback:none` with the error |
+| At hook time | `DEVEGGS_SCOUT_DEFAULT`, else the saved value (install also takes the env var as its answer when there's no flag and nothing saved, without saving it); no default or `none` means no output (fails open). `scout.log` records `checker`: `native`, `fallback:<agent>`, or `fallback` / `fallback:none` with the error |
 | Rerun | Shows the saved default without asking; `--scout-default` changes it. `--dry-run` shows the saved, would-be or would-ask default and writes nothing |
 | Uninstall | Removes it once no installed hook borrows it (uninstalling `gemini` or `all`) |
 
@@ -57,7 +57,7 @@ The scout picks the harness from an explicit `--harness` flag the installed hook
 
 | Invocation | What the hook does | Cost |
 |---|---|---|
-| `invocationNum` 0 (a new prompt) | Reads `lastUserInput` (or the transcript's last `USER_INPUT`) and the transcript tail, runs the default agent's checker, injects `{"injectSteps":[{"ephemeralMessage":…}]}`, caches the context per `conversationId` in the temp folder (`$TMPDIR/deveggs-scout-<uid>/`, mode 0600), logs the run | 2.5–5 s |
+| `invocationNum` 0 (a new prompt) | Clears the conversation's cached context first (so a check that dies never leaves the last turn's to re-send), reads `lastUserInput` (or the transcript's last `USER_INPUT`) and the transcript tail, runs the default agent's checker, injects `{"injectSteps":[{"ephemeralMessage":…}]}`, caches the context per `conversationId` in `<basket>/logs/scout-cache/` (the developer's own, git-ignored folder, not a shared temp folder another user could pre-create; mode 0600), logs the run | 2.5–5 s |
 | `invocationNum` > 0 (later model calls of the same turn) | Re-sends the cached context while the prompt is unchanged, since an ephemeral step lasts one call. Never runs the checker; not logged | ~0.1 s |
 
 ## How a run works
@@ -105,7 +105,9 @@ Adding a harness means an `Adapter` in `ADAPTERS` (`src/scout.ts`) and a `hook` 
 | The file isn't a JSON object, or `hooks` / `hooks.UserPromptSubmit` (`deveggs-scout` / `deveggs-scout.PreInvocation`) has an unexpected shape | Skips with a message; never rewrites it | Nothing to do |
 | Any rewrite | Atomic (temp file + rename); keeps the indent, but `JSON.stringify` normalises formatting (CRLF becomes LF) | Same |
 | Codex | Says the hook runs once trusted in `/hooks` (Codex skips new or changed hooks until then) | Codex keys trust by hook position: removing the scout's group can ask the developer to re-trust a group added after it |
-| Antigravity, no default scout agent (none on PATH, or `none` picked) | Skips its hook with a message | — |
+| Antigravity, no default scout agent (none on PATH) | Skips its hook with a message | — |
+| Antigravity, `none` picked (`--scout-default none`) | Removes a hook an earlier install added, else skips it | — |
+| The default can't be saved (the basket isn't a git repo: no git) | Warns, suggests `DEVEGGS_SCOUT_DEFAULT`, skips the borrowing hook; the rest of install still runs | — |
 | Antigravity not installed (no `~/.gemini/antigravity-cli`, `antigravity` or `config`) | No hook, no question | Not looked for |
 | A harness without a scout hook (Gemini CLI, Cursor) | One line saying why | — |
 | Run from a git worktree | Warns: the hook would go quiet once the worktree is removed | — |
