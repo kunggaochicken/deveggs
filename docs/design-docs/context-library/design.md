@@ -10,7 +10,7 @@
 
 Keep one canonical basket of what the developer wants, alongside a durable library of what happened. Each model and harness combination gets an explainable view of that library, including special eggs requiring attention; combinations do not get independent copies of preferences.
 
-This follows deveggs' [core principle](../../../README.md#core-principle-deveggs-is-a-harness): preferences reach a session through code (the install block today; hooks are coming), not an agent's memory. Context views extend that guaranteed baseline; they never replace it.
+This follows deveggs' [core principle](../../../README.md#core-principle-deveggs-is-a-harness): preferences reach a session through code (the install block, and the [scout hook](../egg-scout/design.md) in Claude Code), not an agent's memory. Context views extend that guaranteed baseline; they never replace it.
 
 ## What was requested, and what is proposed
 
