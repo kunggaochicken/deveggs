@@ -86,6 +86,16 @@ file, or not yet run).
      preferences inline, re-synced by every `deveggs render`). Include
      the output of `<repo>/bin/deveggs install --dry-run` in the plan. Other harnesses
      keep the read line as the fallback.
+   - **The scout hook (Claude Code only).** The same `deveggs install` adds one
+     `UserPromptSubmit` hook to `~/.claude/settings.json` that runs
+     `<repo>/bin/deveggs scout --hook` on every prompt. A fresh-context `claude -p`
+     (Haiku, no tools) picks the eggs and chickens that fit the prompt, and the hook
+     injects them into the session so they get noticed even when the context is busy.
+     It leaves every other setting and hook alone, fails open (a slow or failed scout
+     never blocks the prompt), adds a few seconds per prompt, and `deveggs uninstall`
+     removes exactly that entry. Rewriting `settings.json` keeps its indent but
+     normalises its formatting. Run install from the main deveggs checkout, not a
+     worktree: the hook points at the checkout it ran from. Codex and Gemini keep the instruction-only path.
 
    Show the developer the whole plan as one list: every harness, every link, every
    file. **Confirm**, then make the changes, then run `<repo>/bin/deveggs install`
@@ -118,7 +128,7 @@ file, or not yet run).
      basket up (automatically after every change once `deveggs autopush on` is set)
    - on a new machine, clone their basket repo into `~/.deveggs/` and follow this
      guide again
-   - to uninstall, run `deveggs uninstall`, then ask any agent to remove the deveggs
+   - to uninstall, run `deveggs uninstall` (it also removes the scout hook), then ask any agent to remove the deveggs
      symlinks and the `deveggs:begin` … `deveggs:end` block from each harness
    - to share their basket, `deveggs share --dry-run` shows what would be shared
      and what it redacts; `deveggs share` then opens a PR to

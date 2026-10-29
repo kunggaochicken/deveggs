@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { BasketError } from "./basket.ts";
+import { HOOK_ARGS } from "./scout.ts";
 
 // `deveggs install` loads PREFERENCES.md into every session of a harness through its
 // global instructions file, so no agent has to remember to read it. A harness that
@@ -196,8 +197,144 @@ export function withoutBlock(text: string): { text: string; removed?: string; st
   return { text: out, removed: found[0], ...(state && { state }) };
 }
 
+// The scout hook: Claude Code also gets one managed UserPromptSubmit entry in
+// ~/.claude/settings.json that runs `deveggs scout --hook` on every prompt (src/scout.ts).
+// It is the second code-enforced piece: the block above guarantees the preferences load,
+// the hook guarantees the ones that fit a prompt get noticed. Settings has no comments to
+// hold markers, so the entry is found by its command containing `deveggs scout --hook`, and
+// every other key and hook is left as it was.
+
+/** Seconds Claude Code waits for the hook; the scout itself gives up after 12 s by default. */
+export const SCOUT_HOOK_TIMEOUT = 15;
+
+export const settingsFile = (home: string): string => join(home, ".claude", "settings.json");
+
+/**
+ * The hook command for a deveggs checkout: `<repo>/bin/deveggs scout --hook`, quoted if
+ * needed. Its stderr is dropped and it always exits 0, so even a checkout that's gone (or
+ * no node on the hook's PATH) never shows the developer a hook error: fail open outside
+ * the process too.
+ */
+export function scoutCommand(repo: string): string {
+  const bin = join(repo, "bin", "deveggs");
+  return `${/^[\w@%+=:,./-]+$/.test(bin) ? bin : `'${bin.replace(/'/g, `'\\''`)}'`} ${HOOK_ARGS} 2>/dev/null || true`;
+}
+
+const isScout = (h: unknown): boolean =>
+  !!h && typeof h === "object" && typeof (h as { command?: unknown }).command === "string" && /(^|[/\s'])deveggs'? scout --hook(\s|$)/.test((h as { command: string }).command);
+
+type Json = Record<string, unknown>;
+const isObject = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** The indent a JSON file uses, so a rewrite keeps its look. */
+const indentOf = (text: string): string | number => /^\{\n([ \t]+)"/.exec(text)?.[1] ?? 2;
+
+/**
+ * Settings with the scout hook in `hooks.UserPromptSubmit`: an existing entry is updated in
+ * place (a moved checkout), otherwise one group is appended after the others.
+ */
+export function withScoutHook(settings: Json, command: string): { settings: Json; where: string } | undefined {
+  const out = structuredClone(settings);
+  // Create what's missing, but never replace a value of the wrong shape: that's the developer's.
+  if (out["hooks"] === undefined) out["hooks"] = {};
+  const hooks = out["hooks"];
+  if (!isObject(hooks)) return undefined;
+  if (hooks["UserPromptSubmit"] === undefined) hooks["UserPromptSubmit"] = [];
+  const groups = hooks["UserPromptSubmit"];
+  if (!Array.isArray(groups)) return undefined;
+  const entry = { type: "command", command, timeout: SCOUT_HOOK_TIMEOUT };
+  for (const g of groups) {
+    const list = isObject(g) && Array.isArray(g["hooks"]) ? (g["hooks"] as unknown[]) : [];
+    const at = list.findIndex(isScout);
+    if (at !== -1) {
+      list[at] = { ...(list[at] as Json), ...entry };
+      return { settings: out, where: "updated the scout hook" };
+    }
+  }
+  (groups as unknown[]).push({ hooks: [entry] });
+  return { settings: out, where: "added a UserPromptSubmit hook" };
+}
+
+/** Settings without the scout hook, dropping a group, array or hooks object it leaves empty. */
+export function withoutScoutHook(settings: Json): { settings: Json; removed: unknown[] } {
+  const out = structuredClone(settings);
+  const removed: unknown[] = [];
+  const hooks = out["hooks"];
+  if (!isObject(hooks) || !Array.isArray(hooks["UserPromptSubmit"])) return { settings: out, removed };
+  const groups = (hooks["UserPromptSubmit"] as unknown[]).filter((g) => {
+    if (!isObject(g) || !Array.isArray(g["hooks"])) return true;
+    const list = g["hooks"] as unknown[];
+    const kept = list.filter((h) => !isScout(h));
+    if (kept.length === list.length) return true;
+    removed.push(...list.filter(isScout));
+    g["hooks"] = kept;
+    return kept.length > 0;
+  });
+  if (!removed.length) return { settings, removed };
+  if (groups.length) hooks["UserPromptSubmit"] = groups;
+  else delete hooks["UserPromptSubmit"];
+  if (!Object.keys(hooks).length) delete out["hooks"];
+  return { settings: out, removed };
+}
+
+function readSettings(file: string): { text: string; settings?: Json } {
+  if (!existsSync(file)) return { text: "", settings: {} };
+  const text = readFileSync(file, "utf8");
+  if (!text.trim()) return { text, settings: {} };
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isObject(parsed) ? { text, settings: parsed } : { text };
+  } catch {
+    return { text };
+  }
+}
+
+const writeJson = (settings: Json, before: string): string => `${JSON.stringify(settings, null, indentOf(before))}\n`;
+
+/** Write through a temp file and rename, so Claude Code never reads a half-written settings.json. */
+function writeAtomic(file: string, text: string): void {
+  const tmp = `${file}.deveggs-${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, file);
+}
+
+function installHook(opts: Options, command: string): Change {
+  const harness: Harness = "claude-code";
+  const file = settingsFile(opts.home);
+  const { text: before, settings } = readSettings(file);
+  if (!settings) return { harness, file, action: "skipped the scout hook: settings.json isn't a JSON object; add it by hand (INSTALL.md)", changed: false };
+  const hooked = withScoutHook(settings, command);
+  if (!hooked) return { harness, file, action: "skipped the scout hook: settings.json hooks or hooks.UserPromptSubmit has an unexpected shape; add it by hand (INSTALL.md)", changed: false };
+  const { settings: next, where } = hooked;
+  const text = writeJson(next, before);
+  const shown = JSON.stringify({ type: "command", command, timeout: SCOUT_HOOK_TIMEOUT });
+  if (JSON.stringify(next) === JSON.stringify(settings)) return { harness, file, action: "scout hook already installed; nothing changed", changed: false, block: shown };
+  if (!opts.dryRun) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeAtomic(file, text);
+  }
+  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: scout hook (hooks.UserPromptSubmit runs ${command}); ${where}`, changed: true, block: shown };
+}
+
+function uninstallHook(opts: Options): Change {
+  const harness: Harness = "claude-code";
+  const file = settingsFile(opts.home);
+  const { text: before, settings } = readSettings(file);
+  const { settings: next, removed } = settings ? withoutScoutHook(settings) : { settings: {}, removed: [] };
+  if (!settings || !removed.length) return { harness, file, action: "scout hook not installed; nothing changed", changed: false };
+  // Nothing left means install created the file (or it held only {}): take it away again.
+  const empty = !Object.keys(next).length;
+  if (!opts.dryRun) {
+    if (empty) rmSync(file);
+    else writeAtomic(file, writeJson(next, before));
+  }
+  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the scout hook${empty ? "; deleted the settings file it left empty" : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n") };
+}
+
 interface Options {
   home: string;
+  /** The scout hook's command (Claude Code only); no hook when absent. */
+  scout?: string | undefined;
   preferences: string;
   dryRun: boolean;
   /** Harnesses named explicitly are wired even before their home folder exists. */
@@ -212,38 +349,45 @@ function readRendered(preferences: string): string | undefined {
 
 export function install(harnesses: Harness[], opts: Options): Change[] {
   const rendered = opts.rendered ?? readRendered(opts.preferences);
-  return harnesses.map((harness) => {
-    const file = instructionsFile(opts.home, harness);
-    if (!opts.explicit && !existsSync(join(opts.home, SPECS[harness].home))) {
-      return { harness, file, action: `skipped: not installed (no ~/${SPECS[harness].home})`, changed: false };
-    }
-    const exists = existsSync(file);
-    const before = exists ? readFileSync(file, "utf8") : "";
-    const { text, where, block: managed } = withBlock(before, harness, opts.preferences, rendered, !exists);
-    if (text === before) return { harness, file, action: "already installed; nothing changed", changed: false, block: managed };
-    if (!opts.dryRun) {
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, text);
-    }
-    const how = SPECS[harness].mode === "import" ? `imports ${opts.preferences}` : `copies ${opts.preferences} inline (re-synced by deveggs render)`;
-    return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: ${how}; ${where}`, changed: true, block: managed };
+  return harnesses.flatMap((harness) => {
+    const change = installBlock(harness, opts, rendered);
+    return harness === "claude-code" && opts.scout !== undefined && !change.action.startsWith("skipped") ? [change, installHook(opts, opts.scout)] : [change];
   });
 }
 
+function installBlock(harness: Harness, opts: Options, rendered: string | undefined): Change {
+  const file = instructionsFile(opts.home, harness);
+  if (!opts.explicit && !existsSync(join(opts.home, SPECS[harness].home))) {
+    return { harness, file, action: `skipped: not installed (no ~/${SPECS[harness].home})`, changed: false };
+  }
+  const exists = existsSync(file);
+  const before = exists ? readFileSync(file, "utf8") : "";
+  const { text, where, block: managed } = withBlock(before, harness, opts.preferences, rendered, !exists);
+  if (text === before) return { harness, file, action: "already installed; nothing changed", changed: false, block: managed };
+  if (!opts.dryRun) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  }
+  const how = SPECS[harness].mode === "import" ? `imports ${opts.preferences}` : `copies ${opts.preferences} inline (re-synced by deveggs render)`;
+  return { harness, file, action: `${opts.dryRun ? "would install" : "installed"}: ${how}; ${where}`, changed: true, block: managed };
+}
+
 export function uninstall(harnesses: Harness[], opts: Options): Change[] {
-  return harnesses.map((harness) => {
-    const file = instructionsFile(opts.home, harness);
-    const before = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const { text, removed, state } = withoutBlock(before);
-    if (removed === undefined) return { harness, file, action: "not installed; nothing changed", changed: false };
-    const remove = state?.created === true && text === "";
-    if (!opts.dryRun) {
-      if (remove) rmSync(file);
-      else writeFileSync(file, text);
-    }
-    const what = remove ? "; deleted the file it created" : state?.restore ? "; restored the line it replaced" : "";
-    return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the managed block${what}`, changed: true, block: removed };
-  });
+  return harnesses.flatMap((harness) => (harness === "claude-code" ? [uninstallBlock(harness, opts), uninstallHook(opts)] : [uninstallBlock(harness, opts)]));
+}
+
+function uninstallBlock(harness: Harness, opts: Options): Change {
+  const file = instructionsFile(opts.home, harness);
+  const before = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const { text, removed, state } = withoutBlock(before);
+  if (removed === undefined) return { harness, file, action: "not installed; nothing changed", changed: false };
+  const remove = state?.created === true && text === "";
+  if (!opts.dryRun) {
+    if (remove) rmSync(file);
+    else writeFileSync(file, text);
+  }
+  const what = remove ? "; deleted the file it created" : state?.restore ? "; restored the line it replaced" : "";
+  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the managed block${what}`, changed: true, block: removed };
 }
 
 /**

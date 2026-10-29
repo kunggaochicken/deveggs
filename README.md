@@ -31,14 +31,15 @@ ones that prove themselves hatch into chickens, permanent rules every agent foll
 ## Core principle: deveggs is a harness
 
 <p align="center">
-  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Loaded by code: the managed block deveggs install writes into each harness's global instructions loads them at session start (today); hooks that keep them in view mid-session are coming. 4 Every session: Claude Code, Codex, Gemini CLI and Antigravity. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where deveggs install can't load them.">
+  <img src="assets/harness.svg" width="880" alt="Four layers, left to right. 1 Basket: eggs and chickens in ~/.deveggs. 2 Render: deveggs render writes PREFERENCES.md on every change. 3 Loaded by code: the managed block deveggs install writes into each harness's global instructions loads them at session start, and in Claude Code the scout hook keeps the ones that fit each prompt in view mid-session. 4 Every session: Claude Code, Codex, Gemini CLI and Antigravity. Below, a dashed fallback: an instruction to read PREFERENCES.md, only where deveggs install can't load them.">
 </p>
 
 Preferences written as plain instructions get ignored once a session's context gets
 complex. So deveggs doesn't ask agents to remember them: it's built to **guarantee
 they're loaded, at any point, with code.** Today a managed block in each harness's
-global instructions loads them at session start; hooks that keep the ones that apply in
-view mid-session are coming. An instruction to read them is only the fallback, where
+global instructions loads them at session start, and in Claude Code the scout hook
+(`deveggs scout --hook`) keeps the ones that fit each prompt in view mid-session. An
+instruction to read them is only the fallback, where
 `deveggs install` can't load them (no global file, or not yet run).
 
 ## How it works
@@ -201,6 +202,15 @@ deveggs uninstall [--harness …]           # take it out again
 It's idempotent, and it replaces the deveggs prompt's "read PREFERENCES.md at session
 start" line (uninstall puts it back).
 
+Loaded isn't the same as noticed: in a long, busy session agents stop spotting which
+egg applies. So for Claude Code, `deveggs install` also adds a `UserPromptSubmit` hook,
+`deveggs scout --hook`: on every prompt a fresh-context `claude -p` (Haiku, no tools)
+picks the eggs and chickens whose "fires when" matches, and the hook injects them into
+the session. It fails open, logs each run to `<basket>/logs/scout.log`, and
+`deveggs scout --dry-run "<prompt>"` shows what it would pick
+([design](docs/design-docs/egg-scout/design.md)). It's the attention half of the
+[core principle](#core-principle-deveggs-is-a-harness): loaded and noticed by code, not memory.
+
 Each rule in `PREFERENCES.md` comes with when it fires (its architecture's `Fires when` line), and agents
 name the ids of the rules that shaped a decision, so you can see which ones work.
 Subagents mostly inherit it too: Claude Code's `general-purpose` and custom agents and
@@ -227,6 +237,7 @@ deveggs push                                                            # save y
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
 deveggs install [--harness claude-code|codex|gemini|all] [--dry-run]    # load your preferences into every session
+deveggs scout --dry-run "<prompt>"                                      # 🔭 which eggs the scout hook would inject
 deveggs share --dry-run --as <you>                                      # preview sharing your basket
 deveggs browse [<username>]                                             # browse shared baskets
 deveggs import <username>/<id>                                          # borrow one as an egg
