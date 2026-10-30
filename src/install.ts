@@ -622,29 +622,23 @@ export function scoutCandidates(env: NodeJS.ProcessEnv, home: string): AgentCand
   return SCOUT_AGENTS.filter((a) => onPath(BINARIES[a], env)).map((agent) => ({ agent, checker: CHECKERS[agent].name, signedIn: signedIn(agent, env, home) }));
 }
 
-/** The first signed-in candidate, else the first found. */
-export const recommendedAgent = (candidates: AgentCandidate[]): AgentCandidate | undefined => candidates.find((c) => c.signedIn) ?? candidates[0];
-
-const describe = (c: AgentCandidate, rec: AgentCandidate | undefined): string =>
-  `${c.agent} (${c.checker}${c.signedIn ? ", signed in" : ""}${c === rec ? ", recommended" : ""})`;
+const describe = (c: AgentCandidate): string => `${c.agent} (${c.checker}${c.signedIn ? ", signed in" : ""})`;
 
 /** One line for an agent that runs install without a terminal: ask the developer, then rerun with the flag. */
 export function needsInputMessage(borrowers: string[], candidates: AgentCandidate[]): string {
-  const rec = recommendedAgent(candidates);
-  return `needs input: ${borrowers.join(" and ")} has no isolated headless mode, so its scout hook borrows a default scout agent. Ask the developer which to use (found: ${candidates.map((c) => describe(c, rec)).join(", ")}; or none), then rerun: deveggs install --scout-default <${SCOUT_AGENTS.join("|")}|none>`;
+  return `needs input: ${borrowers.join(" and ")} has no isolated headless mode, so its scout hook borrows a default scout agent. Ask the developer which to use (found: ${candidates.map(describe).join(", ")}; or none), then rerun: deveggs install --scout-default <${SCOUT_AGENTS.join("|")}|none>`;
 }
 
 /** What a dry run says about a default it would ask for. */
-export const wouldAskLine = (borrowers: string[], candidates: AgentCandidate[]): string => {
-  const rec = recommendedAgent(candidates);
-  return candidates.length
-    ? `🔭 default scout agent: not set; install will ask, for ${borrowers.join(" and ")} (found: ${candidates.map((c) => describe(c, rec)).join(", ")}; or none)`
+export const wouldAskLine = (borrowers: string[], candidates: AgentCandidate[]): string =>
+  candidates.length
+    ? `🔭 default scout agent: not set; install will ask, for ${borrowers.join(" and ")} (found: ${candidates.map(describe).join(", ")}; or none)`
     : `🔭 default scout agent: none found (no claude or codex on PATH), so ${borrowers.join(" and ")} would get no scout hook`;
-};
 
 /**
- * Ask the developer for the default scout agent at a terminal. Lists each candidate, marks
- * the recommended one, and takes Enter for it; a number or name picks another, "none" opts out.
+ * Ask the developer for the default scout agent at a terminal. Lists each candidate with what
+ * was detected; it marks no option as recommended and has no default, so an empty answer asks
+ * again. A number or name picks one, "none" opts out.
  * With no candidates it explains and returns undefined without asking.
  */
 export function promptScoutDefault(
@@ -658,15 +652,16 @@ export function promptScoutDefault(
     say(`🔭 Default scout agent: neither claude nor codex is on your PATH, so ${who} gets no scout hook (it has no isolated headless mode of its own). Your preferences still load at session start.`);
     return undefined;
   }
-  const rec = recommendedAgent(candidates) as AgentCandidate;
   const options: ScoutDefault[] = [...candidates.map((c) => c.agent), "none"];
   say(`🔭 Default scout agent: ${who} has no isolated headless mode, so its scout hook borrows one of these to check each prompt in a fresh context:`);
-  candidates.forEach((c, i) => say(`   ${i + 1}) ${c.agent.padEnd(11)} ${c.checker.padEnd(10)} ${c.signedIn ? "signed in" : "sign-in not detected"}${c === rec ? "   ← recommended" : ""}`));
+  candidates.forEach((c, i) => say(`   ${i + 1}) ${c.agent.padEnd(11)} ${c.checker.padEnd(10)} ${c.signedIn ? "signed in" : "sign-in not detected"}`));
   say(`   ${options.length}) none        no scout in ${who}; your preferences still load at session start`);
-  const def = options.indexOf(rec.agent) + 1;
   for (let tries = 0; tries < 3; tries++) {
-    const answer = ask(`   Pick 1-${options.length} [${def}]: `).trim().toLowerCase();
-    if (!answer) return rec.agent;
+    const answer = ask(`   Pick 1-${options.length}: `).trim().toLowerCase();
+    if (!answer) {
+      say(`   There's no default: type a number or name.`);
+      continue;
+    }
     const n = Number(answer);
     if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1];
     const named = options.find((o) => o === answer || (o === "claude-code" && answer === "claude"));
