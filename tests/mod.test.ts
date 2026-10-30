@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { cli, repoRoot, type Sandbox, sandbox } from "./sandbox.ts";
+import { cli, fakePath, repoRoot, type Sandbox, sandbox } from "./sandbox.ts";
 
 // The Claude Code mod (plugins/claude-code/hooks/register.js), driven by fake events and a
 // fake mods API. Its `$.process.run` runs the real deveggs CLI against a sandbox basket, so
@@ -14,7 +14,7 @@ const MODULE = join(repoRoot, "plugins", "claude-code", "hooks", "register.js");
 const SCOUT = "deveggs:deveggs-scout";
 
 type Hook = (api: Api, e: Record<string, unknown>, next: Next) => Promise<unknown>;
-type Next = ((e: Record<string, unknown>) => Promise<unknown>) & { origin?: { plugin: string } };
+type Next = ((e: Record<string, unknown>) => Promise<unknown>) & { origin?: { plugin: string }; budget?: { remainingMs: number } };
 
 interface Api {
   plugin: { name: string; root: string };
@@ -26,7 +26,7 @@ interface Api {
 
 interface Rig {
   box: Sandbox;
-  fire: (event: string, e: Record<string, unknown>) => Promise<unknown>;
+  fire: (event: string, e: Record<string, unknown>, budget?: { remainingMs: number }) => Promise<unknown>;
   registered: Record<string, unknown>[];
   spawned: Record<string, unknown>[];
   appended: unknown[];
@@ -36,6 +36,8 @@ interface Rig {
 async function rig(opts: { wait?: string; reply?: (agentId: string, fire: Rig["fire"]) => void; basket?: boolean; deny?: string; noDeveggs?: boolean } = {}): Promise<Rig> {
   const box = sandbox();
   if (opts.basket !== false) assert.equal(cli(box, "lay", "Present options as a table", "--id", "decision-tables").status, 0);
+  // The fallback hook's own checker, never the real claude.
+  box.env["PATH"] = `${fakePath(box, { claude: `cat > /dev/null; printf '%s' '{"apply":[]}'` })}:${process.env["PATH"]}`;
   const hooks = new Map<string, Hook>();
   const on = (event: string, ...rest: unknown[]) => {
     hooks.set(event, rest[rest.length - 1] as Hook);
@@ -45,9 +47,9 @@ async function rig(opts: { wait?: string; reply?: (agentId: string, fire: Rig["f
   const spawned: Record<string, unknown>[] = [];
   const appended: unknown[] = [];
   let n = 0;
-  const fire = async (event: string, e: Record<string, unknown>): Promise<unknown> => {
+  const fire = async (event: string, e: Record<string, unknown>, budget?: { remainingMs: number }): Promise<unknown> => {
     const hook = hooks.get(event);
-    const next: Next = Object.assign(async (out: Record<string, unknown>) => ({ next: out }), { origin: { plugin: "engine" } });
+    const next: Next = Object.assign(async (out: Record<string, unknown>) => ({ next: out }), { origin: { plugin: "engine" }, ...(budget && { budget }) });
     return hook ? hook(api, e, next) : next(e);
   };
   const api: Api = {
@@ -92,7 +94,9 @@ test("the mod registers a hidden, tool-less scout subagent from deveggs's spec, 
   assert.deepEqual(await r.fire("agent.offer", { agent: "Explore" }), { next: { agent: "Explore" } });
   assert.equal((await r.fire("tool.check", { tool: "Agent", input: { subagent_type: SCOUT } }) as { decision: string }).decision, "allow");
   assert.deepEqual(await r.fire("tool.check", { tool: "Agent", input: { subagent_type: "Explore" } }), { next: { tool: "Agent", input: { subagent_type: "Explore" } } });
-  assert.deepEqual(await r.fire("classic.UserPromptSubmit", { prompt: "x" }), { next: { prompt: "x", deveggs_scout: "subagent" } }, "the fallback hook is told to stay silent");
+  assert.equal((await r.fire("tool.check", { tool: "Bash", input: { subagent_type: SCOUT } }) as { next?: unknown }).next !== undefined, true, "only a spawn is allowed");
+  assert.equal((await r.fire("tool.check", { tool: "Agent", agentId: "x", input: { subagent_type: SCOUT } }) as { next?: unknown }).next !== undefined, true, "not from inside a subagent");
+  assert.deepEqual(await r.fire("classic.UserPromptSubmit", { prompt: "x" }), { next: { prompt: "x" } }, "a prompt it didn't scout keeps the fallback hook");
 });
 
 test("each prompt spawns the scout with deveggs's question; an answer in time is added to the prompt and its report never reaches the main model", async () => {
@@ -105,6 +109,8 @@ test("each prompt spawns the scout with deveggs's question; an answer in time is
   });
   await r.fire("session.start", {});
   const out = (await r.fire("prompt.submit", prompt("postgres or sqlite?"))) as { next: { context?: string[] } };
+  assert.deepEqual(await r.fire("classic.UserPromptSubmit", { prompt: "postgres or sqlite?" }), { next: { prompt: "postgres or sqlite?", deveggs_scout: "subagent" } }, "the fallback hook is told to stay silent");
+  assert.deepEqual(await r.fire("classic.UserPromptSubmit", { prompt: "postgres or sqlite?" }), { next: { prompt: "postgres or sqlite?" } }, "once");
   assert.equal(r.spawned.length, 1);
   assert.equal(r.spawned[0]?.["subagentType"], SCOUT);
   assert.match(String(r.spawned[0]?.["prompt"]), /\[user\] earlier[\s\S]*<new-request>\npostgres or sqlite\?\n<\/new-request>/);
@@ -112,7 +118,8 @@ test("each prompt spawns the scout with deveggs's question; an answer in time is
   assert.match(out.next.context?.[0] ?? "", /^deveggs scout \(fresh-context check\)[\s\S]*`decision-tables` \(egg\): Present options as a table \(why: a db choice\)/);
   assert.deepEqual(delivered, { result: { success: true, message: "Report delivered to your caller." } }, "deveggs answers the handback itself");
   assert.deepEqual(await r.fire("session.receive", { agentId: "a1", text: VERDICT, origin: { kind: "peer" } }), { consumed: "deveggs scout" });
-  assert.deepEqual(await r.fire("prompt.submit", prompt('Agent "a1" completed', "task-notification")), { drop: "deveggs scout finished" });
+  assert.deepEqual(await r.fire("prompt.submit", prompt('Agent "a1" completed', "task-notification")), { drop: "deveggs scout" });
+  assert.deepEqual(await r.fire("prompt.submit", prompt('Agent "a1" completed', "task-notification")), { next: prompt('Agent "a1" completed', "task-notification") }, "only its first notice");
   const [run] = log(r.box);
   assert.deepEqual([run.harness, run.checker, run.session, run.apply], ["claude-code", "subagent", "s1", ["decision-tables"]]);
   assert.equal(r.appended.length, 0);
@@ -129,6 +136,45 @@ test("a scout slower than the wait lets the prompt go ahead, then appends its co
   assert.match(JSON.stringify(r.appended[0]), /answered after this turn began[\s\S]*decision-tables/);
   await r.fire("turn.complete", { agentId: "a1", answer: VERDICT, isAborted: false });
   assert.equal(r.appended.length, 1, "appended once");
+});
+
+test("a handback and the scout's turn ending back to back inject once; a huge wait is capped inside the hook's budget", async () => {
+  const r = await rig({
+    reply: (id, fire) =>
+      setTimeout(() => {
+        void handback(fire, id, VERDICT);
+        void fire("turn.complete", { agentId: id, answer: VERDICT, isAborted: false });
+      }, 5),
+  });
+  await r.fire("session.start", {});
+  const out = (await r.fire("prompt.submit", prompt("postgres or sqlite?"))) as { next: { context?: string[] } };
+  assert.equal(out.next.context?.length, 1);
+  await new Promise((done) => setTimeout(done, 300));
+  assert.equal(r.appended.length, 0, "never appended as well");
+  assert.equal(log(r.box).length, 1, "one run logged");
+
+  const slow = await rig({ wait: "60000" });
+  await slow.fire("session.start", {});
+  const started = Date.now();
+  await slow.fire("prompt.submit", prompt("postgres or sqlite?"), { remainingMs: 1700 });
+  assert.ok(Date.now() - started < 3000, "waited within the budget, not 60 s");
+});
+
+test("a scouted prompt leaves a per-session stamp, so the fallback hook stays silent even without the mark; a refused spawn takes it back", async () => {
+  const r = await rig({ reply: (id, fire) => setTimeout(() => handback(fire, id, '{"apply":[]}'), 5) });
+  await r.fire("session.start", {});
+  await r.fire("prompt.submit", prompt("postgres or sqlite?"));
+  const hook = (p: string) =>
+    spawnSync(join(repoRoot, "bin", "deveggs"), ["scout", "--hook", "--harness", "claude-code"], { env: r.box.env, input: JSON.stringify({ prompt: p, session_id: "s1" }), encoding: "utf8" });
+  assert.equal(hook("postgres or sqlite?").stdout, "");
+  assert.equal(log(r.box).length, 1, "the hook didn't run a check of its own");
+  hook("another prompt");
+  assert.equal(log(r.box).length, 2, "a prompt the mod didn't take is the fallback's");
+
+  const refused = await rig({ deny: "no" });
+  await refused.fire("session.start", {});
+  await refused.fire("prompt.submit", prompt("postgres or sqlite?"));
+  assert.equal(existsSync(join(refused.box.basket, "logs", "scout-cache", "subagent-s1.json")), false);
 });
 
 test("the mod stays out of the way: other prompts, nothing that applies, a refused spawn, or no basket", async () => {

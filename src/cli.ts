@@ -11,7 +11,7 @@ import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type Logge
 import { borrowingHarnesses, CURSOR_HINT, type Change, HARNESS_NAMES, install, needsInputMessage, parseHarness, promptScoutDefault, SCOUT_HARNESS_NAMES, SCOUT_NOTES, scoutCandidates, sync, uninstall, uninstallsBorrowers, wouldAskLine } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, scoutDefault, setAutopush, setScoutDefault, webUrl } from "./store.ts";
-import { ADAPTERS, cacheDir, CHECKERS, clearCached, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, subagentQuestion, subagentSpec, subagentVerdict, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
+import { ADAPTERS, cacheDir, CHECKERS, clearCached, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, stampSubagent, clearStamp, subagentStamped, subagentQuestion, subagentSpec, subagentVerdict, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, formatTimeline, mark, terminalOptions, trialCounts } from "./view.ts";
 
@@ -395,7 +395,7 @@ function scoutCommand(hook: boolean, positionals: string[], harness: string | un
       input = adapter.parse(readFileSync(0, "utf8"));
       if (!input || !existsSync(basketRoot)) return;
       // The harness's own scout subagent covers this prompt (Claude Code's mod): stay silent.
-      if (input.subagent) return;
+      if (input.subagent || subagentStamped(cacheDir(basketRoot), input.sessionId, input.prompt)) return;
       // Antigravity runs the hook before every model call of a turn: only the first one
       // checks; later ones re-send what it injected (an ephemeral step lasts one call).
       if (input.invocation !== undefined && input.invocation > 0) {
@@ -453,7 +453,9 @@ function subagentCommand(step: string, harness: string | undefined): void {
     const input = JSON.parse(readFileSync(0, "utf8")) as Record<string, unknown>;
     if (step === "ask") {
       const asked = subagentQuestion(typeof input["prompt"] === "string" ? input["prompt"] : "", input["messages"], basket.all());
-      if ("question" in asked) process.stdout.write(`${JSON.stringify({ question: asked.question })}\n`);
+      if (!("question" in asked)) return;
+      stampSubagent(cacheDir(basketRoot), typeof input["session"] === "string" ? input["session"] : undefined, asked.prompt);
+      process.stdout.write(`${JSON.stringify({ question: asked.question })}\n`);
       return;
     }
     if (step === "verdict") {
@@ -461,6 +463,7 @@ function subagentCommand(step: string, harness: string | undefined): void {
       const ms = typeof input["ms"] === "number" ? Math.round(input["ms"]) : 0;
       const reply = typeof input["reply"] === "string" ? input["reply"] : undefined;
       const error = typeof input["error"] === "string" ? input["error"] : undefined;
+      if (input["unspawned"] === true) clearStamp(cacheDir(basketRoot), session);
       const verdict = reply === undefined ? { applied: [], candidates: 0, error: error ?? "no reply" } : subagentVerdict(reply, basket.all());
       logRun(basketRoot, { prompt: "", ...(session && { sessionId: session }) }, { ...verdict, ms }, name, new Date(), "subagent");
       if (verdict.context) process.stdout.write(`${verdict.context}\n`);

@@ -135,7 +135,7 @@ export const SCOUT_NOTES: Partial<Record<Harness, string>> = {
 
 /** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
 export const CURSOR_HINT =
-  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook: Cursor's beforeSubmitPrompt hook can't add context, so not even the default scout agent can help it";
+  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook yet: Cursor's beforeSubmitPrompt adds context only in its TUI, and its own subagents and gate hooks are untested here";
 
 const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
@@ -510,9 +510,13 @@ function linkTarget(path: string): string | undefined {
   }
 }
 
-/** Is this a link deveggs made: one pointing at some deveggs checkout's plugin folder? */
+/**
+ * Is this a link deveggs made? One pointing at a deveggs checkout's plugin folder (it has
+ * `bin/deveggs` two levels up), or a dangling one shaped like it (a deleted worktree's).
+ * A live link into some other project's plugins/claude-code is never ours.
+ */
 const isOurLink = (target: string | undefined, plugin: PluginSpec): boolean =>
-  target !== undefined && target.endsWith(`/${plugin.dir}`) && existsSync(join(target, "..", "..", "bin", "deveggs"));
+  target !== undefined && target.endsWith(`/${plugin.dir}`) && (existsSync(join(target, "..", "..", "bin", "deveggs")) || !existsSync(target));
 
 function installPlugin(harness: Harness, plugin: PluginSpec, opts: Options, repo: string): Change {
   const file = join(opts.home, plugin.link);
@@ -525,7 +529,8 @@ function installPlugin(harness: Harness, plugin: PluginSpec, opts: Options, repo
   }
   if (!opts.dryRun) {
     mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.deveggs-${process.pid}.tmp`;
+    // The temp link sits outside the skills folder, so a crash never leaves a second plugin there.
+    const tmp = join(opts.home, dirname(dirname(plugin.link)), `.deveggs-plugin-link-${process.pid}.tmp`);
     rmSync(tmp, { force: true });
     symlinkSync(target, tmp);
     renameSync(tmp, file); // replaces an old deveggs link in one step
@@ -537,7 +542,7 @@ function installPlugin(harness: Harness, plugin: PluginSpec, opts: Options, repo
 function uninstallPlugin(harness: Harness, plugin: PluginSpec, opts: Options): Change {
   const file = join(opts.home, plugin.link);
   const current = linkTarget(file);
-  if (!isOurLink(current, plugin) && !(current !== undefined && current.endsWith(`/${plugin.dir}`))) {
+  if (!isOurLink(current, plugin)) {
     return { harness, file, action: current === undefined && !existsSync(file) ? "plugin not linked; nothing changed" : `left ${file}: it isn't a deveggs link`, changed: false, hook: true };
   }
   if (!opts.dryRun) rmSync(file);

@@ -828,7 +828,24 @@ test("install repoints a link from a moved deveggs checkout, and leaves a folder
   assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /left .*deveggs-scout: it isn't a deveggs link/);
   assert.equal(readlinkSync(pluginLink(box)), join(box.dir, "elsewhere"));
 
+  // A live link into another project's plugins/claude-code isn't ours either.
   rmSync(pluginLink(box));
+  const other = join(box.dir, "other-project", "plugins", "claude-code");
+  mkdirSync(other, { recursive: true });
+  symlinkSync(other, pluginLink(box));
+  assert.match(cli(box, "install", "--harness", "claude-code").stdout, /skipped the plugin/);
+  assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /left .*: it isn't a deveggs link/);
+  assert.equal(readlinkSync(pluginLink(box)), other);
+
+  // A dangling link a deleted deveggs worktree left is ours: repointed, or removed.
+  rmSync(pluginLink(box));
+  symlinkSync(join(box.dir, "deleted-worktree", "plugins", "claude-code"), pluginLink(box));
+  assert.match(cli(box, "install", "--harness", "claude-code").stdout, /repointed it from .*deleted-worktree/);
+  rmSync(pluginLink(box));
+  symlinkSync(join(box.dir, "deleted-worktree", "plugins", "claude-code"), pluginLink(box));
+  assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /removed the plugin link/);
+  assert.equal(isLink(pluginLink(box)), false);
+
   mkdirSync(pluginLink(box));
   writeFileSync(join(pluginLink(box), "SKILL.md"), "mine");
   assert.match(cli(box, "install", "--harness", "claude-code").stdout, /skipped the plugin: .*isn't a deveggs link/);

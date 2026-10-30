@@ -560,6 +560,32 @@ export function sessionTail(messages: unknown, opts: TailOptions = {}): Turn[] {
   return trimTurns(out, opts);
 }
 
+/**
+ * The stamp `deveggs scout --subagent ask` leaves for a prompt its harness's own subagent
+ * scouts, so the fallback command hook stays silent for it even where the harness's code
+ * can't mark the hook's input (Claude Code skips a user mod's hooks on classic events when
+ * the organization's guard mod loads). Per session, in the same private cache folder as
+ * Antigravity's re-sends; it holds the prompt and when, and goes stale after STAMP_MS.
+ */
+export const STAMP_MS = 60_000;
+const stampFile = (dir: string, session: string): string | undefined => cacheFile(dir, `subagent-${session}`);
+
+export function stampSubagent(dir: string, session: string | undefined, prompt: string, at = Date.now()): void {
+  if (session) saveCached(dir, `subagent-${session}`, { prompt, context: String(at) });
+}
+
+export function clearStamp(dir: string, session: string | undefined): void {
+  if (session) clearCached(dir, `subagent-${session}`);
+}
+
+/** Did the harness's own subagent take this prompt, in this session, within STAMP_MS? */
+export function subagentStamped(dir: string, session: string | undefined, prompt: string, now = Date.now()): boolean {
+  if (!session || !stampFile(dir, session)) return false;
+  const stamp = loadCached(dir, `subagent-${session}`);
+  const at = Number(stamp?.context);
+  return !!stamp && stamp.prompt.trim() === prompt.trim() && Number.isFinite(at) && now - at >= 0 && now - at < STAMP_MS;
+}
+
 /** What the subagent is asked for a prompt: the same question a headless checker gets, or why there's none. */
 export function subagentQuestion(prompt: string, messages: unknown, items: Egg[]): { question: string; prompt: string } | { error: string } {
   const list = candidates(items);

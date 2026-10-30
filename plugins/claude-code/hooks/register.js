@@ -16,6 +16,8 @@
 
 /** How long a prompt waits for the scout before it goes ahead without it (ms); DEVEGGS_SCOUT_WAIT_MS overrides it. */
 const WAIT_MS = 5000
+/** A hook gets 10 s of its own time and the wait counts: never wait past this (ms). */
+const MAX_WAIT_MS = 7000
 let waitMs = WAIT_MS
 /** What the fallback command hook finds in its input while this mod scouts. */
 const MARK = { deveggs_scout: 'subagent' }
@@ -24,8 +26,10 @@ const MARK = { deveggs_scout: 'subagent' }
 let scoutType
 /** Answers being waited for, by the scout's agentId. */
 const pending = new Map()
-/** Every scout this session started, so their reports never reach the main conversation. */
+/** Every scout this session started and hasn't finished with, so its reports never reach the main conversation. */
 const scouts = new Set()
+/** Prompts this mod spawned a scout for, until the fallback hook's input is marked. */
+const scouted = new Set()
 
 /** The checkout's deveggs CLI: this plugin lives at <checkout>/plugins/claude-code. */
 function deveggs($) {
@@ -44,7 +48,7 @@ async function run($, args, stdin) {
 
 /** The context the scout's answer injects ('' when nothing applies), logged by deveggs. */
 async function verdict($, answer, ms, session) {
-  const input = typeof answer === 'string' ? { reply: answer, ms, session } : { error: answer.error, ms, session }
+  const input = typeof answer === 'string' ? { reply: answer, ms, session } : { error: answer.error, unspawned: !!answer.unspawned, ms, session }
   return run($, ['--subagent', 'verdict'], JSON.stringify(input))
 }
 
@@ -65,12 +69,12 @@ async function history($) {
 async function land($, agentId, answer) {
   const entry = pending.get(agentId)
   if (!entry) return
+  pending.delete(agentId) // once only, whichever of handback, message or turn end comes first
+  entry.answer = answer
   if (entry.waiting) {
-    entry.waiting = false
     entry.resolve(answer)
     return
   }
-  pending.delete(agentId)
   const context = await verdict($, answer, Date.now() - entry.t0, entry.session)
   if (!context) return
   try {
@@ -97,7 +101,7 @@ export function register(on) {
     try {
       const raw = await $.env.get('DEVEGGS_SCOUT_WAIT_MS')
       const wait = raw ? Number(raw) : NaN
-      waitMs = Number.isFinite(wait) && wait >= 0 ? wait : WAIT_MS
+      waitMs = Number.isFinite(wait) && wait >= 0 ? Math.min(wait, MAX_WAIT_MS) : WAIT_MS
       const spec = JSON.parse(await run($, ['--subagent', 'spec']))
       const r = await $.agent.register({
         name: spec.name,
@@ -122,15 +126,26 @@ export function register(on) {
   // classifier would refuse it (no request asked for it), and in default mode it would ask.
   on('tool.check', async ($, e, next) => {
     const input = e.input && typeof e.input === 'object' ? e.input : {}
-    return scoutType && input.subagent_type === scoutType ? { decision: 'allow', reason: 'deveggs scout: a tool-less subagent deveggs starts on every prompt' } : next(e)
+    const spawn = e.tool === 'Agent' || e.tool === 'Task'
+    return scoutType && spawn && !e.agentId && input.subagent_type === scoutType ? { decision: 'allow', reason: 'deveggs scout: a tool-less subagent deveggs starts on every prompt' } : next(e)
   }).catch(failOpen)
 
-  // Tell the fallback command hook this session is scouted here, so it prints nothing.
-  on('classic.UserPromptSubmit', async ($, e, next) => (scoutType ? next({ ...e, ...MARK }) : next(e))).catch(failOpen)
+  // Tell the fallback command hook this prompt is scouted here, so it prints nothing. Only a
+  // prompt the mod really spawned a scout for: otherwise the fallback still runs. (Where hooks
+  // on classic events don't run for this mod, `deveggs scout --subagent ask` also leaves a
+  // per-session stamp the hook checks.)
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    if (typeof e.prompt !== 'string' || !scouted.delete(e.prompt)) return next(e)
+    return next({ ...e, ...MARK })
+  }).catch(failOpen)
 
   on('prompt.submit', async ($, e, next) => {
     // A scout finishing is deveggs's business, not the main model's: drop its notice.
-    if (e.origin && e.origin.kind === 'task-notification' && [...scouts].some((id) => e.text.includes(id))) return { drop: 'deveggs scout finished' }
+    const done = e.origin && e.origin.kind === 'task-notification' ? [...scouts].find((id) => e.text.includes(id)) : undefined
+    if (done) {
+      scouts.delete(done)
+      return { drop: 'deveggs scout' }
+    }
     if (!scoutType || !fromDeveloper(e)) return next(e)
     const t0 = Date.now()
     let session
@@ -139,7 +154,7 @@ export function register(on) {
     } catch {
       session = undefined
     }
-    const asked = await run($, ['--subagent', 'ask'], JSON.stringify({ prompt: e.text, messages: await history($) }))
+    const asked = await run($, ['--subagent', 'ask'], JSON.stringify({ prompt: e.text, messages: await history($), session }))
     let question
     try {
       question = JSON.parse(asked).question
@@ -153,18 +168,21 @@ export function register(on) {
       spawned = { deny: String(err) }
     }
     if (!spawned || !spawned.agentId) {
-      await verdict($, { error: 'spawn refused: ' + ((spawned && spawned.deny) || 'no agent') }, Date.now() - t0, session)
+      // unspawned: deveggs takes back the stamp `ask` left, so the fallback hook scouts this prompt
+      await verdict($, { error: 'spawn refused: ' + ((spawned && spawned.deny) || 'no agent'), unspawned: true }, Date.now() - t0, session)
       return next(e)
     }
     scouts.add(spawned.agentId)
-    const answer = new Promise((resolve) => pending.set(spawned.agentId, { resolve, t0, session, waiting: true }))
-    const answered = await Promise.race([answer, new Promise((resolve) => setTimeout(() => resolve(undefined), waitMs))])
-    const entry = pending.get(spawned.agentId)
-    if (answered === undefined) {
-      if (entry) entry.waiting = false // land() appends it once it lands
-      return next(e)
-    }
-    pending.delete(spawned.agentId)
+    scouted.add(e.text)
+    const entry = { t0, session, waiting: true }
+    const answer = new Promise((resolve) => (entry.resolve = resolve))
+    pending.set(spawned.agentId, entry)
+    const budget = next.budget && typeof next.budget.remainingMs === 'number' ? next.budget.remainingMs - 1500 : waitMs
+    const wait = Math.max(0, Math.min(waitMs, budget))
+    let answered = await Promise.race([answer, new Promise((resolve) => setTimeout(() => resolve(undefined), wait))])
+    entry.waiting = false // from here, a later answer is appended by land()
+    if (answered === undefined) answered = entry.answer // landed in the same tick as the timeout
+    if (answered === undefined) return next(e)
     const context = await verdict($, answered, Date.now() - t0, session)
     return context ? next({ ...e, context: [...(e.context ?? []), context] }) : next(e)
   }).catch(failOpen)
@@ -191,6 +209,7 @@ export function register(on) {
     if (e.agentId && pending.has(e.agentId)) {
       await land($, e.agentId, e.isAborted || typeof e.answer !== 'string' || !e.answer ? { error: 'the scout subagent ended without an answer' } : e.answer)
     }
+    if (!e.agentId) scouted.clear() // a turn ended: no fallback hook is still to come for its prompt
     return next(e)
   })
 }
