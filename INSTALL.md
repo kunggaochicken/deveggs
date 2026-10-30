@@ -118,9 +118,9 @@ file, or not yet run).
      CLI is on PATH (`claude` → `claude-code`, `codex` → `codex`) plus `none`, each with
      what was detected (signed in: `~/.claude.json` has `oauthAccount`, or
      `~/.codex/auth.json` exists), and let the developer pick. Don't recommend one or
-     pick a default for them. If only one is found, still show it and ask. If neither is, tell them Antigravity gets no scout (preferences
-     still load) and pass nothing. Then run `<repo>/bin/deveggs install --scout-default
-     <claude-code|codex|none>`. It's saved per machine, in the basket repo's own git
+     pick a default for them. If only one is found, still show it and ask. If neither
+     is, tell them Antigravity gets no scout (preferences still load) and pass nothing.
+     Then run `<repo>/bin/deveggs install --scout-default <claude-code|codex|none>`. It's saved per machine, in the basket repo's own git
      config (`deveggs.scoutDefault`, never committed), so later installs just show it;
      pass the flag again to change it; `--scout-default none` also removes an Antigravity
      hook an earlier install added. `DEVEGGS_SCOUT_DEFAULT` overrides it at hook time.
