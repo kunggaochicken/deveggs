@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type AgentCandidate, END, block, parseHarness, promptScoutDefault, readLine, scoutCandidates, scoutCommand, SCOUT_HOOK_TIMEOUT, withBlock, withNamedScoutHook, withoutBlock, withoutNamedScoutHook, withoutScoutHook, withScoutHook } from "../src/install.ts";
@@ -304,7 +304,7 @@ test("install adds one scout hook to settings.json and leaves every other key an
   writeFileSync(settingsJson(box), `${JSON.stringify(OTHERS, null, 4)}\n`);
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness claude-code 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\n/);
+  assert.match(r.stdout, /claude-code: .*settings\.json\n\s+installed: fallback scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness claude-code 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\n/);
   const text = read(settingsJson(box));
   assert.ok(text.startsWith('{\n    "model"'), "keeps the file's indent");
   const after = JSON.parse(text);
@@ -317,7 +317,7 @@ test("install adds one scout hook to settings.json and leaves every other key an
   assert.match(again.stdout, /scout hook already installed; nothing changed/);
   assert.equal(read(settingsJson(box)), text, "idempotent");
   const removed = cli(box, "uninstall", "--harness", "claude-code");
-  assert.match(removed.stdout, /removed the scout hook\n/);
+  assert.match(removed.stdout, /removed the fallback scout hook\n/);
   assert.deepEqual(JSON.parse(read(settingsJson(box))), OTHERS, "uninstall takes out exactly its own entry");
 });
 
@@ -327,7 +327,7 @@ test("install creates settings.json when there is none, and uninstall deletes it
   cli(box, "install", "--harness", "claude-code");
   assert.deepEqual(Object.keys(JSON.parse(read(settingsJson(box)))), ["hooks"]);
   const r = cli(box, "uninstall", "--harness", "claude-code");
-  assert.match(r.stdout, /removed the scout hook; deleted the settings\.json it left empty/);
+  assert.match(r.stdout, /removed the fallback scout hook; deleted the settings\.json it left empty/);
   assert.equal(existsSync(settingsJson(box)), false);
 });
 
@@ -335,12 +335,12 @@ test("--dry-run shows the scout hook and writes no settings", () => {
   const { box } = wired();
   writeFileSync(settingsJson(box), JSON.stringify(OTHERS));
   const r = cli(box, "install", "--harness", "claude-code", "--dry-run");
-  assert.match(r.stdout, /would install: scout hook/);
+  assert.match(r.stdout, /would install: fallback scout hook/);
   assert.match(r.stdout, /\+ \{"type":"command","command":".*deveggs scout --hook --harness claude-code 2>\/dev\/null \|\| true","timeout":15\}/);
   assert.equal(read(settingsJson(box)), JSON.stringify(OTHERS));
   cli(box, "install", "--harness", "claude-code");
   const dry = cli(box, "uninstall", "--harness", "claude-code", "--dry-run");
-  assert.match(dry.stdout, /would remove the scout hook/);
+  assert.match(dry.stdout, /would remove the fallback scout hook/);
   assert.match(read(settingsJson(box)), /deveggs scout --hook/);
 });
 
@@ -349,7 +349,7 @@ test("settings.json that isn't a JSON object is left alone", () => {
   writeFileSync(settingsJson(box), "{ // comments aren't JSON\n}");
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /skipped the scout hook: settings\.json isn't a JSON object/);
+  assert.match(r.stdout, /skipped the fallback scout hook: settings\.json isn't a JSON object/);
   assert.equal(read(settingsJson(box)), "{ // comments aren't JSON\n}");
   assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /scout hook not installed; nothing changed/);
 });
@@ -406,7 +406,7 @@ test("settings of an unexpected shape are never overwritten", () => {
   writeFileSync(settingsJson(box), odd);
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /skipped the scout hook: settings\.json hooks or hooks\.UserPromptSubmit has an unexpected shape/);
+  assert.match(r.stdout, /skipped the fallback scout hook: settings\.json hooks or hooks\.UserPromptSubmit has an unexpected shape/);
   assert.match(r.stdout, /installed: imports/, "the CLAUDE.md block still installs");
   assert.equal(read(settingsJson(box)), odd);
 });
@@ -464,7 +464,7 @@ test("install adds the Codex scout hook to hooks.json, says to trust it, and uni
     r.stdout,
     /codex: .*\.codex\/hooks\.json\n\s+installed: scout hook \(hooks\.UserPromptSubmit runs .*bin\/deveggs scout --hook --harness codex 2>\/dev\/null \|\| true\); added a UserPromptSubmit hook\. Codex runs it once you trust it: start codex and review it in \/hooks/,
   );
-  assert.match(r.stdout, /in Codex, the scout hook names the ones that fit each prompt/);
+  assert.match(r.stdout, /in Codex, the scout names the ones that fit each prompt/);
   const command = `${join(box.checkout, "bin", "deveggs")} scout --hook --harness codex 2>/dev/null || true`;
   const text = read(codexHooks(box));
   assert.deepEqual(JSON.parse(text), {
@@ -517,7 +517,7 @@ test("install upgrades a scout hook from before --harness in place, leaving one 
   writeFileSync(settingsJson(box), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "rtk hook" }] }, { hooks: [{ type: "command", command: old, timeout: 15 }] }] } }));
   const r = cli(box, "install", "--harness", "claude-code");
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /installed: scout hook .*; updated the scout hook/);
+  assert.match(r.stdout, /installed: fallback scout hook .*; updated the scout hook/);
   const text = read(settingsJson(box));
   assert.equal(text.split("deveggs scout --hook").length, 2, "exactly one deveggs entry");
   assert.match(text, /scout --hook --harness claude-code/);
@@ -570,7 +570,7 @@ test("install --scout-default adds Antigravity's scout hook under its own name, 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /gemini: .*config\/hooks\.json\n\s+installed: Antigravity scout hook \(deveggs-scout\.PreInvocation runs .*bin\/deveggs scout --hook --harness antigravity 2>\/dev\/null \|\| true\); checks with the default scout agent, codex \(codex exec\); added a PreInvocation hook named deveggs-scout/);
   assert.match(r.stdout, /🔭 default scout agent: codex \(codex exec\), saved for this machine in .*\.git\/config \(deveggs\.scoutDefault\)/);
-  assert.match(r.stdout, /in Antigravity, the scout hook names the ones that fit each prompt/);
+  assert.match(r.stdout, /in Antigravity, the scout names the ones that fit each prompt/);
   const hooks = JSON.parse(read(agyHooks(box)));
   assert.deepEqual({ ...hooks, "deveggs-scout": undefined }, { ...AGY_OTHERS, "deveggs-scout": undefined }, "every other named hook is untouched");
   assert.deepEqual(Object.keys(hooks), ["herdr", "orca-status", "deveggs-scout"]);
@@ -775,4 +775,72 @@ test("a default that can't be saved (no git) warns and skips the borrowing hook 
   assert.match(r.stdout, /skipped the Antigravity scout hook: no default scout agent/);
   assert.match(r.stdout, /installed: copies .* inline/, "the rest of install still ran");
   assert.equal(existsSync(agyHooks(box)), false);
+});
+
+// ── the Claude Code plugin link (~/.claude/skills/deveggs-scout) ────────────────────
+
+const pluginLink = (box: Sandbox): string => join(box.home, ".claude", "skills", "deveggs-scout");
+const isLink = (path: string): boolean => {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
+
+test("install links the Claude Code plugin from the checkout, idempotently, and uninstall removes exactly that link", () => {
+  const { box } = wired();
+  const target = join(box.checkout, "plugins", "claude-code");
+  const dry = cli(box, "install", "--harness", "claude-code", "--dry-run");
+  assert.match(dry.stdout, /would link: the deveggs mod: each prompt starts a hidden deveggs-scout subagent/);
+  assert.match(dry.stdout, /\+ .*skills\/deveggs-scout -> .*plugins\/claude-code/);
+  assert.equal(isLink(pluginLink(box)), false, "a dry run links nothing");
+  const r = cli(box, "install", "--harness", "claude-code");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /linked: the deveggs mod.*; added it\. Claude Code loads it in new sessions, or now with \/reload-plugins/);
+  assert.equal(readlinkSync(pluginLink(box)), target);
+  assert.match(cli(box, "install", "--harness", "claude-code").stdout, /plugin already linked .*; nothing changed/);
+  assert.match(cli(box, "uninstall", "--harness", "claude-code", "--dry-run").stdout, /would remove the plugin link/);
+  assert.equal(isLink(pluginLink(box)), true, "a dry run removes nothing");
+  assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /removed the plugin link/);
+  assert.equal(isLink(pluginLink(box)), false);
+  assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /plugin not linked; nothing changed/);
+});
+
+test("install repoints a link from a moved deveggs checkout, and leaves a folder or someone else's link alone", () => {
+  const { box } = wired();
+  const old = join(box.dir, "old-deveggs");
+  mkdirSync(join(old, "plugins", "claude-code"), { recursive: true });
+  mkdirSync(join(old, "bin"));
+  writeFileSync(join(old, "bin", "deveggs"), "#!/bin/sh\n");
+  mkdirSync(join(box.home, ".claude", "skills"), { recursive: true });
+  symlinkSync(join(old, "plugins", "claude-code"), pluginLink(box));
+  const moved = cli(box, "install", "--harness", "claude-code");
+  assert.match(moved.stdout, /linked: .*; repointed it from .*old-deveggs\/plugins\/claude-code/);
+  assert.equal(readlinkSync(pluginLink(box)), join(box.checkout, "plugins", "claude-code"));
+
+  rmSync(pluginLink(box));
+  symlinkSync(join(box.dir, "elsewhere"), pluginLink(box));
+  const foreign = cli(box, "install", "--harness", "claude-code");
+  assert.equal(foreign.status, 0, foreign.stderr);
+  assert.match(foreign.stdout, /skipped the plugin: .*deveggs-scout is already there and isn't a deveggs link/);
+  assert.equal(readlinkSync(pluginLink(box)), join(box.dir, "elsewhere"));
+  assert.match(cli(box, "uninstall", "--harness", "claude-code").stdout, /left .*deveggs-scout: it isn't a deveggs link/);
+  assert.equal(readlinkSync(pluginLink(box)), join(box.dir, "elsewhere"));
+
+  rmSync(pluginLink(box));
+  mkdirSync(pluginLink(box));
+  writeFileSync(join(pluginLink(box), "SKILL.md"), "mine");
+  assert.match(cli(box, "install", "--harness", "claude-code").stdout, /skipped the plugin: .*isn't a deveggs link/);
+  cli(box, "uninstall", "--harness", "claude-code");
+  assert.equal(read(join(pluginLink(box), "SKILL.md")), "mine");
+});
+
+test("the scout hook is labelled the fallback in Claude Code, where the plugin scouts", () => {
+  const { box } = wired();
+  const r = cli(box, "install");
+  assert.match(r.stdout, /installed: fallback scout hook \(hooks\.UserPromptSubmit/);
+  assert.match(r.stdout, /claude-code: .*settings\.json[\s\S]*claude-code: .*deveggs-scout/);
+  assert.match(r.stdout, /installed: scout hook \(hooks\.UserPromptSubmit runs .*--harness codex/, "Codex's hook is still its scout");
+  assert.match(r.stdout, /; in Claude Code and Codex, the scout names the ones that fit each prompt\.\n/, "each harness is named once");
 });

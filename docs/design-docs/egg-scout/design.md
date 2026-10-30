@@ -2,7 +2,44 @@
 
 | Status | Scope | Harnesses |
 |---|---|---|
-| Phases 1–3 shipped in #54, phase 5 (native per harness) in #55; phase 6 (default scout agent) in this PR | `deveggs scout`, the install-managed hooks, the default scout agent, docs | Claude Code and Codex native; Antigravity via the default agent; Gemini CLI and Cursor not yet (instruction-only) |
+| Phases 1–3 shipped in #54, phase 5 (native per harness) in #55, phase 6 (default scout agent) in #56; phase 7 (the scout as each harness's own subagent) in this PR | `deveggs scout`, the install-managed hooks, the Claude Code mod, the default scout agent, docs | Claude Code: its own subagent, spawned by code; Codex: its own CLI; Antigravity via the default agent; Gemini CLI and Cursor not yet (instruction-only) |
+
+## Phase 7: the scout as each harness's own subagent
+
+![Per harness: the native trigger code runs, the scout it starts, and how the answer is injected; Claude Code spawns its own subagent from code, Codex and Antigravity keep their fallback CLI, Cursor has none yet](diagrams/scout-native.svg)
+
+The developer asked for the scout to be **that harness's own subagent** (its subagent mechanism, login and model), started by code, not by the model's choice. Where a harness lets code start its own subagent, deveggs does; elsewhere the hook keeps today's checker, and the table says why.
+
+| Harness | Mechanism shipped | Deterministic how | Scout latency (measured) | Why not more native |
+|---|---|---|---|---|
+| Claude Code ≥ 2.1.287 | ✅ **spawn from code**: the deveggs mod (`plugins/claude-code/`, linked as `~/.claude/skills/deveggs-scout`) | Its `prompt.submit` hook calls `$.agent.spawn` on every prompt the developer sends; the model can't skip it, and never sees the scout (`agent.offer` hides it) | 1.6–5.1 s (median ~4 s, 10 runs, real 27-item basket, Haiku); `claude -p` fallback 3.0–3.4 s | — |
+| Codex 0.161 | 🔁 fallback CLI: `codex exec` from its `UserPromptSubmit` hook (unchanged) | The hook runs on every prompt | 3.9–4.1 s | Hooks can't spawn a subagent (`prompt`/`agent` hook types are parsed but skipped). **Native subagent + gate**, tried live (`~/.codex/agents/deveggs-scout.toml`, a nudge in `additionalContext`, `PreToolUse` deny, `SubagentStop` mark, `Stop` block capped at 2): the scout actually ran in **1 of 3** turns; the other spawns failed or never started, so the gate only nags. **App-server scout thread** (`thread/start` ephemeral + `turn/start`): a true code-started Codex thread with its own `baseInstructions` and `outputSchema`, but 5.7 s cold vs `codex exec`'s ~4 s (3.2–4.4 s warm); injecting into the running TUI's thread is unverified |
+| Antigravity 1.4.10 | 🔁 fallback: the default scout agent's CLI from its `PreInvocation` hook (unchanged) | The hook runs on every model call | 2.5–5 s (earlier phase) | Subagents are model-chosen (`invoke_subagent`). Its hooks (`PreToolUse` deny, `Stop` `continue`, built-in continuation caps) and global agents (`~/.gemini/config/agents/<name>.md`) exist in its built-in docs, but a gate couldn't be tested: agy signs in only through the keychain, so not in a throwaway HOME |
+| Cursor (cursor-agent 2026.09.10) | ⬜ none yet | — | — | `beforeSubmitPrompt` `additional_context` does reach the model, but only in the TUI (verified live), not `-p`; custom agents (`.cursor/agents/*.md`) and `preToolUse` deny / `stop` `followup_message` exist in its bundle, untested. cursor-agent also imports Claude Code's `~/.claude/settings.json` hooks, so the Claude Code fallback hook may already run there: check that before adding a Cursor hook |
+
+### How Claude Code's mod runs a prompt
+
+| Step | What happens | Bound |
+|---|---|---|
+| Session start | Asks `deveggs scout --subagent spec` for the definition and registers it: `$.agent.register({name: "deveggs-scout", prompt: SYSTEM_PROMPT, model: "haiku", tools: [], omitClaudeMd: true, maxTurns: 1})`, as `deveggs:deveggs-scout` | No deveggs CLI: no scout, and the fallback hook keeps working |
+| Hidden | `agent.offer` withholds it from the model; `tool.check` allows only its spawn (auto mode's classifier would refuse a call no request asked for) | — |
+| Each prompt | Only the developer's own (`composer`, `bridge`, `sdk`; not commands, notifications or hidden prompts): `deveggs scout --subagent ask` gets the question from the prompt and `$.session.messages()` (same tail rules as a transcript), then `$.agent.spawn` | — |
+| Answer | The scout hands back JSON; the mod answers its `SubagentHandback` call itself (and consumes any message or finish notice from it), so the main model never reads the raw report. `deveggs scout --subagent verdict` checks the ids, writes the context and logs the run (`"checker":"subagent"`) | — |
+| Inject | Within `DEVEGGS_SCOUT_WAIT_MS` (5 s): the context joins the prompt (`next({...e, context})`). Later: `$.session.append` adds it to the conversation when it lands | 5 s wait |
+| No double injection | The mod adds `"deveggs_scout": "subagent"` to the `classic.UserPromptSubmit` input; the fallback command hook sees it and exits before calling `claude -p` (verified live: the marked stdin reached the hook and it printed nothing) | — |
+| Fail open | Every gating hook has a `.catch` that passes the event on; a refused spawn is logged and the prompt goes ahead | — |
+
+### Phase 7 decisions
+
+| Option | Trade-off | Chosen |
+|---|---|---|
+| Claude Code: a mod spawning its own subagent | Native model, login and session; started by code on every prompt; needs Claude Code ≥ 2.1.287 | ✅ |
+| Claude Code: keep the command hook as the fallback | Older Claude Code, mods turned off or no plugin link still get a scout; a mark keeps it silent while the mod scouts | ✅ |
+| Install the mod from a marketplace (`extraKnownMarketplaces` + `enabledPlugins`) | Settings keys and a plugin cache to undo; a cached copy can't find the checkout's `bin/deveggs` | ✗ |
+| Install it as a skills-directory plugin (one symlink in `~/.claude/skills`) | Loads in place every session, no settings key; uninstall deletes the link | ✅ |
+| Wait for the scout before the prompt goes (as the hook did) | Always in the same turn, but a slow scout holds every prompt | ✗ hybrid: wait ≤ 5 s, else append |
+| "Native subagent + gate" for Codex, Antigravity, Cursor | The model still chooses to spawn; the gate can only deny tools and re-prompt, so a turn can end unscouted; adds a subagent turn plus extra parent calls | ✗ for now: Codex ran the scout in 1 of 3 live turns; Antigravity and Cursor couldn't be tested without reading keychain logins |
+| Codex app-server scout thread instead of `codex exec` | Code-started native thread with its own system prompt and schema, but slower cold | ⏭ follow-up |
 
 ## Principle: deveggs is a harness layer, native to each harness
 

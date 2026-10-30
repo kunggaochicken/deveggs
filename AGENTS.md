@@ -19,14 +19,15 @@ repo. `deveggs where` prints the path.
   preferences are loaded and attended to at any point in a session, so that must never
   depend on an agent remembering to read them: instructions get dropped once context
   gets complex. The install block loads them at session start; in Claude Code, Codex
-  and Antigravity, the scout hook keeps the ones that fit each prompt in view mid-session.
+  and Antigravity, the scout keeps the ones that fit each prompt in view mid-session (in
+  Claude Code as its own subagent, spawned by the deveggs mod's code on every prompt).
   Wherever a harness allows it, guarantee loading and attention in code (managed blocks
   in global instructions, hooks); instruction text is the fallback, not the mechanism.
 
   | Layer | Lives in | Add a harness by |
   |---|---|---|
   | Code-enforced loading | `deveggs install` (`src/install.ts`): a managed block in each harness's global instructions; `render` keeps inline copies in sync | adding it to `SPECS` |
-  | Code-enforced attention | `deveggs scout --hook --harness <h>` (`src/scout.ts`): each harness's own prompt hook, added by `deveggs install` (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/config/hooks.json`), where a headless CLI names the eggs that fit each prompt in a fresh context. The hook is always native; the checker is the harness's own where it has an isolated headless mode (`claude -p`, `codex exec`: a harness with one never calls another's model), else the developer's default scout agent, picked at install and saved per machine in the basket repo's git config (Antigravity) ([design](docs/design-docs/egg-scout/design.md)) | an `Adapter` in `src/scout.ts` (input parser, transcript reader, hook output, and its own `Checker` if it has an isolated headless mode) and a `hook` in its `SPECS` entry in `src/install.ts` (`borrows` when it has no checker of its own); only where its hook can inject context |
+  | Code-enforced attention | `deveggs scout --hook --harness <h>` (`src/scout.ts`): each harness's own prompt hook, added by `deveggs install` (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/config/hooks.json`), where a headless CLI names the eggs that fit each prompt in a fresh context. The hook is always native; the checker is the harness's own where it has an isolated headless mode (`claude -p`, `codex exec`: a harness with one never calls another's model), else the developer's default scout agent, picked at install and saved per machine in the basket repo's git config (Antigravity) ([design](docs/design-docs/egg-scout/design.md)) | an `Adapter` in `src/scout.ts` (input parser, transcript reader, hook output, and its own `Checker` if it has an isolated headless mode) and a `hook` in its `SPECS` entry in `src/install.ts` (`borrows` when it has no checker of its own); only where its hook can inject context. Where the harness's own code can start its own subagent (Claude Code's mods), prefer that: a plugin under `plugins/<harness>/` that asks `deveggs scout --subagent spec\|ask\|verdict`, linked by a `plugin` in its `SPECS` entry, with the hook kept as a silent fallback |
   | Per-harness setup (skill links, the deveggs prompt, anything that needs the developer's yes) | `INSTALL.md`, as agent-native instructions | adding a row to its table |
 
 ## Personal basket vs shared baskets

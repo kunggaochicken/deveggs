@@ -95,16 +95,25 @@ file, or not yet run).
 
      | Harness | Hook file | Runs on every prompt | Checker |
      |---|---|---|---|
-     | Claude Code | `~/.claude/settings.json` (`UserPromptSubmit`) | `<repo>/bin/deveggs scout --hook --harness claude-code` | its own: `claude -p` (Haiku, no tools) |
+     | Claude Code | `~/.claude/skills/deveggs-scout` → `<repo>/plugins/claude-code` (the deveggs mod), plus the fallback `~/.claude/settings.json` (`UserPromptSubmit`) | the mod's own code; fallback `<repo>/bin/deveggs scout --hook --harness claude-code` | its own subagent, `deveggs-scout` (Haiku, no tools, hidden from the model); fallback `claude -p` |
      | Codex | `~/.codex/hooks.json` (`UserPromptSubmit`) | `<repo>/bin/deveggs scout --hook --harness codex` | its own: `codex exec` (`gpt-6-luna`, ephemeral, read-only sandbox, hooks off) |
      | Antigravity | `~/.gemini/config/hooks.json` (`deveggs-scout` → `PreInvocation`) | `<repo>/bin/deveggs scout --hook --harness antigravity` | the default scout agent's (`claude -p` or `codex exec`) |
      | Gemini CLI, Cursor | — | — | none: Gemini CLI's hook is untested here; Cursor's can't add context, so a default agent can't help it |
 
+     In Claude Code 2.1.287 or later the scout is Claude Code's own subagent: install
+     links the deveggs mod into `~/.claude/skills/deveggs-scout` (a skills-directory
+     plugin, loaded in place every session; `/reload-plugins` loads it now), and on
+     every prompt its code starts the hidden `deveggs-scout` subagent and adds the
+     answer to the prompt (within 5 s, else as soon as it lands). The command hook stays
+     as the fallback (older Claude Code, mods off) and prints nothing while the mod
+     scouts. Install leaves anything already at that path that isn't its own link alone,
+     and uninstall removes only its link.
+
      The checker picks the eggs and chickens that fit the prompt, and the hook injects
      them into the session so they get noticed even when the context is busy. It
      leaves every other setting and hook alone, fails open (a slow or failed scout
-     never blocks the prompt), adds a few seconds per prompt (about 3 s in Claude Code,
-     4–5 s in Codex and Antigravity), and `deveggs uninstall` removes exactly that entry. Rewriting a
+     never blocks the prompt), adds a few seconds per prompt (Claude Code's subagent
+     2–5 s, waiting at most 5 s; 4–5 s in Codex and Antigravity), and `deveggs uninstall` removes exactly that entry. Rewriting a
      hooks file keeps its indent but normalises its formatting. **Codex runs a new or
      changed hook only once the developer trusts it:** after install, tell them to
      start `codex` and approve it in `/hooks`. Run install from the main deveggs

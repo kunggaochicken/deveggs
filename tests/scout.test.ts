@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { type Egg } from "../src/basket.ts";
-import { ADAPTERS, antigravityOutput, antigravityTranscriptTail, type Ask, CHECKERS, CODEX_PREAMBLE, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseAntigravityInput, parseHookInput, parseVerdict, resolveChecker, scout, scoutPrompt, transcriptTail } from "../src/scout.ts";
+import { ADAPTERS, antigravityOutput, antigravityTranscriptTail, type Ask, CHECKERS, CODEX_PREAMBLE, candidates, cleanWhy, codexTranscriptTail, contextFor, hookOutput, logRun, modelFor, parseAntigravityInput, parseHookInput, parseVerdict, resolveChecker, scout, scoutPrompt, sessionTail, SUBAGENT_MARK, SUBAGENT_NAME, subagentQuestion, subagentSpec, subagentVerdict, SYSTEM_PROMPT, transcriptTail } from "../src/scout.ts";
 import { cli, fakePath, git, type Sandbox, sandbox } from "./sandbox.ts";
 
 const egg = (id: string, tier: Egg["tier"], summary: string, when?: string): Egg => ({
@@ -559,4 +559,86 @@ test("the re-send cache lives in the basket's ignored logs/, works without lastU
   hookRun(box, agyInput({ lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
   const stale = hookRun(box, agyInput({ invocationNum: 1, lastUserInput: undefined, transcriptPath: transcript }), "--harness", "antigravity");
   assert.equal(stale.stdout, "", "a failed check leaves nothing to re-send");
+});
+
+// ── the native scout subagent (Claude Code's mod asks deveggs for its question and reads its answer) ──
+
+test("sessionTail reads a harness's own messages like a transcript: user and assistant text only, noise dropped, trimmed", () => {
+  const messages = [
+    { role: "user", text: "first question", toolUses: [] },
+    { role: "assistant", text: "", toolUses: [{ name: "Bash" }] },
+    { role: "user", text: "<system-reminder>ignore</system-reminder>second question" },
+    { role: "system", text: "not a turn" },
+    { role: "assistant", text: "x".repeat(2000) },
+    null,
+    "junk",
+  ];
+  const turns = sessionTail(messages);
+  assert.deepEqual(turns.map((t) => t.role), ["user", "user", "assistant"]);
+  assert.equal(turns[1]?.text, "second question");
+  assert.equal(turns[2]?.text.length, 601);
+  assert.deepEqual(sessionTail("nope"), []);
+});
+
+test("subagentQuestion is the headless checker's question; subagentVerdict reads the reply like a checker's", () => {
+  const asked = subagentQuestion("postgres or sqlite?", [{ role: "user", text: "earlier" }, { role: "user", text: "postgres or sqlite?" }], ITEMS);
+  assert.ok("question" in asked);
+  assert.equal(asked.question, scoutPrompt("postgres or sqlite?", [{ role: "user", text: "earlier" }], candidates(ITEMS)), "the prompt isn't shown twice");
+  assert.deepEqual(subagentQuestion("x", [], [ITEMS[2] as Egg]), { error: "no eggs or chickens" });
+  assert.deepEqual(subagentQuestion("  ", [], ITEMS), { error: "no prompt" });
+  const verdict = subagentVerdict('Sure: {"apply":[{"id":"decision-tables","why":"`choosing` <a db>"},{"id":"old-habit","why":"x"}]}', ITEMS);
+  assert.deepEqual(verdict.applied, [{ id: "decision-tables", why: "choosing a db" }], "unknown and cracked ids dropped, why cleaned");
+  assert.equal(verdict.context, contextFor(verdict.applied, candidates(ITEMS)));
+  assert.deepEqual(subagentVerdict('{"apply":[]}', ITEMS), { applied: [], candidates: 2 });
+  assert.match(subagentVerdict("no json", ITEMS).error ?? "", /^unparseable reply: no json/);
+  const spec = subagentSpec({});
+  assert.deepEqual(spec, { name: SUBAGENT_NAME, description: spec.description, prompt: SYSTEM_PROMPT, model: "haiku" });
+  assert.equal(subagentSpec({ DEVEGGS_SCOUT_CLAUDE_MODEL: "sonnet" }).model, "sonnet");
+});
+
+test("parseHookInput notices the mark a harness's own scout subagent leaves, and the hook then stays silent", () => {
+  assert.deepEqual(parseHookInput(line({ prompt: "hi", [SUBAGENT_MARK]: "subagent" })), { prompt: "hi", subagent: true });
+  assert.deepEqual(parseHookInput(line({ prompt: "hi", [SUBAGENT_MARK]: "other" })), { prompt: "hi" });
+  const box = wired('{"apply":[{"id":"decision-tables","why":"x"}]}');
+  const r = hookRun(box, line({ prompt: "postgres or sqlite?", session_id: "s", [SUBAGENT_MARK]: "subagent" }), "--harness", "claude-code");
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, "", "no second injection");
+  assert.equal(existsSync(join(box.dir, "args")), false, "claude -p never ran");
+  assert.equal(existsSync(join(box.basket, "logs", "scout.log")), false, "the subagent's own run is the one logged");
+});
+
+const subagentRun = (box: Sandbox, step: string, stdin = ""): { status: number | null; stdout: string } => {
+  const r = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "..", "src", "cli.ts"), "scout", "--subagent", step, "--harness", "claude-code"], {
+    env: box.env,
+    cwd: box.dir,
+    input: stdin,
+    encoding: "utf8",
+  });
+  return { status: r.status, stdout: r.stdout };
+};
+
+test("deveggs scout --subagent spec|ask|verdict: the definition, the question, and the logged context", () => {
+  const box = wired("unused");
+  const spec = JSON.parse(subagentRun(box, "spec").stdout);
+  assert.equal(spec.name, "deveggs-scout");
+  assert.equal(spec.prompt, SYSTEM_PROMPT);
+  const asked = JSON.parse(subagentRun(box, "ask", line({ prompt: "postgres or sqlite?", messages: [{ role: "assistant", text: "hello" }] })).stdout);
+  assert.match(asked.question, /- decision-tables \(egg\)/);
+  assert.match(asked.question, /\[assistant\] hello/);
+  assert.match(asked.question, /<new-request>\npostgres or sqlite\?\n<\/new-request>/);
+  assert.equal(subagentRun(box, "ask", line({ prompt: "" })).stdout, "", "no prompt, no question");
+  const verdict = subagentRun(box, "verdict", line({ reply: '{"apply":[{"id":"decision-tables","why":"a db choice"}]}', session: "s9", ms: 2345.6 }));
+  assert.equal(verdict.status, 0);
+  assert.match(verdict.stdout, /^deveggs scout \(fresh-context check\)[\s\S]*`decision-tables` \(egg\): Present options as a table \(why: a db choice\)/);
+  assert.equal(subagentRun(box, "verdict", line({ reply: '{"apply":[]}', session: "s9", ms: 10 })).stdout, "");
+  assert.equal(subagentRun(box, "verdict", line({ error: "spawn refused: no", session: "s9", ms: 5 })).stdout, "");
+  const log = readFileSync(join(box.basket, "logs", "scout.log"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(log.map((l) => [l.harness, l.checker, l.session, l.ms, l.apply, l.error]), [
+    ["claude-code", "subagent", "s9", 2346, ["decision-tables"], undefined],
+    ["claude-code", "subagent", "s9", 10, [], undefined],
+    ["claude-code", "subagent", "s9", 5, [], "spawn refused: no"],
+  ]);
+  assert.equal(subagentRun(box, "verdict", "not json").status, 0, "fails open");
+  box.env["DEVEGGS_SCOUT"] = "1";
+  assert.equal(subagentRun(box, "spec").stdout, "", "never inside a scout");
 });
