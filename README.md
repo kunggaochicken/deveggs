@@ -38,8 +38,8 @@ Preferences written as plain instructions get ignored once a session's context g
 complex. So deveggs doesn't ask agents to remember them: it's built to **guarantee
 they're loaded, at any point, with code.** Today a managed block in each harness's
 global instructions loads them at session start, and in Claude Code, Codex and
-Antigravity the scout hook (`deveggs scout --hook`) keeps the ones that fit each prompt in
-view mid-session. An
+Antigravity the scout keeps the ones that fit each prompt in view mid-session (in Claude
+Code it's Claude Code's own subagent, started by code on every prompt). An
 instruction to read them is only the fallback, where
 `deveggs install` can't load them (no global file, or not yet run).
 
@@ -212,9 +212,18 @@ harness has an isolated headless mode, that checker is its own; where it doesn't
 borrows your **default scout agent**, which `deveggs install` asks you to pick once per
 machine (or takes from `--scout-default claude-code|codex|none`).
 
+In Claude Code (2.1.287 or later) the scout goes one step further: it's **Claude Code's
+own subagent**. `deveggs install` links the deveggs mod (`plugins/claude-code/`) into
+`~/.claude/skills/deveggs-scout`; on every prompt its code, not the model, starts a hidden,
+tool-less `deveggs-scout` subagent on Haiku and adds its answer to the prompt (or, if it
+takes over 5 s, to the conversation as soon as it lands). The hook below stays as the
+fallback and stays silent while the mod scouts. Codex, Antigravity and Cursor can't start
+their own subagent from code yet, so they keep their hook
+([why](docs/design-docs/egg-scout/design.md#phase-7-the-scout-as-each-harnesss-own-subagent)).
+
 | Harness | Hook | Fresh-context checker |
 |---|---|---|
-| Claude Code | `UserPromptSubmit` in `~/.claude/settings.json` | its own: `claude -p` (Haiku, no tools) |
+| Claude Code | the deveggs mod (`~/.claude/skills/deveggs-scout`); fallback: `UserPromptSubmit` in `~/.claude/settings.json` | its own subagent, `deveggs-scout` (Haiku, no tools); fallback: `claude -p` |
 | Codex | `UserPromptSubmit` in `~/.codex/hooks.json` (trust it once in `/hooks`) | its own: `codex exec` (`gpt-6-luna`, ephemeral, read-only) |
 | Antigravity | `PreInvocation` in `~/.gemini/config/hooks.json` | the default scout agent's (`agy -p` can't run isolated) |
 | Gemini CLI, Cursor | not yet ([why](docs/design-docs/egg-scout/design.md#harness-research)) | — |

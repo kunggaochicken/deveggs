@@ -11,7 +11,7 @@ import { EVENTS, filterHistory, type HistoryEntry, type HistoryEvent, type Logge
 import { borrowingHarnesses, CURSOR_HINT, type Change, HARNESS_NAMES, install, needsInputMessage, parseHarness, promptScoutDefault, SCOUT_HARNESS_NAMES, SCOUT_NOTES, scoutCandidates, sync, uninstall, uninstallsBorrowers, wouldAskLine } from "./install.ts";
 import { hasContent, legacyBasket, lnCommand, migrate, relink, renameLinks } from "./migrate.ts";
 import { autopushEnabled, basketPath, ensureBasket, originUrl, pushBasket, run, saveBasket, scoutDefault, setAutopush, setScoutDefault, webUrl } from "./store.ts";
-import { ADAPTERS, cacheDir, CHECKERS, clearCached, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
+import { ADAPTERS, cacheDir, CHECKERS, clearCached, DEFAULT_ENV, GUARD, isScoutDefault, isScoutHarness, loadCached, logRun, modelFor, resolveChecker, saveCached, scout, SCOUT_AGENTS, stampSubagent, clearStamp, subagentStamped, subagentQuestion, subagentSpec, subagentVerdict, SCOUT_HARNESSES, type HookInput, type ScoutDefault, type ScoutResult } from "./scout.ts";
 import { DEFAULT_SHARE_REPO, formatPreview, planShare, publishShare, shareDir } from "./share.ts";
 import { formatList, formatShow, formatTimeline, mark, terminalOptions, trialCounts } from "./view.ts";
 
@@ -66,14 +66,17 @@ usage:
                                      (Claude Code: an @import; Codex, and Gemini CLI and
                                      Antigravity via ~/.gemini/GEMINI.md: the preferences
                                      inline, re-synced on render), and the scout hook in
-                                     Claude Code, Codex and Antigravity. Antigravity has
+                                     Claude Code, Codex and Antigravity. Claude Code also
+                                     gets the deveggs mod (~/.claude/skills/deveggs-scout),
+                                     which runs the scout as its own subagent; its hook is
+                                     then the silent fallback. Antigravity has
                                      no isolated headless mode, so its scout borrows the
                                      default scout agent: install asks for it at a
                                      terminal (or takes --scout-default) and saves it for
                                      this machine. Idempotent. Cursor keeps global rules
                                      in its settings: paste the deveggs prompt there
   deveggs uninstall [--harness claude-code|codex|gemini|all] [--dry-run]
-                                     remove that block and hook again (and the saved
+                                     remove that block, hook and plugin link again (and the saved
                                      default scout agent, once no hook borrows it)
   deveggs scout --hook [--harness claude-code|codex|antigravity]
                                      that harness's prompt hook (deveggs install adds it):
@@ -85,6 +88,11 @@ usage:
                                      claude-code
   deveggs scout --dry-run [--harness claude-code|codex|antigravity] "<prompt>"
                                      show what the scout picks for a prompt, and its latency
+  deveggs scout --subagent spec|ask|verdict
+                                     for a harness's own code that runs the scout as its
+                                     own subagent (the Claude Code mod): its definition,
+                                     its question for {prompt, messages} on stdin, and the
+                                     context for its {reply} (logged)
   deveggs where                        print the basket's path
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
@@ -120,7 +128,9 @@ env:
   DEVEGGS_SCOUT_MODEL       either scout's model, when its own isn't set
   DEVEGGS_SCOUT_DEFAULT     the default scout agent (claude-code|codex|none), over the
                             one deveggs install saved
-  DEVEGGS_SCOUT_TIMEOUT_MS  how long the scout waits before giving up (default: 12000)`;
+  DEVEGGS_SCOUT_TIMEOUT_MS  how long the scout waits before giving up (default: 12000)
+  DEVEGGS_SCOUT_WAIT_MS     how long a Claude Code prompt waits for its scout subagent
+                            before going ahead; a later answer is appended (default: 5000)`;
 
 const repoRoot = resolve(process.env["DEVEGGS_HOME"] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
 const basketRoot = basketPath();
@@ -384,6 +394,8 @@ function scoutCommand(hook: boolean, positionals: string[], harness: string | un
       const adapter = ADAPTERS[name];
       input = adapter.parse(readFileSync(0, "utf8"));
       if (!input || !existsSync(basketRoot)) return;
+      // The harness's own scout subagent covers this prompt (Claude Code's mod): stay silent.
+      if (input.subagent || subagentStamped(cacheDir(basketRoot), input.sessionId, input.prompt)) return;
       // Antigravity runs the hook before every model call of a turn: only the first one
       // checks; later ones re-send what it injected (an ephemeral step lasts one call).
       if (input.invocation !== undefined && input.invocation > 0) {
@@ -421,6 +433,46 @@ function scoutCommand(hook: boolean, positionals: string[], harness: string | un
   if (result.output) console.log(`\nhook output:\n${result.output}`);
 }
 
+/**
+ * `deveggs scout --subagent <spec|ask|verdict>`: the harness's own code runs the scout as
+ * its native subagent (Claude Code's mod, plugins/claude-code/), and asks deveggs only for
+ * the subagent's definition (`spec`), its question for a prompt (`ask`, stdin `{prompt,
+ * messages}`) and the context its reply injects (`verdict`, stdin `{reply, session, ms}`,
+ * logged like a hook run). Fails open like the hook: anything wrong prints nothing.
+ */
+function subagentCommand(step: string, harness: string | undefined): void {
+  if (process.env[GUARD]) return;
+  try {
+    const name = harness ?? "claude-code";
+    if (!isScoutHarness(name)) return;
+    if (step === "spec") {
+      process.stdout.write(`${JSON.stringify(subagentSpec(process.env))}\n`);
+      return;
+    }
+    if (!existsSync(basketRoot)) return;
+    const input = JSON.parse(readFileSync(0, "utf8")) as Record<string, unknown>;
+    if (step === "ask") {
+      const asked = subagentQuestion(typeof input["prompt"] === "string" ? input["prompt"] : "", input["messages"], basket.all());
+      if (!("question" in asked)) return;
+      stampSubagent(cacheDir(basketRoot), typeof input["session"] === "string" ? input["session"] : undefined, asked.prompt);
+      process.stdout.write(`${JSON.stringify({ question: asked.question })}\n`);
+      return;
+    }
+    if (step === "verdict") {
+      const session = typeof input["session"] === "string" ? input["session"] : undefined;
+      const ms = typeof input["ms"] === "number" ? Math.round(input["ms"]) : 0;
+      const reply = typeof input["reply"] === "string" ? input["reply"] : undefined;
+      const error = typeof input["error"] === "string" ? input["error"] : undefined;
+      if (input["unspawned"] === true) clearStamp(cacheDir(basketRoot), session);
+      const verdict = reply === undefined ? { applied: [], candidates: 0, error: error ?? "no reply" } : subagentVerdict(reply, basket.all());
+      logRun(basketRoot, { prompt: "", ...(session && { sessionId: session }) }, { ...verdict, ms }, name, new Date(), "subagent");
+      if (verdict.context) process.stdout.write(`${verdict.context}\n`);
+    }
+  } catch {
+    // fail open
+  }
+}
+
 function main(argv: string[]): void {
   const [command, ...rest] = argv;
   const { values, positionals } = parseArgs({
@@ -451,6 +503,7 @@ function main(argv: string[]): void {
       json: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       hook: { type: "boolean", default: false },
+      subagent: { type: "string" },
       "scout-default": { type: "string" },
       as: { type: "string" },
       yes: { type: "boolean", default: false },
@@ -772,14 +825,14 @@ function main(argv: string[]): void {
         }
       }
       if (command === "install" && !opts.explicit && existsSync(join(homedir(), ".cursor"))) console.log(CURSOR_HINT);
-      const hooked = changes.filter((c) => c.changed && c.hook).map((c) => (c.harness === "gemini" ? "Antigravity" : HARNESS_NAMES[c.harness]));
+      const hooked = [...new Set(changes.filter((c) => c.changed && c.hook).map((c) => (c.harness === "gemini" ? "Antigravity" : HARNESS_NAMES[c.harness])))];
       // A worktree's .git is a file. A hook pinned to a worktree goes quiet once it's deleted.
       if (command === "install" && hooked.length && existsSync(join(repoRoot, ".git")) && !statSync(join(repoRoot, ".git")).isDirectory()) {
         warn(`the scout hook points into a git worktree (${repoRoot}); once it's removed the hook does nothing. Run deveggs install from your main deveggs checkout.`);
       }
       if (dryRun) console.log("--dry-run: nothing written.");
       else if (changes.some((c) => c.changed)) {
-        const scouting = hooked.length ? `; in ${hooked.join(" and ")}, the scout hook names the ones that fit each prompt` : "";
+        const scouting = hooked.length ? `; in ${hooked.join(" and ")}, the scout names the ones that fit each prompt` : "";
         console.log(command === "install" ? `new sessions load your preferences without being asked to read them${scouting}.` : "new sessions no longer load your preferences on their own.");
       }
       return;
@@ -799,7 +852,8 @@ function main(argv: string[]): void {
       return;
     }
     case "scout":
-      scoutCommand(values.hook, positionals, values.harness);
+      if (values.subagent !== undefined) subagentCommand(values.subagent, values.harness);
+      else scoutCommand(values.hook, positionals, values.harness);
       return;
     case "where":
       console.log(basketRoot);

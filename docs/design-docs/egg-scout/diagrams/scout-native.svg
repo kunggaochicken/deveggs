@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600" viewBox="0 0 1000 600" role="img" aria-labelledby="title desc">
+<title id="title">deveggs scout: each harness's native trigger, its scout, and the injection</title>
+<desc id="desc">Rows per harness. Claude Code: spawn from code. The deveggs mod (a plugin linked into ~/.claude/skills) handles prompt.submit, starts a hidden deveggs:deveggs-scout subagent in Claude Code itself (Haiku, no tools, no CLAUDE.md), waits up to 5 s and adds its answer as prompt context, else appends it when it lands; the UserPromptSubmit command hook stays as the fallback and is silent while the mod scouts. Codex: fallback CLI. The UserPromptSubmit hook runs codex exec; the native subagent plus gate was tried and ran the scout in 1 of 3 turns, and the app-server scout thread is slower cold. Antigravity: fallback default agent. The PreInvocation hook runs the default scout agent's CLI; its gate is unverified because agy needs the keychain login. Cursor: none; its prompt hook can inject only in the TUI and its gate is unverified. The shared core builds the question and checks the verdict for every row.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#567086"/></marker></defs>
+<rect width="1000" height="600" fill="#f5f8fc"/>
+<text x="24" y="36" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#15344d">deveggs scout: native where the harness lets code start its own subagent</text>
+<g font-family="Arial,sans-serif" font-size="12" fill="#567086" font-weight="bold">
+  <text x="94" y="66" text-anchor="middle">1 HARNESS</text>
+  <text x="289" y="66" text-anchor="middle">2 NATIVE TRIGGER (code)</text>
+  <text x="529" y="66" text-anchor="middle">3 THE SCOUT</text>
+  <text x="749" y="66" text-anchor="middle">4 INJECTION</text>
+  <text x="914" y="66" text-anchor="middle">MECHANISM</text>
+</g>
+<g font-family="Arial,sans-serif" font-size="13" fill="#15344d">
+  <!-- Claude Code -->
+  <rect x="24" y="80" width="140" height="100" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="94" y="124" text-anchor="middle" font-weight="bold">🟠 Claude Code</text>
+  <text x="94" y="146" text-anchor="middle">≥ 2.1.287</text>
+  <rect x="184" y="80" width="210" height="100" rx="10" fill="#ffffff" stroke="#3f8f52" stroke-width="2"/>
+  <text x="289" y="104" text-anchor="middle" font-weight="bold">🧩 deveggs mod</text>
+  <text x="289" y="124" text-anchor="middle">prompt.submit → $.agent.spawn</text>
+  <text x="289" y="144" text-anchor="middle">~/.claude/skills/deveggs-scout</text>
+  <text x="289" y="164" text-anchor="middle" fill="#567086">fallback hook: silent (marked)</text>
+  <rect x="414" y="80" width="230" height="100" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
+  <text x="529" y="104" text-anchor="middle" font-weight="bold">🤖 its own subagent</text>
+  <text x="529" y="124" text-anchor="middle">deveggs:deveggs-scout</text>
+  <text x="529" y="144" text-anchor="middle">haiku · no tools · no CLAUDE.md</text>
+  <text x="529" y="164" text-anchor="middle">hidden from the model</text>
+  <rect x="664" y="80" width="170" height="100" rx="10" fill="#eaf6ec" stroke="#3f8f52" stroke-width="2"/>
+  <text x="749" y="108" text-anchor="middle" font-weight="bold">🧠 prompt context</text>
+  <text x="749" y="130" text-anchor="middle">≤ 5 s: added to the prompt</text>
+  <text x="749" y="150" text-anchor="middle">later: appended</text>
+  <text x="914" y="124" text-anchor="middle" font-weight="bold">✅ spawn</text>
+  <text x="914" y="144" text-anchor="middle" font-weight="bold">from code</text>
+
+  <!-- Codex -->
+  <rect x="24" y="200" width="140" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="94" y="250" text-anchor="middle" font-weight="bold">🟢 Codex</text>
+  <rect x="184" y="200" width="210" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="289" y="230" text-anchor="middle" font-weight="bold">🪝 UserPromptSubmit</text>
+  <text x="289" y="252" text-anchor="middle">~/.codex/hooks.json</text>
+  <text x="289" y="272" text-anchor="middle" fill="#567086">gate tried: scout ran 1 of 3</text>
+  <rect x="414" y="200" width="230" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="529" y="230" text-anchor="middle" font-weight="bold">💻 codex exec (its own CLI)</text>
+  <text x="529" y="252" text-anchor="middle">ephemeral · read-only · hooks off</text>
+  <text x="529" y="272" text-anchor="middle" fill="#567086">app-server thread: next</text>
+  <rect x="664" y="200" width="170" height="90" rx="10" fill="#eaf6ec" stroke="#3f8f52"/>
+  <text x="749" y="240" text-anchor="middle" font-weight="bold">🧠 additionalContext</text>
+  <text x="749" y="262" text-anchor="middle">same turn</text>
+  <text x="914" y="240" text-anchor="middle" font-weight="bold">🔁 fallback</text>
+  <text x="914" y="260" text-anchor="middle" font-weight="bold">CLI</text>
+
+  <!-- Antigravity -->
+  <rect x="24" y="310" width="140" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="94" y="360" text-anchor="middle" font-weight="bold">🔵 Antigravity</text>
+  <rect x="184" y="310" width="210" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="289" y="340" text-anchor="middle" font-weight="bold">🪝 PreInvocation</text>
+  <text x="289" y="362" text-anchor="middle">~/.gemini/config/hooks.json</text>
+  <text x="289" y="382" text-anchor="middle" fill="#567086">gate: unverified (keychain)</text>
+  <rect x="414" y="310" width="230" height="90" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="529" y="340" text-anchor="middle" font-weight="bold">💻 default scout agent</text>
+  <text x="529" y="362" text-anchor="middle">claude -p or codex exec</text>
+  <text x="529" y="382" text-anchor="middle" fill="#567086">picked at install</text>
+  <rect x="664" y="310" width="170" height="90" rx="10" fill="#eaf6ec" stroke="#3f8f52"/>
+  <text x="749" y="350" text-anchor="middle" font-weight="bold">🧠 ephemeral step</text>
+  <text x="749" y="372" text-anchor="middle">re-sent each call</text>
+  <text x="914" y="350" text-anchor="middle" font-weight="bold">🔁 fallback</text>
+  <text x="914" y="370" text-anchor="middle" font-weight="bold">default agent</text>
+
+  <!-- Cursor -->
+  <rect x="24" y="420" width="140" height="70" rx="10" fill="#ffffff" stroke="#8aa4ba"/>
+  <text x="94" y="460" text-anchor="middle" font-weight="bold">⚪ Cursor</text>
+  <rect x="184" y="420" width="650" height="70" rx="10" fill="#fbf3e6" stroke="#c39a54"/>
+  <text x="509" y="450" text-anchor="middle">beforeSubmitPrompt injects in the TUI only (not -p); agents and a gate exist in its bundle, untested</text>
+  <text x="509" y="472" text-anchor="middle" fill="#567086">preferences still load from the rules the developer pastes</text>
+  <text x="914" y="460" text-anchor="middle" font-weight="bold">⬜ none yet</text>
+
+  <!-- shared core -->
+  <rect x="184" y="510" width="650" height="64" rx="10" fill="#e9f0f8" stroke="#567086"/>
+  <text x="509" y="536" text-anchor="middle" font-weight="bold">⚙️ shared core (src/scout.ts): candidates · question · verdict check · log · fail open</text>
+  <text x="509" y="558" text-anchor="middle">the mod asks it through deveggs scout --subagent spec | ask | verdict</text>
+</g>
+<g stroke="#567086" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+  <path d="M164 130 L182 130"/><path d="M394 130 L412 130"/><path d="M644 130 L662 130"/>
+  <path d="M164 245 L182 245"/><path d="M394 245 L412 245"/><path d="M644 245 L662 245"/>
+  <path d="M164 355 L182 355"/><path d="M394 355 L412 355"/><path d="M644 355 L662 355"/>
+</g>
+</svg>

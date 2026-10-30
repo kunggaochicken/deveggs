@@ -303,14 +303,17 @@ Reading it yourself is the fallback, not the mechanism.
 
 ### The scout's context block
 
-In Claude Code, Codex and Antigravity, the `deveggs scout --hook` hook runs a
-fresh-context check on every prompt (the harness's own headless CLI, or in Antigravity the
-developer's default scout agent) and may add a block that starts
+In Claude Code, Codex and Antigravity, deveggs runs a fresh-context check on every prompt
+(in Claude Code its own hidden `deveggs-scout` subagent, started by the deveggs mod; in
+Codex its own headless CLI; in Antigravity the developer's default scout agent) and may add
+a block that starts
 `deveggs scout (fresh-context check)`. It names
 the eggs and chickens that fit this request, each with its fact and why. Apply them,
 cite their ids, and for an egg record the trial once you see how it went. The scout is a
 cheap model and can be wrong: if a named item clearly doesn't fit, skip it and don't
-count it as a trial. Its absence doesn't mean nothing applies.
+count it as a trial. Its absence doesn't mean nothing applies. In Claude Code a slow scout's
+block can arrive mid-turn ("answered after this turn began"): apply it from your next step
+on. Never spawn `deveggs-scout` yourself; deveggs starts it.
 
 ### Subagents
 

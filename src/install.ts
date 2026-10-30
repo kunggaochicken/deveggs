@@ -1,5 +1,5 @@
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { BasketError } from "./basket.ts";
 import { CHECKERS, HOOK_ARGS, SCOUT_AGENTS, type ScoutAgent, type ScoutDefault, type ScoutHarness } from "./scout.ts";
 
@@ -37,6 +37,21 @@ interface HarnessSpec {
   mode: "import" | "inline";
   /** The harness's own prompt-submit hook that runs the scout, when it has one that can inject context. */
   hook?: HookSpec;
+  /** A plugin in this checkout the harness loads from a link, so its own code can run the scout as its own subagent. */
+  plugin?: PluginSpec;
+}
+
+/**
+ * A plugin linked into a harness: `link` (relative to HOME) points at `dir` (relative to the
+ * deveggs checkout). Claude Code loads a folder under ~/.claude/skills that holds
+ * `.claude-plugin/plugin.json` as a plugin, in place, every session: no marketplace, no
+ * settings key, and deleting the link turns it off.
+ */
+interface PluginSpec {
+  link: string;
+  dir: string;
+  /** What it does, for messages. */
+  what: string;
 }
 
 /**
@@ -65,6 +80,13 @@ const SPECS: Record<Harness, HarnessSpec> = {
     file: join(".claude", "CLAUDE.md"),
     mode: "import",
     hook: { harness: "claude-code", file: join(".claude", "settings.json"), event: "UserPromptSubmit", shape: "nested", timeout: SCOUT_HOOK_TIMEOUT },
+    // The scout as Claude Code's own subagent (a mod, Claude Code >= 2.1.287). The hook above
+    // stays as the fallback: while the mod scouts, it marks the hook's input and the hook prints nothing.
+    plugin: {
+      link: join(".claude", "skills", "deveggs-scout"),
+      dir: join("plugins", "claude-code"),
+      what: "the deveggs mod: each prompt starts a hidden deveggs-scout subagent in Claude Code itself",
+    },
   },
   codex: {
     home: ".codex",
@@ -113,7 +135,7 @@ export const SCOUT_NOTES: Partial<Record<Harness, string>> = {
 
 /** What `install` (no --harness, or `all`) tells a developer who has Cursor, which keeps global rules only in its settings. */
 export const CURSOR_HINT =
-  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook: Cursor's beforeSubmitPrompt hook can't add context, so not even the default scout agent can help it";
+  "· cursor: no global rules file to write; paste the deveggs prompt (INSTALL.md) into Cursor Settings → Rules → User Rules. No scout hook yet: Cursor's beforeSubmitPrompt adds context only in its TUI, and its own subagents and gate hooks are untested here";
 
 const BEGIN_TAG = "<!-- deveggs:preferences:begin (managed by deveggs install; undo with deveggs uninstall)";
 export const END = "<!-- deveggs:preferences:end -->";
@@ -413,7 +435,11 @@ function writeAtomic(file: string, text: string): void {
 }
 
 /** "scout hook", naming the harness where the file alone doesn't (Antigravity shares ~/.gemini with Gemini CLI). */
-const hookLabel = (hook: HookSpec): string => (hook.borrows ? `${SCOUT_HARNESS_NAMES[hook.harness]} scout hook` : "scout hook");
+/** Harnesses whose scout runs as their own subagent (a plugin), so their command hook is only the fallback. */
+const SPECS_WITH_PLUGIN = new Set<ScoutHarness>((Object.values(SPECS) as HarnessSpec[]).flatMap((s) => (s.plugin && s.hook ? [s.hook.harness] : [])));
+
+const hookLabel = (hook: HookSpec): string =>
+  hook.borrows ? `${SCOUT_HARNESS_NAMES[hook.harness]} scout hook` : SPECS_WITH_PLUGIN.has(hook.harness) ? "fallback scout hook" : "scout hook";
 
 /** Is this hook's harness installed? A hook with `present` paths (Antigravity, which shares ~/.gemini with Gemini CLI) needs one of them, even when its harness is named. */
 const hookPresent = (hook: HookSpec, home: string): boolean =>
@@ -471,6 +497,58 @@ function uninstallHook(harness: Harness, hook: HookSpec, opts: Options): Change 
   return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the ${label}${empty ? `; deleted the ${basename(file)} it left empty` : ""}`, changed: true, block: removed.map((h) => JSON.stringify(h)).join("\n"), hook: true };
 }
 
+// The plugin link: one symlink, recognised as deveggs's own by where it points (a deveggs
+// checkout's plugins/<harness> folder), so uninstall never takes a link or folder it didn't make.
+
+/** Where a link points, absolute; undefined when the path isn't a symlink. */
+function linkTarget(path: string): string | undefined {
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return undefined;
+    return resolve(dirname(path), readlinkSync(path));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Is this a link deveggs made? One pointing at a deveggs checkout's plugin folder (it has
+ * `bin/deveggs` two levels up), or a dangling one shaped like it (a deleted worktree's).
+ * A live link into some other project's plugins/claude-code is never ours.
+ */
+const isOurLink = (target: string | undefined, plugin: PluginSpec): boolean =>
+  target !== undefined && target.endsWith(`/${plugin.dir}`) && (existsSync(join(target, "..", "..", "bin", "deveggs")) || !existsSync(target));
+
+function installPlugin(harness: Harness, plugin: PluginSpec, opts: Options, repo: string): Change {
+  const file = join(opts.home, plugin.link);
+  const target = join(repo, plugin.dir);
+  const current = linkTarget(file);
+  const exists = current !== undefined || existsSync(file);
+  if (current === target) return { harness, file, action: `plugin already linked (${plugin.what}); nothing changed`, changed: false, hook: true };
+  if (exists && !isOurLink(current, plugin)) {
+    return { harness, file, action: `skipped the plugin: ${file} is already there and isn't a deveggs link; move it, then rerun`, changed: false, hook: true };
+  }
+  if (!opts.dryRun) {
+    mkdirSync(dirname(file), { recursive: true });
+    // The temp link sits outside the skills folder, so a crash never leaves a second plugin there.
+    const tmp = join(opts.home, dirname(dirname(plugin.link)), `.deveggs-plugin-link-${process.pid}.tmp`);
+    rmSync(tmp, { force: true });
+    symlinkSync(target, tmp);
+    renameSync(tmp, file); // replaces an old deveggs link in one step
+  }
+  const did = current ? `repointed it from ${current}` : "added it";
+  return { harness, file, action: `${opts.dryRun ? "would link" : "linked"}: ${plugin.what} (${file} -> ${target}); ${did}. Claude Code loads it in new sessions, or now with /reload-plugins`, changed: true, block: `${file} -> ${target}`, hook: true };
+}
+
+function uninstallPlugin(harness: Harness, plugin: PluginSpec, opts: Options): Change {
+  const file = join(opts.home, plugin.link);
+  const current = linkTarget(file);
+  if (!isOurLink(current, plugin)) {
+    return { harness, file, action: current === undefined && !existsSync(file) ? "plugin not linked; nothing changed" : `left ${file}: it isn't a deveggs link`, changed: false, hook: true };
+  }
+  if (!opts.dryRun) rmSync(file);
+  return { harness, file, action: `${opts.dryRun ? "would remove" : "removed"} the plugin link`, changed: true, block: `${file} -> ${current}`, hook: true };
+}
+
 interface Options {
   home: string;
   /** The deveggs checkout the scout hooks run; no hooks when absent. */
@@ -494,8 +572,11 @@ export function install(harnesses: Harness[], opts: Options): Change[] {
   return harnesses.flatMap((harness) => {
     const change = installBlock(harness, opts, rendered);
     const hook = SPECS[harness].hook;
-    const hooked = hook && opts.repo !== undefined && !change.action.startsWith("skipped") ? installHook(harness, hook, opts, opts.repo) : undefined;
-    return hooked ? [change, hooked] : [change];
+    const wired = opts.repo !== undefined && !change.action.startsWith("skipped");
+    const hooked = hook && wired && opts.repo !== undefined ? installHook(harness, hook, opts, opts.repo) : undefined;
+    const plugin = SPECS[harness].plugin;
+    const linked = plugin && wired && opts.repo !== undefined ? installPlugin(harness, plugin, opts, opts.repo) : undefined;
+    return [change, ...(hooked ? [hooked] : []), ...(linked ? [linked] : [])];
   });
 }
 
@@ -520,7 +601,12 @@ export function uninstall(harnesses: Harness[], opts: Options): Change[] {
   return harnesses.flatMap((harness) => {
     const hook = SPECS[harness].hook;
     const skip = hook && !hookPresent(hook, opts.home) && !existsSync(join(opts.home, hook.file));
-    return hook && !skip ? [uninstallBlock(harness, opts), uninstallHook(harness, hook, opts)] : [uninstallBlock(harness, opts)];
+    const plugin = SPECS[harness].plugin;
+    return [
+      uninstallBlock(harness, opts),
+      ...(hook && !skip ? [uninstallHook(harness, hook, opts)] : []),
+      ...(plugin ? [uninstallPlugin(harness, plugin, opts)] : []),
+    ];
   });
 }
 

@@ -6,5 +6,5 @@ while [ -L "$SELF" ]; do
   LINK="$(readlink "$SELF")"
   case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
 done
-DIR="$(cd "$(dirname "$SELF")/.." && pwd -P)"
+DIR="$(cd -P "$(dirname "$SELF")/.." && pwd -P)"
 exec node --disable-warning=ExperimentalWarning "$DIR/src/cli.ts" "$@"

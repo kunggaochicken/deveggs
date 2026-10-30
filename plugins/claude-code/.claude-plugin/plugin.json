@@ -1,0 +1,5 @@
+{
+  "name": "deveggs",
+  "version": "0.1.0",
+  "description": "deveggs scout as Claude Code's own subagent: on every prompt it starts a hidden scout subagent that names the developer's preferences that apply, and adds them to the prompt."
+}

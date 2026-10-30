@@ -9,6 +9,7 @@ not here (see [Sharing your basket](#sharing-your-basket)).
 
 This repo is the deveggs **code**:
 
+- `plugins/claude-code/`: the deveggs mod, which runs the scout as Claude Code's own subagent.
 - `src/` and `bin/deveggs`: the CLI (`lay`, `arch`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`, `install`, `scout`,
   `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
@@ -62,6 +63,7 @@ checkout and basket from `tests/sandbox.ts`; use it for anything that runs the C
 | `deveggs browse` and `deveggs import`: reading the shared baskets repo and borrowing from it | `src/borrow.ts` (the borrowed egg itself: `Basket.borrow` in `src/basket.ts`) |
 | Per-harness setup (skill links, the deveggs prompt; Claude Code, Codex, Cursor, …) | `INSTALL.md`, as agent-native instructions. Add a harness by adding a row to its table. |
 | `deveggs install`/`uninstall`: loading `PREFERENCES.md` into each harness's global instructions, re-syncing inline copies on render, and the scout hook entries (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.gemini/config/hooks.json`), and asking for the default scout agent | `src/install.ts` (add a harness to `SPECS`; its scout hook is the entry's `hook`) |
+| The Claude Code mod: the scout as Claude Code's own subagent, spawned by code on every prompt | `plugins/claude-code/` (its question, verdict and log come from `deveggs scout --subagent` in `src/scout.ts`; its link is the `plugin` in `SPECS`, `src/install.ts`; tests in `tests/mod.test.ts`) |
 | `deveggs scout`: the per-prompt fresh-context check that injects the eggs that fit, each harness's `Adapter` (input, transcript reader, hook output) and each headless `Checker`, and the fallback to the default scout agent | `src/scout.ts` (the saved default itself: `src/store.ts`) |
 | How agents spot, lay, trial, hatch and present eggs | `skills/deveggs/SKILL.md` |
 | Tests | `tests/<module>.test.ts` |

@@ -52,7 +52,16 @@ export interface HookInput {
   sessionId?: string;
   /** Antigravity's PreInvocation: which model call of the turn this is (0 on a new prompt). */
   invocation?: number;
+  /** The harness's own scout subagent already covers this prompt (SUBAGENT_MARK), so the hook stays silent. */
+  subagent?: true;
 }
+
+/**
+ * The key a harness's own code adds to the prompt hook's input when it scouts the prompt
+ * with its native subagent (Claude Code's mod sets `"deveggs_scout": "subagent"`), so the
+ * command hook, kept as the fallback, never injects a second time.
+ */
+export const SUBAGENT_MARK = "deveggs_scout";
 
 function parseObject(text: string): Record<string, unknown> | undefined {
   let raw: unknown;
@@ -79,6 +88,7 @@ export function parseHookInput(text: string): HookInput | undefined {
     ...(transcriptPath && { transcriptPath }),
     ...(cwd && { cwd }),
     ...(sessionId && { sessionId }),
+    ...(o[SUBAGENT_MARK] === "subagent" && { subagent: true as const }),
   };
 }
 
@@ -497,6 +507,101 @@ export interface ScoutDeps {
   now?: () => number;
 }
 
+/**
+ * The scout's question for a prompt and the turns before it. The new prompt may already be
+ * the transcript's last line; don't show it twice. With no prompt (Antigravity without
+ * lastUserInput), that line is the prompt. No question when there's still no prompt.
+ */
+export function questionFor(raw: string, turns: Turn[], items: Candidate[]): { prompt: string; question?: string } {
+  const rest = [...turns];
+  const last = rest[rest.length - 1];
+  let prompt = raw.trim();
+  const same = last?.role === "user" && (!prompt || last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
+  if (same) rest.pop();
+  if (!prompt && same && last) prompt = last.text;
+  return prompt ? { prompt, question: scoutPrompt(prompt, rest, items) } : { prompt };
+}
+
+// The native scout subagent. Where a harness can start its own subagent from code (Claude
+// Code's mod, plugins/claude-code/), that subagent is the checker: it runs on the harness's
+// own model and login, in the same session, and deveggs only writes its question and reads
+// its answer (`deveggs scout --subagent <spec|ask|verdict>`). The question, the verdict and
+// the injected context are the same as a headless checker's.
+
+/** The subagent's name in every harness that defines one. */
+export const SUBAGENT_NAME = "deveggs-scout";
+/** Tells the main model the subagent isn't its to call; the mod also hides it from the model. */
+export const SUBAGENT_DESCRIPTION =
+  "deveggs scout: names the developer's standing preferences that apply to a prompt, from a fresh context. deveggs starts it on every prompt; don't delegate to it yourself.";
+
+/** The subagent's definition, for a harness's code to register: name, description, system prompt, model. */
+export const subagentSpec = (env: NodeJS.ProcessEnv): { name: string; description: string; prompt: string; model: string } => ({
+  name: SUBAGENT_NAME,
+  description: SUBAGENT_DESCRIPTION,
+  prompt: SYSTEM_PROMPT,
+  model: env["DEVEGGS_SCOUT_CLAUDE_MODEL"] || env["DEVEGGS_SCOUT_MODEL"] || "haiku",
+});
+
+/**
+ * The turns a harness's code read from its own session (Claude Code's `$.session.messages()`:
+ * `{role, text}`), cleaned like a transcript's: other roles, empty turns and harness-injected
+ * blocks dropped, then trimmed to the same tail.
+ */
+export function sessionTail(messages: unknown, opts: TailOptions = {}): Turn[] {
+  if (!Array.isArray(messages)) return [];
+  const out: Turn[] = [];
+  for (const m of messages) {
+    const role = (m as { role?: unknown } | null)?.role;
+    const text = (m as { text?: unknown } | null)?.text;
+    if ((role !== "user" && role !== "assistant") || typeof text !== "string") continue;
+    const clean = text.replace(NOISE, "").trim();
+    if (clean) out.push({ role, text: clean });
+  }
+  return trimTurns(out, opts);
+}
+
+/**
+ * The stamp `deveggs scout --subagent ask` leaves for a prompt its harness's own subagent
+ * scouts, so the fallback command hook stays silent for it even where the harness's code
+ * can't mark the hook's input (Claude Code skips a user mod's hooks on classic events when
+ * the organization's guard mod loads). Per session, in the same private cache folder as
+ * Antigravity's re-sends; it holds the prompt and when, and goes stale after STAMP_MS.
+ */
+export const STAMP_MS = 60_000;
+const stampFile = (dir: string, session: string): string | undefined => cacheFile(dir, `subagent-${session}`);
+
+export function stampSubagent(dir: string, session: string | undefined, prompt: string, at = Date.now()): void {
+  if (session) saveCached(dir, `subagent-${session}`, { prompt, context: String(at) });
+}
+
+export function clearStamp(dir: string, session: string | undefined): void {
+  if (session) clearCached(dir, `subagent-${session}`);
+}
+
+/** Did the harness's own subagent take this prompt, in this session, within STAMP_MS? */
+export function subagentStamped(dir: string, session: string | undefined, prompt: string, now = Date.now()): boolean {
+  if (!session || !stampFile(dir, session)) return false;
+  const stamp = loadCached(dir, `subagent-${session}`);
+  const at = Number(stamp?.context);
+  return !!stamp && stamp.prompt.trim() === prompt.trim() && Number.isFinite(at) && now - at >= 0 && now - at < STAMP_MS;
+}
+
+/** What the subagent is asked for a prompt: the same question a headless checker gets, or why there's none. */
+export function subagentQuestion(prompt: string, messages: unknown, items: Egg[]): { question: string; prompt: string } | { error: string } {
+  const list = candidates(items);
+  if (!list.length) return { error: "no eggs or chickens" };
+  const asked = questionFor(prompt, sessionTail(messages), list);
+  return asked.question ? { question: asked.question, prompt: asked.prompt } : { error: "no prompt" };
+}
+
+/** The subagent's reply read like a headless checker's: the ids it picked (known ones, each once) and the context to inject. */
+export function subagentVerdict(reply: string, items: Egg[]): { applied: Applied[]; context?: string; candidates: number; error?: string } {
+  const list = candidates(items);
+  const applied = parseVerdict(reply, new Set(list.map((c) => c.id)));
+  if (!applied) return { applied: [], candidates: list.length, error: `unparseable reply: ${reply.trim().slice(0, 120)}` };
+  return applied.length ? { applied, context: contextFor(applied, list), candidates: list.length } : { applied, candidates: list.length };
+}
+
 /** Positive integer from the environment, or the fallback. */
 function envInt(value: string | undefined, fallback: number): number {
   const n = Number(value);
@@ -523,18 +628,12 @@ export function scout(input: HookInput, deps: ScoutDeps): ScoutResult {
         turns = []; // no context beats no scout
       }
     }
-    // The new prompt may already be the transcript's last line; don't show it twice. With no
-    // prompt in the input (Antigravity without lastUserInput), that line is the prompt.
-    const last = turns[turns.length - 1];
-    let prompt = input.prompt.trim();
-    const same = last?.role === "user" && (!prompt || last.text === prompt || (last.text.endsWith("…") && prompt.startsWith(last.text.slice(0, -1))));
-    if (same) turns.pop();
-    if (!prompt && same && last) prompt = last.text;
-    if (!prompt) return done({ applied: [], error: "no prompt" }, items.length);
+    const { prompt, question } = questionFor(input.prompt, turns, items);
+    if (!question) return done({ applied: [], error: "no prompt" }, items.length);
     const ask = deps.ask ?? checker.ask;
     const model = modelFor(checker, deps.env);
     const timeoutMs = envInt(deps.env["DEVEGGS_SCOUT_TIMEOUT_MS"], DEFAULT_TIMEOUT_MS);
-    const answer = ask(scoutPrompt(prompt, turns, items), { model, timeoutMs });
+    const answer = ask(question, { model, timeoutMs });
     if (!answer.ok) return done({ applied: [], error: answer.error, prompt }, items.length);
     const applied = parseVerdict(answer.text, new Set(items.map((c) => c.id)));
     if (!applied) return done({ applied: [], error: `unparseable reply: ${answer.text.trim().slice(0, 120)}`, prompt }, items.length);
