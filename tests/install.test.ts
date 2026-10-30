@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type AgentCandidate, END, block, parseHarness, promptScoutDefault, readLine, recommendedAgent, scoutCandidates, scoutCommand, SCOUT_HOOK_TIMEOUT, withBlock, withNamedScoutHook, withoutBlock, withoutNamedScoutHook, withoutScoutHook, withScoutHook } from "../src/install.ts";
+import { type AgentCandidate, END, block, parseHarness, promptScoutDefault, readLine, scoutCandidates, scoutCommand, SCOUT_HOOK_TIMEOUT, withBlock, withNamedScoutHook, withoutBlock, withoutNamedScoutHook, withoutScoutHook, withScoutHook } from "../src/install.ts";
 import { cli, fakePath, git, type Sandbox, sandbox } from "./sandbox.ts";
 
 const BEGIN = "<!-- deveggs:preferences:begin";
@@ -104,6 +104,7 @@ test("--dry-run prints the plan and writes nothing", () => {
   assert.match(r.stdout, /would install: imports/);
   assert.match(r.stdout, /would install: copies/);
   assert.match(r.stdout, /\+ @.*PREFERENCES\.md/);
+  assert.doesNotMatch(r.stdout, /recommend/);
   assert.match(r.stdout, /--dry-run: nothing written\./);
   assert.equal(read(claudeMd(box)), claude);
   assert.equal(read(agentsMd(box)), codex);
@@ -617,20 +618,22 @@ test("install without a terminal asks the caller to ask the developer, and write
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
   assert.equal(r.stderr.trim().split("\n").length, 1, "one line");
-  assert.match(r.stderr, /^deveggs: needs input: Antigravity has no isolated headless mode, so its scout hook borrows a default scout agent\. Ask the developer which to use \(found: claude-code \(claude -p, recommended\), codex \(codex exec\); or none\), then rerun: deveggs install --scout-default <claude-code\|codex\|none>$/m);
+  assert.match(r.stderr, /^deveggs: needs input: Antigravity has no isolated headless mode, so its scout hook borrows a default scout agent\. Ask the developer which to use \(found: claude-code \(claude -p\), codex \(codex exec\); or none\), then rerun: deveggs install --scout-default <claude-code\|codex\|none>$/m);
   assert.deepEqual(JSON.parse(read(agyHooks(box))), AGY_OTHERS);
   assert.equal(existsSync(geminiMd(box)), false);
   assert.equal(git(box, box.basket, "log", "--format=%H"), before, "not even a render commit");
   assert.equal(savedDefault(box), "");
 });
 
-test("the recommended default is the first signed-in agent", () => {
+test("the needs-input line shows which agents are signed in and recommends none", () => {
   const box = wiredAgy();
   mkdirSync(join(box.home, ".codex"));
   writeFileSync(join(box.home, ".codex", "auth.json"), "{}");
-  assert.match(cli(box, "install").stderr, /found: claude-code \(claude -p\), codex \(codex exec, signed in, recommended\)/);
+  assert.match(cli(box, "install").stderr, /found: claude-code \(claude -p\), codex \(codex exec, signed in\); or none\)/);
   writeFileSync(join(box.home, ".claude.json"), JSON.stringify({ oauthAccount: { emailAddress: "x" } }));
-  assert.match(cli(box, "install").stderr, /found: claude-code \(claude -p, signed in, recommended\), codex \(codex exec, signed in\)/);
+  const both = cli(box, "install").stderr;
+  assert.match(both, /found: claude-code \(claude -p, signed in\), codex \(codex exec, signed in\); or none\)/);
+  assert.doesNotMatch(both, /recommend/);
 });
 
 test("with no claude or codex on PATH, install explains and skips Antigravity's hook; --scout-default none opts out", () => {
@@ -660,7 +663,8 @@ test("--dry-run shows the default it would ask for, or would save, and writes no
   const r = cli(box, "install", "--dry-run");
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /would install: Antigravity scout hook \(deveggs-scout\.PreInvocation runs .*\); checks with the default scout agent you pick/);
-  assert.match(r.stdout, /🔭 default scout agent: not set; install will ask, for Antigravity \(found: claude-code \(claude -p, recommended\), codex \(codex exec\); or none\)/);
+  assert.match(r.stdout, /🔭 default scout agent: not set; install will ask, for Antigravity \(found: claude-code \(claude -p\), codex \(codex exec\); or none\)/);
+  assert.doesNotMatch(r.stdout, /recommend/);
   assert.match(r.stdout, /--dry-run: nothing written\./);
   const flagged = cli(box, "install", "--dry-run", "--scout-default", "codex");
   assert.match(flagged.stdout, /🔭 default scout agent: codex \(codex exec\), would save for this machine/);
@@ -694,7 +698,7 @@ test("withNamedScoutHook repoints a moved checkout in place; withoutNamedScoutHo
   assert.deepEqual(withoutNamedScoutHook(untouched), { settings: untouched, removed: [] }, "only its own name is ever touched");
 });
 
-test("promptScoutDefault lists the agents, marks the recommended one, and reads the choice", () => {
+test("promptScoutDefault lists the agents, recommends none, has no default, and reads the choice", () => {
   const both: AgentCandidate[] = [
     { agent: "claude-code", checker: "claude -p", signedIn: false },
     { agent: "codex", checker: "codex exec", signedIn: true },
@@ -705,15 +709,18 @@ test("promptScoutDefault lists the agents, marks the recommended one, and reads 
     const pick = promptScoutDefault(["Antigravity"], candidates, (q) => (asked.push(q), answers.shift() ?? ""), (l) => said.push(l));
     return { pick, said, asked };
   };
-  const enter = run([""]);
-  assert.equal(enter.pick, "codex", "Enter takes the recommended (signed-in) one");
+  const enter = run(["", "2"]);
+  assert.equal(enter.pick, "codex", "Enter picks nothing; the prompt asks again and the next answer is saved");
   assert.deepEqual(enter.said, [
     "🔭 Default scout agent: Antigravity has no isolated headless mode, so its scout hook borrows one of these to check each prompt in a fresh context:",
     "   1) claude-code claude -p  sign-in not detected",
-    "   2) codex       codex exec signed in   ← recommended",
+    "   2) codex       codex exec signed in",
     "   3) none        no scout in Antigravity; your preferences still load at session start",
+    "   There's no default: type a number or name.",
   ]);
-  assert.deepEqual(enter.asked, ["   Pick 1-3 [2]: "]);
+  assert.deepEqual(enter.asked, ["   Pick 1-3: ", "   Pick 1-3: "]);
+  assert.doesNotMatch(enter.said.join("\n"), /recommend/);
+  assert.throws(() => run(["", "", ""]), /no default scout agent picked/, "Enter alone never picks, even at end of input");
   assert.equal(run(["1"]).pick, "claude-code");
   assert.equal(run(["claude"]).pick, "claude-code");
   assert.equal(run(["3"]).pick, "none");
@@ -721,9 +728,9 @@ test("promptScoutDefault lists the agents, marks the recommended one, and reads 
   assert.equal(retry.pick, "none");
   assert.match(retry.said.join("\n"), /"9" isn't one of them/);
   assert.throws(() => run(["x", "y", "z"]), /no default scout agent picked; rerun deveggs install, or pass --scout-default/);
-  const one = run([""], [{ agent: "claude-code", checker: "claude -p", signedIn: false }]);
-  assert.equal(one.pick, "claude-code", "a single candidate is still shown and confirmed");
-  assert.deepEqual(one.asked, ["   Pick 1-2 [1]: "]);
+  const one = run(["1"], [{ agent: "claude-code", checker: "claude -p", signedIn: false }]);
+  assert.equal(one.pick, "claude-code", "a single candidate is still shown and picked explicitly");
+  assert.deepEqual(one.asked, ["   Pick 1-2: "]);
   const none = run([], []);
   assert.equal(none.pick, undefined);
   assert.equal(none.asked.length, 0, "nothing to ask");
@@ -736,7 +743,6 @@ test("scoutCandidates finds claude and codex on PATH, with cheap sign-in hints",
   assert.deepEqual(scoutCandidates({ PATH: bin }, box.home), [{ agent: "codex", checker: "codex exec", signedIn: false }]);
   assert.deepEqual(scoutCandidates({ PATH: bin, OPENAI_API_KEY: "k" }, box.home), [{ agent: "codex", checker: "codex exec", signedIn: true }]);
   assert.deepEqual(scoutCandidates({ PATH: "" }, box.home), []);
-  assert.equal(recommendedAgent([]), undefined);
 });
 
 test("switching the default to none takes away an Antigravity hook an earlier install added", () => {

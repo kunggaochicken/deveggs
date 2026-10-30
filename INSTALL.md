@@ -115,10 +115,10 @@ file, or not yet run).
      exists). You run install without a terminal, so it can't ask them itself: without
      a saved default or `--scout-default`, it stops before writing anything and prints a
      `needs input:` line naming what it found. Ask instead: list the candidates whose
-     CLI is on PATH (`claude` → `claude-code`, `codex` → `codex`) plus `none`, and
-     recommend the first one that's signed in (`~/.claude.json` has `oauthAccount`, or
-     `~/.codex/auth.json` exists), else the first found. If only one is found, still show
-     it and confirm. If neither is, tell them Antigravity gets no scout (preferences
+     CLI is on PATH (`claude` → `claude-code`, `codex` → `codex`) plus `none`, each with
+     what was detected (signed in: `~/.claude.json` has `oauthAccount`, or
+     `~/.codex/auth.json` exists), and let the developer pick. Don't recommend one or
+     pick a default for them. If only one is found, still show it and ask. If neither is, tell them Antigravity gets no scout (preferences
      still load) and pass nothing. Then run `<repo>/bin/deveggs install --scout-default
      <claude-code|codex|none>`. It's saved per machine, in the basket repo's own git
      config (`deveggs.scoutDefault`, never committed), so later installs just show it;
