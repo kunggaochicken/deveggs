@@ -16,9 +16,9 @@ case "$1" in
     if [ -f "$BASKET/scripts/$1" ]; then
       SCRIPT="$BASKET/scripts/$1"
       shift
-      exec /bin/bash "$SCRIPT" "$@"
+      exec bash "$SCRIPT" "$@"
     fi
     echo "deveggs: $1 runs your basket's scripts/$1, and $BASKET has none" >&2
-    exit 2 ;;
+    exit 1 ;;
 esac
 exec node --disable-warning=ExperimentalWarning "$DIR/src/cli.ts" "$@"

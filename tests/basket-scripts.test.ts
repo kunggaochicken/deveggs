@@ -37,9 +37,33 @@ test("the CLI runs them too when called without the shim", () => {
 test("a basket without the script says so", () => {
   const box = sandbox();
   const r = spawnSync(shim, ["lease", "--", "true"], { env: box.env, encoding: "utf8" });
-  assert.equal(r.status, 2);
+  assert.equal(r.status, 1);
   assert.match(r.stderr, /lease runs your basket's scripts\/lease, and .* has none/);
   const c = cli(box, "mem", "status");
   assert.equal(c.status, 1);
   assert.match(c.stderr, /mem runs your basket's scripts\/mem, and .* has none/);
+});
+
+test("a signal ends the command with 128+n, through the shim and without it", () => {
+  const box = sandbox();
+  mkdirSync(join(box.basket, "scripts"), { recursive: true });
+  writeFileSync(join(box.basket, "scripts", "lease"), "kill -TERM $$\n");
+  const r = spawnSync(shim, ["lease"], { env: box.env, encoding: "utf8" });
+  assert.equal(r.signal, "SIGTERM");
+  assert.equal(cli(box, "lease").status, 143);
+});
+
+test("a relative DEVEGGS_BASKET resolves from the current directory", () => {
+  const box = withScripts();
+  const r = spawnSync(shim, ["mem", "status"], { env: { ...box.env, DEVEGGS_BASKET: "basket" }, cwd: box.dir, encoding: "utf8" });
+  assert.equal(r.status, 3, r.stderr);
+  assert.equal(r.stdout.trim(), "mem:1:status");
+});
+
+test("a folder named like the script is not a script", () => {
+  const box = sandbox();
+  mkdirSync(join(box.basket, "scripts", "mem"), { recursive: true });
+  const c = cli(box, "mem", "status");
+  assert.equal(c.status, 1);
+  assert.match(c.stderr, /has none/);
 });
