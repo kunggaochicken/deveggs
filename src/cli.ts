@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, readSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { constants as osConstants, homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -94,6 +94,8 @@ usage:
                                      its question for {prompt, messages} on stdin, and the
                                      context for its {reply} (logged)
   deveggs where                        print the basket's path
+  deveggs lease <args...>              run your basket's scripts/lease with these arguments
+  deveggs mem <args...>                run your basket's scripts/mem with these arguments
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
   deveggs autopush on|off|status       push the basket after every change (default off;
@@ -473,8 +475,37 @@ function subagentCommand(step: string, harness: string | undefined): void {
   }
 }
 
+/** The subcommands that run a basket script (bin/deveggs execs them directly). */
+const BASKET_SCRIPTS = ["lease", "mem"];
+
+/**
+ * Run <basket>/scripts/<name> with the rest of the arguments, passing its exit status on
+ * (128+n for a signal). bin/deveggs execs the script instead; this path forwards INT, TERM
+ * and HUP to it so a lease still stops its command when node is run directly.
+ */
+function basketScript(name: string, args: string[]): void {
+  const script = join(basketRoot, "scripts", name);
+  if (!existsSync(script) || !statSync(script).isFile()) throw new BasketError(`${name} runs your basket's scripts/${name}, and ${basketRoot} has none`);
+  const child = spawn("bash", [script, ...args], { stdio: "inherit" });
+  const forward = (signal: NodeJS.Signals): void => void child.kill(signal);
+  const forwarded: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+  for (const signal of forwarded) process.on(signal, forward);
+  child.on("error", (err) => {
+    console.error(`deveggs: can't run ${script}: ${err.message}`);
+    process.exitCode = 1;
+  });
+  child.on("exit", (code, signal) => {
+    for (const s of forwarded) process.off(s, forward);
+    process.exitCode = code ?? (signal ? 128 + (osConstants.signals[signal] ?? 0) : 1);
+  });
+}
+
 function main(argv: string[]): void {
   const [command, ...rest] = argv;
+  if (command !== undefined && BASKET_SCRIPTS.includes(command)) {
+    basketScript(command, rest);
+    return;
+  }
   const { values, positionals } = parseArgs({
     args: rest,
     allowPositionals: true,
