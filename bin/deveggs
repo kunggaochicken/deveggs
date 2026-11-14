@@ -7,4 +7,18 @@ while [ -L "$SELF" ]; do
   case "$LINK" in /*) SELF="$LINK" ;; *) SELF="$(dirname "$SELF")/$LINK" ;; esac
 done
 DIR="$(cd -P "$(dirname "$SELF")/.." && pwd -P)"
+# Basket scripts as subcommands: `deveggs lease` and `deveggs mem` run the basket's
+# scripts/lease and scripts/mem. exec, so signals (a timeout's TERM, Ctrl-C) reach the
+# script itself, which stops its command's process group.
+case "$1" in
+  lease|mem)
+    BASKET="${DEVEGGS_BASKET:-$HOME/.deveggs}"
+    if [ -f "$BASKET/scripts/$1" ]; then
+      SCRIPT="$BASKET/scripts/$1"
+      shift
+      exec /bin/bash "$SCRIPT" "$@"
+    fi
+    echo "deveggs: $1 runs your basket's scripts/$1, and $BASKET has none" >&2
+    exit 2 ;;
+esac
 exec node --disable-warning=ExperimentalWarning "$DIR/src/cli.ts" "$@"

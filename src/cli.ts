@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -94,6 +94,12 @@ usage:
                                      its question for {prompt, messages} on stdin, and the
                                      context for its {reply} (logged)
   deveggs where                        print the basket's path
+  deveggs lease [--label L] -- <cmd...>
+                                     run a heavy command through your basket's
+                                     scripts/lease (its own process group, tagged for the
+                                     memory monitor, stopped with everything it started)
+  deveggs mem status|resume            your basket's scripts/mem: what the memory monitor
+                                     sees and has paused, or resume it all now
   deveggs push [--repo owner/name]     save the basket to GitHub (first time: creates
                                      a private repo with gh, default name my-basket)
   deveggs autopush on|off|status       push the basket after every change (default off;
@@ -473,8 +479,24 @@ function subagentCommand(step: string, harness: string | undefined): void {
   }
 }
 
+/** The subcommands that run a basket script (bin/deveggs execs them directly). */
+const BASKET_SCRIPTS = ["lease", "mem"];
+
+/** Run <basket>/scripts/<name> with the rest of the arguments, passing its exit status on. */
+function basketScript(name: string, args: string[]): void {
+  const script = join(basketRoot, "scripts", name);
+  if (!existsSync(script)) throw new BasketError(`${name} runs your basket's scripts/${name}, and ${basketRoot} has none`);
+  const r = spawnSync("/bin/bash", [script, ...args], { stdio: "inherit" });
+  const signals: Record<string, number> = { SIGHUP: 1, SIGINT: 2, SIGKILL: 9, SIGTERM: 15 };
+  process.exitCode = r.status ?? (r.signal ? 128 + (signals[r.signal] ?? 0) : 1);
+}
+
 function main(argv: string[]): void {
   const [command, ...rest] = argv;
+  if (command !== undefined && BASKET_SCRIPTS.includes(command)) {
+    basketScript(command, rest);
+    return;
+  }
   const { values, positionals } = parseArgs({
     args: rest,
     allowPositionals: true,

@@ -11,7 +11,7 @@ This repo is the deveggs **code**:
 
 - `plugins/claude-code/`: the deveggs mod, which runs the scout as Claude Code's own subagent.
 - `src/` and `bin/deveggs`: the CLI (`lay`, `arch`, `feedback`, `evolve`, `rename`, `hatch`, `crack`, `history`, `render`, `install`, `scout`,
-  `push`, `autopush`, `share`, `browse`, `import`, `migrate`, …).
+  `push`, `autopush`, `share`, `browse`, `import`, `migrate`, and `lease` and `mem`, which run the basket's own `scripts/lease` and `scripts/mem`, …).
 - `skills/deveggs/SKILL.md`: the meta-skill that teaches any agent to tend a basket.
 - `INSTALL.md`: the instructions an agent follows to wire deveggs into every harness.
 - `templates/`: files new baskets start with.

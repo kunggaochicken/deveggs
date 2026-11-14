@@ -258,6 +258,8 @@ deveggs enforce <id> <hook-or-script-path>                              # 🛡 n
 deveggs push                                                            # save your basket to GitHub
 deveggs autopush on                                                     # then push after every change
 deveggs where                                                           # print your basket's path
+deveggs lease -- pnpm typecheck                                         # run your basket's scripts/lease (if it has one)
+deveggs mem status                                                      # run your basket's scripts/mem (if it has one)
 deveggs install [--harness claude-code|codex|gemini|all] [--dry-run]    # load your preferences into every session
 deveggs install --scout-default claude-code|codex|none                  # 🔭 the agent that scouts for harnesses without their own
 deveggs scout --dry-run [--harness codex|antigravity] "<prompt>"        # 🔭 which eggs the scout hook would inject
